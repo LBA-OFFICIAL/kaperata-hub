@@ -574,6 +574,7 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Initialize Auth exactly once
   useEffect(() => {
     const initAuth = async () => {
       try {
