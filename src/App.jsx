@@ -23,6 +23,7 @@ import {
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
   : {
+      // --- CRITICAL: PASTE YOUR REAL KEYS HERE FOR VERCEL ---
       apiKey: "YOUR_API_KEY_HERE",
       authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
       projectId: "YOUR_PROJECT_ID",
@@ -35,7 +36,10 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// FIX: Sanitize appId to ensure it is a valid Firestore document ID (no slashes)
+// Check if config is still using placeholders
+const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
+
+// FIX: Sanitize appId to ensure it is a valid Firestore document ID
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'lba-portal-v13';
 const appId = rawAppId.replace(/[\/.]/g, '_'); 
 
@@ -157,7 +161,11 @@ const Login = ({ user, onLoginSuccess }) => {
     setLoading(true);
     
     if (!user) {
-        setError("System initializing... please wait.");
+        if (!isConfigured) {
+            setError("SETUP REQUIRED: Please update src/App.jsx with your Firebase keys.");
+        } else {
+            setError("System initializing... please wait.");
+        }
         setLoading(false);
         return;
     }
@@ -301,7 +309,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   useEffect(() => {
     if (!user) return;
     
-    // Safety error handlers added
     const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
