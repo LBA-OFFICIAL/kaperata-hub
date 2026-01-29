@@ -277,6 +277,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [isImporting, setIsImporting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // Custom modal state
   const fileInputRef = useRef(null);
   const currentDailyKey = getDailyCashPasskey();
 
@@ -316,6 +317,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleUpdatePosition = async (targetId, cat, specific = "") => {
     if (!isOfficer) return;
     const target = members.find(m => m.memberId === targetId);
+    if (!target) return; // Safety check
+    
     let newId = target.memberId;
     const isL = ['Officer', 'Execomm', 'Committee'].includes(cat);
     const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId;
@@ -325,9 +328,19 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates });
   };
 
-  const handleRemoveMember = async (mid, name) => {
-    if (!confirm(`Are you sure you want to remove ${name}?`)) return;
-    await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid));
+  const initiateRemoveMember = (mid, name) => {
+    setConfirmDelete({ mid, name });
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!confirmDelete) return;
+    try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid));
+    } catch(e) {
+        console.error("Delete failed", e);
+    } finally {
+        setConfirmDelete(null);
+    }
   };
 
   const handleRotateSecurityKeys = async () => {
@@ -387,7 +400,26 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans">
+    <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
+      {/* Confirmation Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
+                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trash2 size={32} />
+                </div>
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm Deletion</h3>
+                <p className="text-sm text-gray-600 mb-8">
+                    Are you sure you want to remove <span className="font-bold text-[#3E2723]">{confirmDelete.name}</span>? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                    <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                    <button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button>
+                </div>
+            </div>
+        </div>
+      )}
+
       <aside className="w-64 bg-[#3E2723] text-amber-50 md:flex flex-col hidden">
         <div className="p-8 border-b border-amber-900/30 text-center">
            <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA" className="w-20 h-20 object-contain mx-auto mb-4" />
@@ -468,7 +500,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <select className="bg-amber-50 text-[8px] font-black p-2 rounded-lg outline-none mb-1 block mx-auto" value={m.positionCategory} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
                                 <select className="bg-white border border-amber-100 text-[8px] font-black p-2 rounded-lg outline-none block mx-auto" value={m.specificTitle} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                              </td>
-                             <td className="text-right pr-8"><button onClick={()=>handleRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button></td>
+                             <td className="text-right pr-8"><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button></td>
                           </tr>
                        ))}
                     </tbody>
