@@ -20,10 +20,16 @@ import {
 } from 'lucide-react';
 
 // --- Configuration Helper ---
-// Using the specific keys provided by the user for the fallback configuration
-const firebaseConfig = typeof __firebase_config !== 'undefined' 
-  ? JSON.parse(__firebase_config) 
-  : {
+let firebaseConfig;
+if (typeof __firebase_config !== 'undefined') {
+  try {
+    firebaseConfig = JSON.parse(__firebase_config);
+  } catch (e) {
+    console.error("Error parsing firebase config", e);
+    firebaseConfig = {};
+  }
+} else {
+  firebaseConfig = {
       apiKey: "AIzaSyByPoN0xDIfomiNHLQh2q4OS0tvhY9a_5w",
       authDomain: "kaperata-hub.firebaseapp.com",
       projectId: "kaperata-hub",
@@ -31,14 +37,12 @@ const firebaseConfig = typeof __firebase_config !== 'undefined'
       messagingSenderId: "760060001621",
       appId: "1:760060001621:web:1d0439eff2fb2d2e1143dc",
       measurementId: "G-D2YNL39DSF"
-    };
+  };
+}
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
-// Check if config is still using placeholders
-const isConfigured = firebaseConfig.apiKey !== "YOUR_API_KEY_HERE";
 
 // FIX: Sanitize appId to ensure it is a valid Firestore document ID
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'lba-portal-v13';
@@ -100,18 +104,30 @@ const formatDate = (dateStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  let colorClasses;
-  switch(variant) {
-    case 'amber': colorClasses = "bg-amber-100 text-amber-600"; break;
-    case 'indigo': colorClasses = "bg-indigo-100 text-indigo-600"; break;
-    case 'green': colorClasses = "bg-green-100 text-green-600"; break;
-    case 'blue': colorClasses = "bg-blue-100 text-blue-600"; break;
-    case 'red': colorClasses = "bg-red-100 text-red-600"; break;
-    default: colorClasses = "bg-gray-100 text-gray-600";
+  // Refactored to switch statement to avoid object/tailwind ambiguity
+  let className = "p-3 rounded-2xl ";
+  switch (variant) {
+    case 'amber':
+      className += "bg-amber-100 text-amber-600";
+      break;
+    case 'indigo':
+      className += "bg-indigo-100 text-indigo-600";
+      break;
+    case 'green':
+      className += "bg-green-100 text-green-600";
+      break;
+    case 'blue':
+      className += "bg-blue-100 text-blue-600";
+      break;
+    case 'red':
+      className += "bg-red-100 text-red-600";
+      break;
+    default:
+      className += "bg-gray-100 text-gray-600";
   }
   
   return (
-    <div className={`p-3 rounded-2xl ${colorClasses}`}>
+    <div className={className}>
       <Icon size={24} />
     </div>
   );
@@ -162,11 +178,7 @@ const Login = ({ user, onLoginSuccess }) => {
     setLoading(true);
     
     if (!user) {
-        if (!isConfigured) {
-            setError("SETUP REQUIRED: Please update src/App.jsx with your Firebase keys.");
-        } else {
-            setError("System initializing... please wait.");
-        }
+        setError("System initializing... please wait.");
         setLoading(false);
         return;
     }
@@ -205,6 +217,9 @@ const Login = ({ user, onLoginSuccess }) => {
       }
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
+
+  const activeBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]";
+  const inactiveBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723]">
@@ -253,8 +268,8 @@ const Login = ({ user, onLoginSuccess }) => {
           {authMode === 'payment' && (
             <div className="space-y-4">
                <div className="flex gap-2">
-                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={`flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${paymentMethod === 'gcash' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>GCash</button>
-                  <button type="button" onClick={() => setPaymentMethod('cash')} className={`flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${paymentMethod === 'cash' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>Cash</button>
+                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={paymentMethod === 'gcash' ? activeBtnClass : inactiveBtnClass}>GCash</button>
+                  <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
                   {paymentMethod === 'gcash' ? "GCash: 09XX XXX XXXX (Treasurer)" : "Provide the Daily Cash Key"}
@@ -416,6 +431,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }, { id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
+  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black";
+  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5";
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
       {/* Confirmation Modal */}
@@ -440,7 +458,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         </div>
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
           {menuItems.map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${view === item.id ? 'bg-[#FDB813] text-[#3E2723] shadow-lg font-black' : 'text-amber-200/40 hover:bg-white/5'}`}>
+            <button key={item.id} onClick={() => setView(item.id)} className={view === item.id ? activeMenuClass : inactiveMenuClass}>
               <item.icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
             </button>
           ))}
