@@ -84,18 +84,21 @@ const formatDate = (dateStr) => {
 
 // --- Components ---
 
-const StatIcon = ({ icon: Icon, color }) => {
-  // Explicit mapping to avoid dynamic class issues and ensure JIT safety
-  const bgColors = {
-    'text-amber-600': 'bg-amber-100',
-    'text-indigo-600': 'bg-indigo-100',
-    'text-green-600': 'bg-green-100',
-    'text-blue-600': 'bg-blue-100',
-    'text-red-600': 'bg-red-100',
+const StatIcon = ({ icon: Icon, variant = 'default' }) => {
+  const baseClass = "p-3 rounded-2xl";
+  const variants = {
+    amber: "bg-amber-100 text-amber-600",
+    indigo: "bg-indigo-100 text-indigo-600",
+    green: "bg-green-100 text-green-600",
+    blue: "bg-blue-100 text-blue-600",
+    red: "bg-red-100 text-red-600",
+    default: "bg-gray-100 text-gray-600"
   };
+  const colorClass = variants[variant] || variants.default;
+  const fullClass = `${baseClass} ${colorClass}`;
   
   return (
-    <div className={`p-3 rounded-2xl ${bgColors[color] || 'bg-gray-100'} ${color}`}>
+    <div className={fullClass}>
       <Icon size={24} />
     </div>
   );
@@ -187,6 +190,11 @@ const Login = ({ user, onLoginSuccess }) => {
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
 
+  const getPaymentButtonClass = (method) => {
+      const active = paymentMethod === method;
+      return `flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${active ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`;
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723]">
       {showForgotModal && (
@@ -234,8 +242,8 @@ const Login = ({ user, onLoginSuccess }) => {
           {authMode === 'payment' && (
             <div className="space-y-4">
                <div className="flex gap-2">
-                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={`flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${paymentMethod === 'gcash' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>GCash</button>
-                  <button type="button" onClick={() => setPaymentMethod('cash')} className={`flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${paymentMethod === 'cash' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>Cash</button>
+                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={getPaymentButtonClass('gcash')}>GCash</button>
+                  <button type="button" onClick={() => setPaymentMethod('cash')} className={getPaymentButtonClass('cash')}>Cash</button>
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
                   {paymentMethod === 'gcash' ? "GCash: 09XX XXX XXXX (Treasurer)" : "Provide the Daily Cash Key"}
@@ -399,6 +407,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }, { id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
+  const getMenuItemClass = (item) => {
+      const active = view === item.id;
+      return `w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${active ? 'bg-[#FDB813] text-[#3E2723] shadow-lg font-black' : 'text-amber-200/40 hover:bg-white/5'}`;
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
       {/* Confirmation Modal */}
@@ -427,7 +440,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         </div>
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
           {menuItems.map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${view === item.id ? 'bg-[#FDB813] text-[#3E2723] shadow-lg font-black' : 'text-amber-200/40 hover:bg-white/5'}`}>
+            <button key={item.id} onClick={() => setView(item.id)} className={getMenuItemClass(item)}>
               <item.icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
             </button>
           ))}
@@ -460,7 +473,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {view === 'reports' && isOfficer && (
            <div className="space-y-10 animate-fadeIn text-[#3E2723]">
               <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
-                 <StatIcon icon={TrendingUp} color="text-amber-600" />
+                 <StatIcon icon={TrendingUp} variant="amber" />
                  <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
               </div>
               <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
