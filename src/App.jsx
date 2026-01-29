@@ -35,8 +35,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// FIX: Hardcode appId to ensure valid Firestore path segments (avoiding environment variable pollution)
-const appId = 'lba-portal-v13';
+// FIX: Sanitize appId to ensure it is a valid Firestore document ID (no slashes)
+const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'lba-portal-v13';
+const appId = rawAppId.replace(/[\/.]/g, '_'); 
 
 // --- Global Constants ---
 const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
@@ -94,17 +95,18 @@ const formatDate = (dateStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  // Simpler implementation to avoid reference errors
-  let className = "p-3 rounded-2xl bg-gray-100 text-gray-600";
+  let finalClass = "p-3 rounded-2xl ";
+  switch (variant) {
+    case 'amber': finalClass += "bg-amber-100 text-amber-600"; break;
+    case 'indigo': finalClass += "bg-indigo-100 text-indigo-600"; break;
+    case 'green': finalClass += "bg-green-100 text-green-600"; break;
+    case 'blue': finalClass += "bg-blue-100 text-blue-600"; break;
+    case 'red': finalClass += "bg-red-100 text-red-600"; break;
+    default: finalClass += "bg-gray-100 text-gray-600";
+  }
   
-  if (variant === 'amber') className = "p-3 rounded-2xl bg-amber-100 text-amber-600";
-  if (variant === 'indigo') className = "p-3 rounded-2xl bg-indigo-100 text-indigo-600";
-  if (variant === 'green') className = "p-3 rounded-2xl bg-green-100 text-green-600";
-  if (variant === 'blue') className = "p-3 rounded-2xl bg-blue-100 text-blue-600";
-  if (variant === 'red') className = "p-3 rounded-2xl bg-red-100 text-red-600";
-
   return (
-    <div className={className}>
+    <div className={finalClass}>
       <Icon size={24} />
     </div>
   );
@@ -134,7 +136,6 @@ const Login = ({ user, onLoginSuccess }) => {
   useEffect(() => {
     if (!user) return;
     
-    // Add error handling to snapshots
     const unsubOps = onSnapshot(
       doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), 
       (snap) => snap.exists() && setHubSettings(snap.data()),
@@ -291,7 +292,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [isImporting, setIsImporting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(null); // Custom modal state
+  const [confirmDelete, setConfirmDelete] = useState(null); 
   const fileInputRef = useRef(null);
   const currentDailyKey = getDailyCashPasskey();
 
@@ -300,12 +301,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   useEffect(() => {
     if (!user) return;
     
-    // Add error handlers to all snapshots
-    const unsubReg = onSnapshot(
-        collection(db, 'artifacts', appId, 'public', 'data', 'registry'), 
-        (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))),
-        (e) => console.log("Registry fetch error:", e)
-    );
+    // Safety error handlers added
+    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), orderBy('createdAt', 'desc')), (s) => setSuggestions(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
@@ -331,7 +328,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleUpdatePosition = async (targetId, cat, specific = "") => {
     if (!isOfficer) return;
     const target = members.find(m => m.memberId === targetId);
-    if (!target) return; // Safety check
+    if (!target) return;
     
     let newId = target.memberId;
     const isL = ['Officer', 'Execomm', 'Committee'].includes(cat);
@@ -350,11 +347,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     if (!confirmDelete) return;
     try {
         await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid));
-    } catch(e) {
-        console.error("Delete failed", e);
-    } finally {
-        setConfirmDelete(null);
-    }
+    } catch(e) { console.error(e); } finally { setConfirmDelete(null); }
   };
 
   const handleRotateSecurityKeys = async () => {
@@ -406,7 +399,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     { id: 'home', label: 'Dashboard', icon: BarChart3 },
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'team', label: 'Brew Crew', icon: Users2 },
-    { id: 'brew_master', label: '✨ AI Master', icon: BrainCircuit },
     { id: 'events', label: "What's Brewing?", icon: Calendar },
     { id: 'announcements', label: 'Grind Report', icon: Bell },
     { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare },
@@ -424,13 +416,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
             <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
-                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Trash2 size={32} />
-                </div>
+                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={32} /></div>
                 <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm Deletion</h3>
-                <p className="text-sm text-gray-600 mb-8">
-                    Are you sure you want to remove <span className="font-bold text-[#3E2723]">{confirmDelete.name}</span>? This action cannot be undone.
-                </p>
+                <p className="text-sm text-gray-600 mb-8">Are you sure you want to remove <span className="font-bold text-[#3E2723]">{confirmDelete.name}</span>?</p>
                 <div className="flex gap-3">
                     <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
                     <button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button>
@@ -473,6 +461,54 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                    <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
                 </div>
               </div>
+           </div>
+        )}
+
+        {view === 'about' && (
+           <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-6">
+              <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
+                 <StatIcon icon={History} variant="amber" />
+                 <h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3>
+              </div>
+              <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{legacyContent?.body || "History not yet written."}</p>
+           </div>
+        )}
+
+        {view === 'team' && (
+           <div className="space-y-6">
+              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
+                 <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
+                 <p className="text-amber-500 font-bold text-xs uppercase tracking-widest">Officers & Committee</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                 {members.filter(m => ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory)).map(m => (
+                    <div key={m.memberId} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
+                       <img src={`https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4"/>
+                       <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
+                       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase">{m.specificTitle}</span>
+                    </div>
+                 ))}
+              </div>
+           </div>
+        )}
+
+        {view === 'events' && (
+           <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                 <h3 className="font-serif text-3xl font-black uppercase">Events</h3>
+              </div>
+              {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => (
+                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex items-center gap-6">
+                    <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
+                       <span className="text-xl">{new Date(ev.date).getDate()}</span>
+                       <span className="text-[8px] uppercase">{new Date(ev.date).toLocaleString('default', { month: 'short' })}</span>
+                    </div>
+                    <div>
+                       <h4 className="font-black text-lg uppercase">{ev.name}</h4>
+                       <p className="text-xs opacity-60">{ev.venue} • {ev.time}</p>
+                    </div>
+                 </div>
+              ))}
            </div>
         )}
 
@@ -538,7 +574,6 @@ const App = () => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize Auth exactly once
   useEffect(() => {
     const initAuth = async () => {
       try {
