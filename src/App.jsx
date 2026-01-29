@@ -20,16 +20,17 @@ import {
 } from 'lucide-react';
 
 // --- Configuration Helper ---
+// Using the specific keys provided by the user for the fallback configuration
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
   : {
-      // --- CRITICAL: PASTE YOUR REAL KEYS HERE FOR VERCEL ---
-      apiKey: "YOUR_API_KEY_HERE",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyByPoN0xDIfomiNHLQh2q4OS0tvhY9a_5w",
+      authDomain: "kaperata-hub.firebaseapp.com",
+      projectId: "kaperata-hub",
+      storageBucket: "kaperata-hub.firebasestorage.app",
+      messagingSenderId: "760060001621",
+      appId: "1:760060001621:web:1d0439eff2fb2d2e1143dc",
+      measurementId: "G-D2YNL39DSF"
     };
 
 const app = initializeApp(firebaseConfig);
@@ -99,18 +100,18 @@ const formatDate = (dateStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  let finalClass = "p-3 rounded-2xl ";
-  switch (variant) {
-    case 'amber': finalClass += "bg-amber-100 text-amber-600"; break;
-    case 'indigo': finalClass += "bg-indigo-100 text-indigo-600"; break;
-    case 'green': finalClass += "bg-green-100 text-green-600"; break;
-    case 'blue': finalClass += "bg-blue-100 text-blue-600"; break;
-    case 'red': finalClass += "bg-red-100 text-red-600"; break;
-    default: finalClass += "bg-gray-100 text-gray-600";
+  let colorClasses;
+  switch(variant) {
+    case 'amber': colorClasses = "bg-amber-100 text-amber-600"; break;
+    case 'indigo': colorClasses = "bg-indigo-100 text-indigo-600"; break;
+    case 'green': colorClasses = "bg-green-100 text-green-600"; break;
+    case 'blue': colorClasses = "bg-blue-100 text-blue-600"; break;
+    case 'red': colorClasses = "bg-red-100 text-red-600"; break;
+    default: colorClasses = "bg-gray-100 text-gray-600";
   }
   
   return (
-    <div className={finalClass}>
+    <div className={`p-3 rounded-2xl ${colorClasses}`}>
       <Icon size={24} />
     </div>
   );
@@ -205,11 +206,6 @@ const Login = ({ user, onLoginSuccess }) => {
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
 
-  const getPaymentButtonClass = (method) => {
-      const active = paymentMethod === method;
-      return `flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${active ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`;
-  };
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723]">
       {showForgotModal && (
@@ -257,8 +253,8 @@ const Login = ({ user, onLoginSuccess }) => {
           {authMode === 'payment' && (
             <div className="space-y-4">
                <div className="flex gap-2">
-                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={getPaymentButtonClass('gcash')}>GCash</button>
-                  <button type="button" onClick={() => setPaymentMethod('cash')} className={getPaymentButtonClass('cash')}>Cash</button>
+                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={`flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${paymentMethod === 'gcash' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>GCash</button>
+                  <button type="button" onClick={() => setPaymentMethod('cash')} className={`flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] ${paymentMethod === 'cash' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>Cash</button>
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
                   {paymentMethod === 'gcash' ? "GCash: 09XX XXX XXXX (Treasurer)" : "Provide the Daily Cash Key"}
@@ -312,7 +308,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
-    const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), orderBy('createdAt', 'desc')), (s) => setSuggestions(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
+    
+    // REMOVED orderBy to avoid requiring a composite index in the preview environment
+    const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => {
+        const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort in memory instead
+        data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
+        setSuggestions(data);
+    }, (e) => {});
+
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (snap) => snap.exists() && setHubSettings(snap.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (snap) => snap.exists() && setSecureKeys(snap.data()), (e) => {});
     const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (snap) => snap.exists() && setLegacyContent(snap.data()), (e) => {});
@@ -412,11 +416,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }, { id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
-  const getMenuItemClass = (item) => {
-      const active = view === item.id;
-      return `w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${active ? 'bg-[#FDB813] text-[#3E2723] shadow-lg font-black' : 'text-amber-200/40 hover:bg-white/5'}`;
-  };
-
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
       {/* Confirmation Modal */}
@@ -441,7 +440,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         </div>
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
           {menuItems.map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} className={getMenuItemClass(item)}>
+            <button key={item.id} onClick={() => setView(item.id)} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${view === item.id ? 'bg-[#FDB813] text-[#3E2723] shadow-lg font-black' : 'text-amber-200/40 hover:bg-white/5'}`}>
               <item.icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
             </button>
           ))}
