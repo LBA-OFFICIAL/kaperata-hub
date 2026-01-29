@@ -22,12 +22,21 @@ import {
 // --- Configuration Helper ---
 const firebaseConfig = typeof __firebase_config !== 'undefined' 
   ? JSON.parse(__firebase_config) 
-  : {};
+  : {
+      apiKey: "YOUR_API_KEY_HERE",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.firebasestorage.app",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'lba-portal-v13';
+
+// FIX: Hardcode appId to ensure valid Firestore path segments (avoiding environment variable pollution)
+const appId = 'lba-portal-v13';
 
 // --- Global Constants ---
 const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
@@ -85,20 +94,17 @@ const formatDate = (dateStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  const baseClass = "p-3 rounded-2xl";
-  const variants = {
-    amber: "bg-amber-100 text-amber-600",
-    indigo: "bg-indigo-100 text-indigo-600",
-    green: "bg-green-100 text-green-600",
-    blue: "bg-blue-100 text-blue-600",
-    red: "bg-red-100 text-red-600",
-    default: "bg-gray-100 text-gray-600"
-  };
-  const colorClass = variants[variant] || variants.default;
-  const fullClass = `${baseClass} ${colorClass}`;
+  // Simpler implementation to avoid reference errors
+  let className = "p-3 rounded-2xl bg-gray-100 text-gray-600";
   
+  if (variant === 'amber') className = "p-3 rounded-2xl bg-amber-100 text-amber-600";
+  if (variant === 'indigo') className = "p-3 rounded-2xl bg-indigo-100 text-indigo-600";
+  if (variant === 'green') className = "p-3 rounded-2xl bg-green-100 text-green-600";
+  if (variant === 'blue') className = "p-3 rounded-2xl bg-blue-100 text-blue-600";
+  if (variant === 'red') className = "p-3 rounded-2xl bg-red-100 text-red-600";
+
   return (
-    <div className={fullClass}>
+    <div className={className}>
       <Icon size={24} />
     </div>
   );
