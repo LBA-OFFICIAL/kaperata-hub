@@ -237,7 +237,15 @@ const Login = ({ user, onLoginSuccess }) => {
             })(),
             timeout
         ]);
-    } catch (err) { setError(err.message); } finally { setLoading(false); setStatusMessage(''); }
+    } catch (err) { 
+        console.error("Auth error:", err);
+        // Better error message for the specific Firestore missing error
+        if (err.message.includes("database (default) does not exist")) {
+            setError("Database missing: Please create a Firestore Database in your Firebase Console.");
+        } else {
+            setError(err.message); 
+        }
+    } finally { setLoading(false); setStatusMessage(''); }
   };
 
   const activeBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]";
