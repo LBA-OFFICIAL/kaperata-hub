@@ -106,7 +106,8 @@ const getMemberIdMeta = () => {
 
 const generateLBAId = (category, currentCount = 0) => {
   const { sy, sem } = getMemberIdMeta();
-  const padded = String(currentCount + 1).padStart(4, '0');
+  const count = Number(currentCount) + 1;
+  const padded = String(count).padStart(4, '0');
   const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
   return `LBA${sy}-${sem}${padded}${isLeader ? "C" : ""}`;
 };
