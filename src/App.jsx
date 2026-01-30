@@ -209,6 +209,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
                             throw fetchErr;
                         }
+                        console.warn("Fast count failed, using fallback:", fetchErr);
                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                         currentCount = allDocs.size;
                     }
@@ -387,7 +388,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   // FIX: Case-insensitive check for officer role
   const isOfficer = useMemo(() => {
      if (!profile?.positionCategory) return false;
-     const pc = profile.positionCategory.toUpperCase();
+     const pc = String(profile.positionCategory).toUpperCase();
      return ['OFFICER', 'EXECOMM', 'COMMITTEE'].includes(pc);
   }, [profile?.positionCategory]);
 
