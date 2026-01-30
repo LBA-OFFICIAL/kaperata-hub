@@ -104,33 +104,13 @@ const formatDate = (dateStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  // Refactored to switch statement to avoid object/tailwind ambiguity
-  let className = "p-3 rounded-2xl ";
-  switch (variant) {
-    case 'amber':
-      className += "bg-amber-100 text-amber-600";
-      break;
-    case 'indigo':
-      className += "bg-indigo-100 text-indigo-600";
-      break;
-    case 'green':
-      className += "bg-green-100 text-green-600";
-      break;
-    case 'blue':
-      className += "bg-blue-100 text-blue-600";
-      break;
-    case 'red':
-      className += "bg-red-100 text-red-600";
-      break;
-    default:
-      className += "bg-gray-100 text-gray-600";
-  }
+  if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
+  if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
+  if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
+  if (variant === 'blue') return <div className="p-3 rounded-2xl bg-blue-100 text-blue-600"><Icon size={24} /></div>;
+  if (variant === 'red') return <div className="p-3 rounded-2xl bg-red-100 text-red-600"><Icon size={24} /></div>;
   
-  return (
-    <div className={className}>
-      <Icon size={24} />
-    </div>
-  );
+  return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
 };
 
 const Login = ({ user, onLoginSuccess }) => {
@@ -177,10 +157,17 @@ const Login = ({ user, onLoginSuccess }) => {
     setError('');
     setLoading(true);
     
-    if (!user) {
-        setError("System initializing... please wait.");
-        setLoading(false);
-        return;
+    let currentUser = user;
+    if (!currentUser) {
+        try {
+            const result = await signInAnonymously(auth);
+            currentUser = result.user;
+        } catch (err) {
+            console.error("Auto-auth failed:", err);
+            setError("Connection failed. Please refresh the page.");
+            setLoading(false);
+            return;
+        }
     }
 
     try {
@@ -198,7 +185,7 @@ const Login = ({ user, onLoginSuccess }) => {
         const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
         const assignedId = generateLBAId(pc, snap.size);
         const meta = getMemberIdMeta();
-        const profileData = { uid: user.uid, name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(), firstName: firstName.toUpperCase(), middleInitial: middleInitial.toUpperCase(), lastName: lastName.toUpperCase(), email: email.toLowerCase(), password, program, positionCategory: pc, specificTitle: st, memberId: assignedId, role, status: 'active', paymentStatus: pay, lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, joinedDate: new Date().toISOString() };
+        const profileData = { uid: currentUser.uid, name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(), firstName: firstName.toUpperCase(), middleInitial: middleInitial.toUpperCase(), lastName: lastName.toUpperCase(), email: email.toLowerCase(), password, program, positionCategory: pc, specificTitle: st, memberId: assignedId, role, status: 'active', paymentStatus: pay, lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, joinedDate: new Date().toISOString() };
         if (pc !== 'Member') {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', assignedId), profileData);
           onLoginSuccess(profileData);
@@ -217,9 +204,6 @@ const Login = ({ user, onLoginSuccess }) => {
       }
     } catch (err) { setError(err.message); } finally { setLoading(false); }
   };
-
-  const activeBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]";
-  const inactiveBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723]">
@@ -268,8 +252,8 @@ const Login = ({ user, onLoginSuccess }) => {
           {authMode === 'payment' && (
             <div className="space-y-4">
                <div className="flex gap-2">
-                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={paymentMethod === 'gcash' ? activeBtnClass : inactiveBtnClass}>GCash</button>
-                  <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
+                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={paymentMethod === 'gcash' ? "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]" : "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900"}>GCash</button>
+                  <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]" : "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900"}>Cash</button>
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
                   {paymentMethod === 'gcash' ? "GCash: 09XX XXX XXXX (Treasurer)" : "Provide the Daily Cash Key"}
@@ -324,7 +308,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     
-    // REMOVED orderBy to avoid requiring a composite index in the preview environment
     const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         // Sort in memory instead
@@ -431,9 +414,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }, { id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
-  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black";
-  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5";
-
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
       {/* Confirmation Modal */}
@@ -457,11 +437,22 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            <h1 className="font-serif font-black text-[10px] uppercase">LPU Baristas' Association</h1>
         </div>
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
-          {menuItems.map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} className={view === item.id ? activeMenuClass : inactiveMenuClass}>
-              <item.icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
-            </button>
-          ))}
+          {menuItems.map(item => {
+             const active = view === item.id;
+             const Icon = item.icon; // Cap variable for JSX
+             if (active) {
+                 return (
+                    <button key={item.id} onClick={() => setView(item.id)} className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black">
+                      <Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
+                    </button>
+                 );
+             }
+             return (
+                <button key={item.id} onClick={() => setView(item.id)} className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5">
+                  <Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
+                </button>
+             );
+          })}
         </nav>
         <div className="p-6 border-t border-amber-900/30"><button onClick={logout} className="flex items-center gap-2 text-red-400 font-black text-[10px] uppercase hover:text-red-300"><LogOut size={16} /> Exit Hub</button></div>
       </aside>
