@@ -104,13 +104,33 @@ const formatDate = (dateStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
-  if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
-  if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
-  if (variant === 'blue') return <div className="p-3 rounded-2xl bg-blue-100 text-blue-600"><Icon size={24} /></div>;
-  if (variant === 'red') return <div className="p-3 rounded-2xl bg-red-100 text-red-600"><Icon size={24} /></div>;
+  // Refactored to switch statement to avoid object/tailwind ambiguity
+  let className = "p-3 rounded-2xl ";
+  switch (variant) {
+    case 'amber':
+      className += "bg-amber-100 text-amber-600";
+      break;
+    case 'indigo':
+      className += "bg-indigo-100 text-indigo-600";
+      break;
+    case 'green':
+      className += "bg-green-100 text-green-600";
+      break;
+    case 'blue':
+      className += "bg-blue-100 text-blue-600";
+      break;
+    case 'red':
+      className += "bg-red-100 text-red-600";
+      break;
+    default:
+      className += "bg-gray-100 text-gray-600";
+  }
   
-  return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
+  return (
+    <div className={className}>
+      <Icon size={24} />
+    </div>
+  );
 };
 
 const Login = ({ user, onLoginSuccess }) => {
@@ -157,9 +177,11 @@ const Login = ({ user, onLoginSuccess }) => {
     setError('');
     setLoading(true);
     
+    // Fallback: If auth hasn't finished initializing, try to sign in anonymously right now
     let currentUser = user || auth.currentUser;
     if (!currentUser) {
         try {
+            // Force an anonymous sign-in if one isn't present
             const result = await signInAnonymously(auth);
             currentUser = result.user;
         } catch (err) {
@@ -247,6 +269,7 @@ const Login = ({ user, onLoginSuccess }) => {
                 {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
               <input type="password" required placeholder="Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input type="password" required placeholder="Confirm Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
               <input type="text" placeholder="Leader Key (Optional)" className="w-full p-3 border border-amber-200 rounded-xl text-[10px] font-bold uppercase" value={inputKey} onChange={(e) => setInputKey(e.target.value.toUpperCase())} />
             </div>
           )}
