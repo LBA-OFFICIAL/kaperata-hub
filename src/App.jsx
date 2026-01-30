@@ -260,7 +260,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         
                         if (!snapshot.empty) {
                             const lastMember = snapshot.docs[0].data();
-                            // Correct ID matching regex to separate semester digit
                             const match = lastMember.memberId.match(/-(\d)(\d{4,})C?$/);
                             if (match) {
                                 currentCount = parseInt(match[2], 10);
@@ -317,10 +316,23 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     onLoginSuccess(final);
                 } else {
                     setStatusMessage('Logging in...');
-                    const snap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1)));
+                    const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1));
+                    const snap = await getDocs(q);
                     if (snap.empty) throw new Error("ID not found.");
-                    const userData = snap.docs[0].data();
+                    const docSnap = snap.docs[0];
+                    const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
+
+                    // IMPORTANT: Update the UID on the existing record to match the current session
+                    // This ensures persistence works if the anonymous UID has rotated
+                    if (userData.uid !== currentUser.uid) {
+                        setStatusMessage('Updating session...');
+                        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
+                            uid: currentUser.uid
+                        });
+                        userData.uid = currentUser.uid;
+                    }
+
                     onLoginSuccess(userData);
                 }
             })(),
