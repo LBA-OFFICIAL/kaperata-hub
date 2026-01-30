@@ -151,7 +151,8 @@ const Login = ({ user, onLoginSuccess }) => {
     setLoading(true);
     setStatusMessage('Authenticating...');
 
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out.")), 15000));
+    // Increased timeout to 60 seconds to handle slower connections or database creation
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out.")), 60000));
     
     try {
         await Promise.race([
