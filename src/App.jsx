@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -94,6 +94,13 @@ const getDirectLink = (url) => {
   return url;
 };
 
+// Ensure URL has protocol
+const ensureAbsoluteUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return 'https://' + url;
+};
+
 const getMemberIdMeta = () => {
   const now = new Date();
   const month = now.getMonth() + 1;
@@ -106,7 +113,7 @@ const getMemberIdMeta = () => {
 
 const generateLBAId = (category, currentCount = 0) => {
   const { sy, sem } = getMemberIdMeta();
-  const padded = String(currentCount + 1).padStart(4, '0');
+  const padded = String(Number(currentCount) + 1).padStart(4, '0');
   const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
   return `LBA${sy}-${sem}${padded}${isLeader ? "C" : ""}`;
 };
@@ -253,12 +260,10 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         
                         if (!snapshot.empty) {
                             const lastMember = snapshot.docs[0].data();
-                            // Safely extract number, ignoring undefined parts
-                            const memberId = lastMember.memberId || "";
-                            // Regex to find 4+ digits at the end
-                            const match = memberId.match(/(\d{4,})C?$/);
+                            // Correct ID matching regex to separate semester digit
+                            const match = lastMember.memberId.match(/-(\d)(\d{4,})C?$/);
                             if (match) {
-                                currentCount = parseInt(match[1], 10);
+                                currentCount = parseInt(match[2], 10);
                             } else {
                                 const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                                 currentCount = allDocs.size;
@@ -445,6 +450,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [settingsForm, setSettingsForm] = useState({ ...profile });
   const [savingSettings, setSavingSettings] = useState(false);
   const [expandedCommittee, setExpandedCommittee] = useState(null);
+  const [financialFilter, setFinancialFilter] = useState('all');
   
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
@@ -742,6 +748,56 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           setSubmittingApp(false);
       }
   };
+
+  // --- NEW ACTIONS FOR TERMINAL ---
+  const handleUpdateAppStatus = async (id, status) => {
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id), { status });
+      } catch (err) { console.error(err); }
+  };
+
+  const handleDeleteApp = async (id) => {
+      if (!confirm("Delete this application?")) return;
+      try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id));
+      } catch (err) { console.error(err); }
+  };
+
+  const handleToggleRegistration = async () => {
+      try {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+              ...hubSettings,
+              registrationOpen: !hubSettings.registrationOpen
+          });
+      } catch (err) { console.error(err); }
+  };
+
+  const handleDownloadFinancials = () => {
+      let filtered = members;
+      if (financialFilter !== 'all') {
+          const [sy, sem] = financialFilter.split('-');
+          filtered = members.filter(m => m.lastRenewedSY === sy && m.lastRenewedSem === sem);
+      }
+
+      // Logic: Include everyone, but mark exempt
+      const csvData = filtered.map(m => {
+          const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
+          const status = isExempt ? 'EXEMPT' : (m.paymentStatus === 'paid' ? 'PAID' : 'UNPAID');
+          return `${m.name},${m.memberId},${m.positionCategory},${status},${m.paymentDetails?.method || ''},${m.paymentDetails?.refNo || ''}`;
+      });
+
+      const csvContent = "data:text/csv;charset=utf-8," 
+           + "Name,ID,Category,Payment Status,Method,Ref No\n"
+           + csvData.join("\n");
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `LBA_Financials_${financialFilter}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+  };
   
   const handleSanitizeDatabase = async () => {
       if (!confirm("This will RE-GENERATE all Member IDs. Are you sure?")) return;
@@ -754,9 +810,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           snapshot.docs.forEach((docSnap) => {
              const data = docSnap.data();
              const category = data.positionCategory || "Member";
-             const meta = getMemberIdMeta(); // Assuming current sem for simplicity, or parse from joinedDate
+             const meta = getMemberIdMeta(); 
              
-             // Manually generate ID here to ensure sequence
              count++;
              const padded = String(count).padStart(4, '0');
              const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
@@ -967,8 +1022,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     {/* Safe sort logic to prevent blank page crashes */}
                     {[...members].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => {
                         const isPresent = attendanceEvent.attendees?.includes(m.memberId);
+                        // Using unique ID for key to prevent crashes
                         return (
-                            <div key={m.memberId} 
+                            <div key={m.id} 
                                  onClick={() => handleToggleAttendance(m.memberId)}
                                  className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent hover:bg-amber-50'}`}>
                                 <div className="flex items-center gap-3">
@@ -1380,7 +1436,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             </button>
 
                             {ev.evaluationLink && (
-                                <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors">Post-Event Evaluation</a>
+                                <a href={ensureAbsoluteUrl(ev.evaluationLink)} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors flex items-center gap-1">
+                                    <ExternalLink size={12}/> Post-Event Evaluation
+                                </a>
                             )}
                         </div>
                         {isOfficer && (
