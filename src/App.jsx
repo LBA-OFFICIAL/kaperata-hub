@@ -110,7 +110,7 @@ const getEventDay = (dateStr) => {
 const getEventMonth = (dateStr) => {
     if (!dateStr) return "???";
     const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' });
+    return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
 };
 
 // --- Components ---
@@ -384,7 +384,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [announcements, setAnnouncements] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
-  const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
+  // Initialize with seed values to prevent null crash before fetch
+  const [secureKeys, setSecureKeys] = useState({ officerKey: SEED_OFFICER_KEY, headKey: SEED_HEAD_KEY, commKey: SEED_COMM_KEY });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -403,7 +404,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
   const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
-  const [editingEvent, setEditingEvent] = useState(null); // Added for editing events
+  const [editingEvent, setEditingEvent] = useState(null); 
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
@@ -413,6 +414,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   // New States for Accolades & Bulk Email
   const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { memberId }
   const [accoladeText, setAccoladeText] = useState("");
+  const [exportFilter, setExportFilter] = useState('all');
 
   // FIX: Case-insensitive check for officer role
   const isOfficer = useMemo(() => {
@@ -444,20 +446,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const isCat = (m, cat) => m.positionCategory?.toUpperCase() === cat.toUpperCase();
 
     return {
-        // Tier 1: President & VP
         tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")),
-        
-        // Tier 2: Secretaries
         tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")),
-        
-        // Tier 3: Other Officers (Treasurer, Auditor, etc.)
         tier3: sortedMembers.filter(m => 
-            !hasTitle(m, "President") && 
-            !hasTitle(m, "Secretary") && 
-            isCat(m, "Officer")
+            !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")
         ),
-        
-        // Committees
         committees: {
             heads: sortedMembers.filter(m => isCat(m, "Committee") && hasTitle(m, "Head")),
             members: sortedMembers.filter(m => isCat(m, "Committee") && !hasTitle(m, "Head"))
@@ -595,18 +588,24 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   // --- NEW FEATURES ---
-  const handleBulkEmail = () => {
-    const recipients = selectedBaristas.length > 0 
-        ? members.filter(m => selectedBaristas.includes(m.memberId))
-        : filteredRegistry;
-    
-    const emails = recipients
-        .map(m => m.email)
-        .filter(e => e)
-        .join(',');
-        
-    if (!emails) return alert("No valid emails found.");
-    window.location.href = `mailto:?bcc=${emails}`;
+  const handleExportCSV = () => {
+      let dataToExport = [...members];
+      if (exportFilter === 'active') dataToExport = dataToExport.filter(m => m.status === 'active');
+      else if (exportFilter === 'inactive') dataToExport = dataToExport.filter(m => m.status !== 'active');
+      else if (exportFilter === 'officers') dataToExport = dataToExport.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
+      else if (exportFilter === 'committee') dataToExport = dataToExport.filter(m => m.positionCategory === 'Committee');
+      
+      const csvContent = "data:text/csv;charset=utf-8," 
+           + "Name,ID,Email,Program,Position,Status\n"
+           + dataToExport.map(e => `${e.name},${e.memberId},${e.email},${e.program},${e.specificTitle},${e.status}`).join("\n");
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `LBA_Registry_${exportFilter}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
   };
 
   const handleGiveAccolade = async () => {
@@ -850,8 +849,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            {events.length === 0 ? <p className="text-xs text-gray-500">No upcoming events.</p> : events.slice(0, 3).map(ev => (
                              <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
                                 <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
-                                   <span className="text-sm">{getEventDay(ev.startDate)}</span>
-                                   <span className="text-[8px] uppercase">{getEventMonth(ev.startDate)}</span>
+                                   <span className="text-sm font-black">{getEventDay(ev.startDate)}</span>
+                                   <span className="text-[8px] font-bold uppercase">{getEventMonth(ev.startDate)}</span>
                                 </div>
                                 <div className="min-w-0">
                                    <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
@@ -1032,8 +1031,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="flex justify-between items-start">
                         <div className="flex items-center gap-4">
                             <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
-                                <span className="text-xl">{getEventDay(ev.startDate)}</span>
-                                <span className="text-[8px] uppercase">{getEventMonth(ev.startDate)}</span>
+                                <span className="text-xl font-bold">{getEventDay(ev.startDate)}</span>
+                                <span className="text-[10px] uppercase font-bold">{getEventMonth(ev.startDate)}</span>
                             </div>
                             <div>
                                 <h4 className="font-black text-lg uppercase">{ev.name}</h4>
@@ -1227,46 +1226,64 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
               <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center">
                  <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
-                 {/* Added Bulk Email Button */}
+                 {/* Added Bulk Email & Export Buttons */}
                  <div className="flex gap-2">
+                    {/* Filter Dropdown */}
+                    <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
+                        <option value="all">All</option>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="officers">Officers</option>
+                        <option value="committee">Committee</option>
+                    </select>
+
+                    <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                     <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
+                    
                     <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                     <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
-                    <button onClick={downloadImportTemplate} className="bg-amber-100 px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Template</button>
                  </div>
               </div>
               <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
-                 <table className="w-full text-left uppercase">
-                    <thead className="bg-[#3E2723] text-white font-serif tracking-widest"><tr className="text-[10px]"><th className="p-8 w-12"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th><th>Barista</th><th className="text-center">ID</th><th className="text-center">Designation</th><th className="text-right">Manage</th></tr></thead>
+                 <table className="w-full text-left uppercase table-fixed">
+                    <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
+                        <tr className="text-[10px]">
+                            <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
+                            <th className="p-4 w-1/3">Barista</th>
+                            <th className="p-4 w-24 text-center">ID</th>
+                            <th className="p-4 w-32 text-center">Designation</th>
+                            <th className="p-4 w-24 text-right">Manage</th>
+                        </tr>
+                    </thead>
                     <tbody className="text-[#3E2723] divide-y divide-amber-50">
                        {paginatedRegistry.map(m => (
                           <tr key={m.id || m.memberId} className="hover:bg-amber-50/50">
-                             <td className="p-8 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                             <td className="py-8">
-                                {/* FIX: Move div inside td properly */}
+                             <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
+                             <td className="py-4 px-4">
                                 <div className="flex items-center gap-4">
-                                  <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
-                                  <div>
-                                      <p className="font-black text-xs">{m.name}</p>
-                                      <p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p>
-                                      {/* Added Accolades Display in Row */}
-                                      <div className="flex gap-1 mt-1">
+                                  <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" />
+                                  <div className="min-w-0">
+                                      <p className="font-black text-xs truncate">{m.name}</p>
+                                      <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
+                                      <div className="flex flex-wrap gap-1 mt-1">
                                           {m.accolades?.map((acc, i) => (
-                                              <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded">🏆</span>
+                                              <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
                                           ))}
                                       </div>
                                   </div>
                                 </div>
                              </td>
-                             <td className="text-center font-mono font-black">{m.memberId}</td>
+                             <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
                              <td className="text-center">
-                                <select className="bg-amber-50 text-[8px] font-black p-2 rounded-lg outline-none mb-1 block mx-auto" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                <select className="bg-white border border-amber-100 text-[8px] font-black p-2 rounded-lg outline-none block mx-auto" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                <div className="flex flex-col gap-1 items-center">
+                                    <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                </div>
                              </td>
-                             <td className="text-right pr-8">
-                                 <div className="flex items-center justify-end gap-2">
-                                     <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2" title="Award Accolade"><Trophy size={16}/></button>
-                                     <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button>
+                             <td className="text-right p-4">
+                                 <div className="flex items-center justify-end gap-1">
+                                     <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
+                                     <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
                                  </div>
                              </td>
                           </tr>
