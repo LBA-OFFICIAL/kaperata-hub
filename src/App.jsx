@@ -6,8 +6,8 @@ import {
 import { 
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
-  orderBy, writeBatch, getCountFromServer
-} from 'firebase/firestore';
+  orderBy, writeBatch
+} from 'firebase/firestore'; // Removed getCountFromServer to avoid billing requirement
 import { 
   Users, Calendar, Award, Bell, LogOut, UserCircle, BarChart3, Plus, 
   ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, Users2, 
@@ -151,7 +151,6 @@ const Login = ({ user, onLoginSuccess }) => {
     setLoading(true);
     setStatusMessage('Authenticating...');
 
-    // Increased timeout to 60 seconds to handle slower connections or database creation
     const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out.")), 60000));
     
     try {
@@ -183,10 +182,35 @@ const Login = ({ user, onLoginSuccess }) => {
                     }
 
                     setStatusMessage('Checking registry...');
-                    // OPTIMIZATION: Use getCountFromServer instead of fetching all docs to calculate ID
-                    const collRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
-                    const snapshot = await getCountFromServer(collRef);
-                    const currentCount = snapshot.data().count;
+                    // OPTIMIZATION: Fetch only the last member to calculate next ID (Fast & Free Tier friendly)
+                    // This avoids downloading the entire registry (slow) or using aggregation queries (requires billing)
+                    let currentCount = 0;
+                    try {
+                        const q = query(
+                            collection(db, 'artifacts', appId, 'public', 'data', 'registry'),
+                            orderBy('joinedDate', 'desc'),
+                            limit(1)
+                        );
+                        const snapshot = await getDocs(q);
+                        
+                        if (!snapshot.empty) {
+                            const lastMember = snapshot.docs[0].data();
+                            // Attempt to extract the sequence number from the last ID (e.g., LBA24-10042 -> 42)
+                            const match = lastMember.memberId.match(/(\d{4,})C?$/);
+                            if (match) {
+                                currentCount = parseInt(match[1], 10);
+                            } else {
+                                // If regex fails, fallback to simple size check (slower but functional)
+                                const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+                                currentCount = allDocs.size;
+                            }
+                        }
+                    } catch (fetchErr) {
+                        console.warn("Fast count failed, using fallback:", fetchErr);
+                        // Fallback for first run or index issues
+                        const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+                        currentCount = allDocs.size;
+                    }
                     
                     const assignedId = generateLBAId(pc, currentCount);
                     const meta = getMemberIdMeta();
@@ -239,7 +263,6 @@ const Login = ({ user, onLoginSuccess }) => {
         ]);
     } catch (err) { 
         console.error("Auth error:", err);
-        // Better error message for the specific Firestore missing error
         if (err.message.includes("database (default) does not exist")) {
             setError("Database missing: Please create a Firestore Database in your Firebase Console.");
         } else {
