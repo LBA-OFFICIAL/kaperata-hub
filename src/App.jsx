@@ -101,16 +101,26 @@ const formatDate = (dateStr) => {
 };
 
 // Safe date helpers for event rendering
-const getEventDay = (dateStr) => {
-    if (!dateStr) return "?";
-    const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? "?" : d.getDate();
-};
+const getEventDateParts = (startStr, endStr) => {
+    if (!startStr) return { day: '?', month: '?' };
+    
+    const start = new Date(startStr);
+    const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase();
+    const startDay = start.getDate();
 
-const getEventMonth = (dateStr) => {
-    if (!dateStr) return "???";
-    const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
+    if (!endStr || startStr === endStr) {
+        return { day: `${startDay}`, month: startMonth };
+    }
+
+    const end = new Date(endStr);
+    const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase();
+    const endDay = end.getDate();
+
+    if (startMonth === endMonth) {
+        return { day: `${startDay}-${endDay}`, month: startMonth };
+    } else {
+        return { day: `${startDay}-${endDay}`, month: `${startMonth}/${endMonth}` };
+    }
 };
 
 // --- Components ---
@@ -124,6 +134,16 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
   if (variant === 'red') return <div className="p-3 rounded-2xl bg-red-100 text-red-600"><Icon size={24} /></div>;
   return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
 };
+
+// Moved MemberCard outside Dashboard to prevent re-declaration
+const MemberCard = ({ m }) => (
+    <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
+       <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
+       <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
+       {m.nickname && <p className="text-[10px] text-gray-500 mb-2">"{m.nickname}"</p>}
+       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase">{m.specificTitle}</span>
+    </div>
+);
 
 const Login = ({ user, onLoginSuccess, initialError }) => {
   const [authMode, setAuthMode] = useState('login'); 
@@ -722,16 +742,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black";
   const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5";
 
-  // Card component for team members
-  const MemberCard = ({ m }) => (
-      <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
-         <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
-         <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
-         {m.nickname && <p className="text-[10px] text-gray-500 mb-2">"{m.nickname}"</p>}
-         <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase">{m.specificTitle}</span>
-      </div>
-  );
-
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
       {/* Confirmation Modal */}
@@ -844,18 +854,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           <Calendar size={20} className="text-amber-600"/> Upcoming Events
                         </h3>
                         <div className="space-y-4">
-                           {events.length === 0 ? <p className="text-xs text-gray-500">No upcoming events.</p> : events.slice(0, 3).map(ev => (
-                             <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
-                                <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
-                                   <span className="text-sm font-black">{getEventDay(ev.startDate)}</span>
-                                   <span className="text-[8px] font-bold uppercase">{getEventMonth(ev.startDate)}</span>
-                                </div>
-                                <div className="min-w-0">
-                                   <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
-                                   <p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p>
-                                </div>
-                             </div>
-                           ))}
+                           {events.length === 0 ? <p className="text-xs text-gray-500">No upcoming events.</p> : events.slice(0, 3).map(ev => {
+                               const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                               return (
+                                 <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
+                                    <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
+                                       <span className="text-xs font-black">{day}</span>
+                                       <span className="text-[8px] uppercase">{month}</span>
+                                    </div>
+                                    <div className="min-w-0">
+                                       <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
+                                       <p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p>
+                                    </div>
+                                 </div>
+                               );
+                           })}
                         </div>
                     </div>
                  </div>
@@ -1024,13 +1037,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                       </div>
                   </form>
               )}
-              {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => (
+              {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => {
+                 const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                 return (
                  <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col gap-4">
                     <div className="flex justify-between items-start">
                         <div className="flex items-center gap-4">
                             <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
-                                <span className="text-xl font-bold">{getEventDay(ev.startDate)}</span>
-                                <span className="text-[10px] uppercase font-bold">{getEventMonth(ev.startDate)}</span>
+                                <span className="text-xl font-bold">{day}</span>
+                                <span className="text-[8px] uppercase font-bold">{month}</span>
                             </div>
                             <div>
                                 <h4 className="font-black text-lg uppercase">{ev.name}</h4>
@@ -1059,7 +1074,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         )}
                     </div>
                  </div>
-              ))}
+                 );
+              })}
            </div>
         )}
 
