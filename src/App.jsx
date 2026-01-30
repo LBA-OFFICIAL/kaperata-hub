@@ -7,7 +7,7 @@ import {
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
   orderBy, writeBatch
-} from 'firebase/firestore'; // Removed getCountFromServer to avoid billing requirement
+} from 'firebase/firestore';
 import { 
   Users, Calendar, Award, Bell, LogOut, UserCircle, BarChart3, Plus, 
   ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, Users2, 
@@ -182,10 +182,9 @@ const Login = ({ user, onLoginSuccess }) => {
                     }
 
                     setStatusMessage('Checking registry...');
-                    // OPTIMIZATION: Fetch only the last member to calculate next ID (Fast & Free Tier friendly)
-                    // This avoids downloading the entire registry (slow) or using aggregation queries (requires billing)
                     let currentCount = 0;
                     try {
+                        // Attempt efficient query first
                         const q = query(
                             collection(db, 'artifacts', appId, 'public', 'data', 'registry'),
                             orderBy('joinedDate', 'desc'),
@@ -195,19 +194,20 @@ const Login = ({ user, onLoginSuccess }) => {
                         
                         if (!snapshot.empty) {
                             const lastMember = snapshot.docs[0].data();
-                            // Attempt to extract the sequence number from the last ID (e.g., LBA24-10042 -> 42)
                             const match = lastMember.memberId.match(/(\d{4,})C?$/);
                             if (match) {
                                 currentCount = parseInt(match[1], 10);
                             } else {
-                                // If regex fails, fallback to simple size check (slower but functional)
                                 const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                                 currentCount = allDocs.size;
                             }
                         }
                     } catch (fetchErr) {
+                        // If this error is permission denied, we should throw it immediately so the outer catch handles it
+                        if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
+                            throw fetchErr;
+                        }
                         console.warn("Fast count failed, using fallback:", fetchErr);
-                        // Fallback for first run or index issues
                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                         currentCount = allDocs.size;
                     }
@@ -263,8 +263,11 @@ const Login = ({ user, onLoginSuccess }) => {
         ]);
     } catch (err) { 
         console.error("Auth error:", err);
+        // Better error message for the specific Firestore missing/permission error
         if (err.message.includes("database (default) does not exist")) {
             setError("Database missing: Please create a Firestore Database in your Firebase Console.");
+        } else if (err.code === 'permission-denied' || err.message.includes("insufficient permission")) {
+            setError("Access Denied: Go to Firebase Console > Firestore > Rules and set to 'allow read, write: if true;' (Test Mode).");
         } else {
             setError(err.message); 
         }
