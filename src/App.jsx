@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, FileBarChart, CheckSquare
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -95,7 +95,22 @@ const getDailyCashPasskey = () => {
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return ""; // Safe check for invalid dates
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+// Safe date helpers for event rendering
+const getEventDay = (dateStr) => {
+    if (!dateStr) return "?";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "?" : d.getDate();
+};
+
+const getEventMonth = (dateStr) => {
+    if (!dateStr) return "???";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' });
 };
 
 // --- Components ---
@@ -694,8 +709,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            {events.length === 0 ? <p className="text-xs text-gray-500">No upcoming events.</p> : events.slice(0, 3).map(ev => (
                              <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
                                 <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
-                                   <span className="text-sm">{new Date(ev.startDate).getDate()}</span>
-                                   <span className="text-[8px] uppercase">{new Date(ev.startDate).toLocaleString('default', { month: 'short' })}</span>
+                                   <span className="text-sm">{getEventDay(ev.startDate)}</span>
+                                   <span className="text-[8px] uppercase">{getEventMonth(ev.startDate)}</span>
                                 </div>
                                 <div className="min-w-0">
                                    <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
@@ -717,7 +732,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           {/* Dynamic Badges */}
                           <div title="Member" className="aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">☕</div>
                           {isOfficer && <div title="Officer" className="aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>}
-                          {(new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && <div title="Veteran" className="aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>}
+                          {/* Safe check for memberId before calculation */}
+                          {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && <div title="Veteran" className="aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>}
                        </div>
                     </div>
                     
@@ -828,8 +844,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="flex justify-between items-start">
                         <div className="flex items-center gap-4">
                             <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
-                                <span className="text-xl">{new Date(ev.startDate).getDate()}</span>
-                                <span className="text-[8px] uppercase">{new Date(ev.startDate).toLocaleString('default', { month: 'short' })}</span>
+                                <span className="text-xl">{getEventDay(ev.startDate)}</span>
+                                <span className="text-[8px] uppercase">{getEventMonth(ev.startDate)}</span>
                             </div>
                             <div>
                                 <h4 className="font-black text-lg uppercase">{ev.name}</h4>
