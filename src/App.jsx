@@ -7,7 +7,7 @@ import {
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
   orderBy, writeBatch
-} from 'firebase/firestore'; // Removed getCountFromServer to avoid billing requirement
+} from 'firebase/firestore'; 
 import { 
   Users, Calendar, Award, Bell, LogOut, UserCircle, BarChart3, Plus, 
   ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, Users2, 
@@ -188,7 +188,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     setStatusMessage('Checking registry...');
                     let currentCount = 0;
                     try {
-                        // Attempt efficient query first
+                        // Use latest doc to infer count (fallback for no billing)
                         const q = query(
                             collection(db, 'artifacts', appId, 'public', 'data', 'registry'),
                             orderBy('joinedDate', 'desc'),
@@ -496,6 +496,81 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            </div>
         )}
 
+        {view === 'about' && (
+           <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-6">
+              <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
+                 <StatIcon icon={History} variant="amber" />
+                 <h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3>
+              </div>
+              <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{legacyContent?.body || "History not yet written."}</p>
+           </div>
+        )}
+
+        {view === 'team' && (
+           <div className="space-y-6">
+              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
+                 <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
+                 <p className="text-amber-500 font-bold text-xs uppercase tracking-widest">Officers & Committee</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                 {members.filter(m => ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory)).map(m => (
+                    <div key={m.memberId} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
+                       <img src={`https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4"/>
+                       <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
+                       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase">{m.specificTitle}</span>
+                    </div>
+                 ))}
+              </div>
+           </div>
+        )}
+
+        {view === 'events' && (
+           <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                 <h3 className="font-serif text-3xl font-black uppercase">Events</h3>
+              </div>
+              {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => (
+                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex items-center gap-6">
+                    <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
+                       <span className="text-xl">{new Date(ev.date).getDate()}</span>
+                       <span className="text-[8px] uppercase">{new Date(ev.date).toLocaleString('default', { month: 'short' })}</span>
+                    </div>
+                    <div>
+                       <h4 className="font-black text-lg uppercase">{ev.name}</h4>
+                       <p className="text-xs opacity-60">{ev.venue} • {ev.time}</p>
+                    </div>
+                 </div>
+              ))}
+           </div>
+        )}
+
+        {view === 'announcements' && (
+           <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-serif text-3xl font-black uppercase">Grind Report</h3>
+              {announcements.length === 0 ? <p className="text-center opacity-50">No announcements.</p> : announcements.map(ann => (
+                 <div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-6 opacity-10"><Megaphone size={64}/></div>
+                    <div className="relative z-10">
+                       <h4 className="font-black text-xl uppercase text-[#3E2723] mb-2">{ann.title}</h4>
+                       <p className="text-xs text-gray-600 leading-relaxed mb-4">{ann.content}</p>
+                       <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">{formatDate(ann.date)}</span>
+                    </div>
+                 </div>
+              ))}
+           </div>
+        )}
+
+        {view === 'suggestions' && (
+           <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-serif text-3xl font-black uppercase">Suggestion Box</h3>
+              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
+                 <MessageSquare size={48} className="mx-auto text-amber-300 mb-4" />
+                 <p className="text-sm text-gray-500 font-medium">Drop your thoughts here.</p>
+                 <p className="text-xs text-gray-400 mt-2">(Feature coming soon)</p>
+              </div>
+           </div>
+        )}
+
         {view === 'settings' && (
             <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
                 <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
@@ -553,6 +628,26 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             </div>
         )}
         
+        {view === 'reports' && isOfficer && (
+           <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+              <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
+                 <StatIcon icon={TrendingUp} variant="amber" />
+                 <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
+              </div>
+              <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
+                 <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
+                 <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                 <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
+                    <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
+                    {[{l:'Officer', v:secureKeys?.officerKey||SEED_OFFICER_KEY}, {l:'Head', v:secureKeys?.headKey||SEED_HEAD_KEY}, {l:'Comm', v:secureKeys?.commKey||SEED_COMM_KEY}].map((k,i)=>(<div key={i} className="flex justify-between p-4 bg-white/5 rounded-2xl mb-2"><span className="text-[10px] font-black uppercase">{k.l} Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{k.v}</span></div>))}
+                    <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
+                 </div>
+              </div>
+           </div>
+        )}
+
         {/* MEMBERS VIEW (Registry) */}
         {view === 'members' && isOfficer && (
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
