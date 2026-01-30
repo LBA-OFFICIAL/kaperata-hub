@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -60,6 +60,7 @@ const MONTHS = [
   { value: 7, label: "July" }, { value: 8, label: "August" }, { value: 9, label: "September" },
   { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }
 ];
+const COMMITTEES = ["Arts Committee", "PR Committee", "Events Committee"];
 
 // --- Helper Logic ---
 const getDirectLink = (url) => {
@@ -241,6 +242,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
                             throw fetchErr;
                         }
+                        console.warn("Fast count failed, using fallback:", fetchErr);
                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                         currentCount = allDocs.size;
                     }
@@ -400,6 +402,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [events, setEvents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
+  const [committeeApps, setCommitteeApps] = useState([]); // New state for applications
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
@@ -427,6 +430,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '' });
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   
+  // Committee Hunt State
+  const [committeeForm, setCommitteeForm] = useState({ committee: COMMITTEES[0], role: 'Committee Member' });
+  const [submittingApp, setSubmittingApp] = useState(false);
+
   // New States for Accolades & Bulk Email
   const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { memberId }
   const [accoladeText, setAccoladeText] = useState("");
@@ -486,6 +493,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
         setSuggestions(data);
     }, (e) => console.error("Suggestions sync error:", e));
+    
+    // Fetch committee applications for officers
+    let unsubApps;
+    if (isAdmin) {
+        unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => {
+             const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
+             setCommitteeApps(data);
+        }, (e) => console.error("Apps sync error:", e));
+    }
+
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
     const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => {
@@ -494,8 +511,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              setLegacyForm(s.data());
          }
     }, (e) => {});
-    return () => { unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); };
-  }, [user]);
+    
+    return () => { 
+        unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); 
+        if (unsubApps) unsubApps();
+    };
+  }, [user, isAdmin]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -605,6 +626,36 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch(err) { console.error(err); }
   };
 
+  const handleApplyCommittee = async (e) => {
+      e.preventDefault();
+      setSubmittingApp(true);
+      try {
+          // Check for existing application to prevent duplicates
+          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId));
+          const snap = await getDocs(q);
+          if(!snap.empty) {
+              alert("You already have a pending application.");
+              setSubmittingApp(false);
+              return;
+          }
+
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), {
+              memberId: profile.memberId,
+              name: profile.name,
+              committee: committeeForm.committee,
+              role: committeeForm.role,
+              status: 'pending',
+              createdAt: serverTimestamp()
+          });
+          alert("Application submitted successfully!");
+      } catch(err) {
+          console.error(err);
+          alert("Failed to submit application.");
+      } finally {
+          setSubmittingApp(false);
+      }
+  };
+
   // --- NEW FEATURES ---
   const handleExportCSV = () => {
       let dataToExport = [...members];
@@ -624,6 +675,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+  };
+
+  const handleBulkEmail = () => {
+    const recipients = selectedBaristas.length > 0 
+        ? members.filter(m => selectedBaristas.includes(m.memberId))
+        : filteredRegistry;
+    
+    const emails = recipients
+        .map(m => m.email)
+        .filter(e => e)
+        .join(',');
+        
+    if (!emails) return alert("No valid emails found.");
+    window.location.href = `mailto:?bcc=${emails}`;
   };
 
   const handleGiveAccolade = async () => {
@@ -734,6 +799,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     { id: 'events', label: "What's Brewing?", icon: Calendar },
     { id: 'announcements', label: 'Grind Report', icon: Bell },
     { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare },
+    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase }, // Added new tab
     ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }] : []),
     // Only show reports/terminal to actual Admins (Officer/Execomm), not Committees
     ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
@@ -1003,6 +1069,37 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            </div>
         )}
 
+        {view === 'committee_hunt' && (
+           <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-serif text-3xl font-black uppercase">Join the Team</h3>
+              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
+                 <form onSubmit={handleApplyCommittee} className="space-y-4 max-w-md mx-auto">
+                     <Briefcase size={48} className="mx-auto text-amber-300 mb-4" />
+                     <p className="text-sm text-gray-500 font-medium">Want to contribute more? Apply for a committee position!</p>
+                     
+                     <div className="text-left space-y-2">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Select Committee</label>
+                        <select className="w-full p-4 border border-amber-100 rounded-2xl text-xs bg-gray-50 outline-none" value={committeeForm.committee} onChange={e => setCommitteeForm({...committeeForm, committee: e.target.value})}>
+                            {COMMITTEES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                     </div>
+                     
+                     <div className="text-left space-y-2">
+                        <label className="text-[10px] font-bold uppercase text-gray-500">Select Role</label>
+                        <select className="w-full p-4 border border-amber-100 rounded-2xl text-xs bg-gray-50 outline-none" value={committeeForm.role} onChange={e => setCommitteeForm({...committeeForm, role: e.target.value})}>
+                            <option value="Committee Member">Committee Member</option>
+                            <option value="Committee Head">Committee Head</option>
+                        </select>
+                     </div>
+
+                     <button type="submit" disabled={submittingApp} className="w-full bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">
+                        {submittingApp ? "Submitting..." : "Apply Now"}
+                     </button>
+                 </form>
+              </div>
+           </div>
+        )}
+
         {view === 'events' && (
            <div className="space-y-6">
               <div className="flex items-center justify-between">
@@ -1045,7 +1142,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         <div className="flex items-center gap-4">
                             <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
                                 <span className="text-xl font-bold">{day}</span>
-                                <span className="text-[8px] uppercase font-bold">{month}</span>
+                                <span className="text-[10px] uppercase font-bold">{month}</span>
                             </div>
                             <div>
                                 <h4 className="font-black text-lg uppercase">{ev.name}</h4>
@@ -1062,12 +1159,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="flex gap-2 pt-2 border-t border-gray-100 items-center justify-between">
                         <div>
                         {ev.evaluationLink && (
-                            <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block">Evaluate</a>
+                            <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block">Post-Event Evaluation</a>
                         )}
                         </div>
                         {isOfficer && (
                             <div className="flex gap-2">
-                                <button onClick={() => alert("Attendance report generation coming soon.")} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase">Report</button>
+                                <button onClick={() => alert("Attendance report generation coming soon.")} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase">Attendance Check</button>
                                 <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit</button>
                                 <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete</button>
                             </div>
@@ -1230,6 +1327,24 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         </div>
                     </div>
                     <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
+                 </div>
+                 
+                 {/* Committee Applications Viewer */}
+                 <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
+                    <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {committeeApps && committeeApps.length > 0 ? (
+                            committeeApps.map(app => (
+                                <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs">
+                                    <p className="font-bold">{app.name} ({app.memberId})</p>
+                                    <p className="text-amber-700">{app.committee} - {app.role}</p>
+                                    <p className="text-[8px] text-gray-500 uppercase mt-1">{formatDate(app.createdAt?.toDate())}</p>
+                                </div>
+                            ))
+                        ) : (
+                            <p className="text-xs text-gray-500 italic">No pending applications.</p>
+                        )}
+                    </div>
                  </div>
               </div>
            </div>
