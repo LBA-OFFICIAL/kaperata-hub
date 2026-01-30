@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText
+  History, BrainCircuit, FileText, Cake
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -54,15 +54,12 @@ const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant S
 const COMMITTEE_TITLES = ["Committee Head", "Committee Member"];
 const PROGRAMS = ["CAKO", "CLOCA", "CLOHS", "HRA", "ITM/ITTM"];
 const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Blacklisted"];
-const SOCIAL_LINKS = { 
-  facebook: "https://fb.com/lpubaristas.official", 
-  instagram: "https://instagram.com/lpubaristas.official", 
-  tiktok: "https://tiktok.com/@lpubaristas.official",
-  email: "lpubaristas.official@gmail.com" 
-};
-const SEED_OFFICER_KEY = "KAPERATA_OFFICER_2024";
-const SEED_HEAD_KEY = "KAPERATA_HEAD_2024";
-const SEED_COMM_KEY = "KAPERATA_COMM_2024";
+const MONTHS = [
+  { value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" },
+  { value: 4, label: "April" }, { value: 5, label: "May" }, { value: 6, label: "June" },
+  { value: 7, label: "July" }, { value: 8, label: "August" }, { value: 9, label: "September" },
+  { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }
+];
 
 // --- Helper Logic ---
 const getDirectLink = (url) => {
@@ -96,41 +93,19 @@ const getDailyCashPasskey = () => {
   return `KBA-${now.getDate()}-${(now.getMonth() + 1) + (now.getFullYear() % 100)}`;
 };
 
-const formatDate = (dateStr) => {
-  if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-};
-
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  // Refactored to switch statement to avoid object/tailwind ambiguity
   let className = "p-3 rounded-2xl ";
   switch (variant) {
-    case 'amber':
-      className += "bg-amber-100 text-amber-600";
-      break;
-    case 'indigo':
-      className += "bg-indigo-100 text-indigo-600";
-      break;
-    case 'green':
-      className += "bg-green-100 text-green-600";
-      break;
-    case 'blue':
-      className += "bg-blue-100 text-blue-600";
-      break;
-    case 'red':
-      className += "bg-red-100 text-red-600";
-      break;
-    default:
-      className += "bg-gray-100 text-gray-600";
+    case 'amber': className += "bg-amber-100 text-amber-600"; break;
+    case 'indigo': className += "bg-indigo-100 text-indigo-600"; break;
+    case 'green': className += "bg-green-100 text-green-600"; break;
+    case 'blue': className += "bg-blue-100 text-blue-600"; break;
+    case 'red': className += "bg-red-100 text-red-600"; break;
+    default: className += "bg-gray-100 text-gray-600";
   }
-  
-  return (
-    <div className={className}>
-      <Icon size={24} />
-    </div>
-  );
+  return <div className={className}><Icon size={24} /></div>;
 };
 
 const Login = ({ user, onLoginSuccess }) => {
@@ -143,12 +118,15 @@ const Login = ({ user, onLoginSuccess }) => {
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [program, setProgram] = useState('');
+  const [birthMonth, setBirthMonth] = useState('');
+  const [birthDay, setBirthDay] = useState('');
   const [inputKey, setInputKey] = useState('');
   const [paymentMethod, setPaymentMethod] = useState(''); 
   const [refNo, setRefNo] = useState('');
   const [cashOfficerKey, setCashOfficerKey] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(''); 
   const [pendingProfile, setPendingProfile] = useState(null);
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true });
   const [secureKeys, setSecureKeys] = useState(null);
@@ -156,77 +134,104 @@ const Login = ({ user, onLoginSuccess }) => {
 
   useEffect(() => {
     if (!user) return;
-    
-    const unsubOps = onSnapshot(
-      doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), 
-      (snap) => snap.exists() && setHubSettings(snap.data()),
-      (err) => console.log("Settings fetch error:", err)
-    );
-    
-    const unsubKeys = onSnapshot(
-      doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), 
-      (snap) => snap.exists() && setSecureKeys(snap.data()),
-      (err) => console.log("Keys fetch error:", err)
-    );
-    
+    const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
+    const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
     return () => { unsubOps(); unsubKeys(); };
   }, [user]);
 
   const handleAuth = async (e) => {
     e.preventDefault();
+    if (loading) return; 
     setError('');
     setLoading(true);
-    
-    // Fallback: If auth hasn't finished initializing, try to sign in anonymously right now
-    let currentUser = user || auth.currentUser;
-    if (!currentUser) {
-        try {
-            // Force an anonymous sign-in if one isn't present
-            const result = await signInAnonymously(auth);
-            currentUser = result.user;
-        } catch (err) {
-            console.error("Auto-auth failed:", err);
-            // Display the specific error message to help debugging
-            setError(`Connection failed: ${err.message} (Enable Anonymous Auth in Firebase Console)`);
-            setLoading(false);
-            return;
-        }
-    }
+    setStatusMessage('Authenticating...');
 
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out.")), 15000));
+    
     try {
-      if (authMode === 'register') {
-        if (!hubSettings.registrationOpen) throw new Error("Registration is closed.");
-        if (password !== confirmPassword) throw new Error("Passwords do not match.");
-        let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid';
-        if (inputKey) {
-          const uk = inputKey.trim().toUpperCase();
-          if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; }
-          else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
-          else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
-          else throw new Error("Invalid verification key.");
-        }
-        const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
-        const assignedId = generateLBAId(pc, snap.size);
-        const meta = getMemberIdMeta();
-        const profileData = { uid: currentUser.uid, name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(), firstName: firstName.toUpperCase(), middleInitial: middleInitial.toUpperCase(), lastName: lastName.toUpperCase(), email: email.toLowerCase(), password, program, positionCategory: pc, specificTitle: st, memberId: assignedId, role, status: 'active', paymentStatus: pay, lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, joinedDate: new Date().toISOString() };
-        if (pc !== 'Member') {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', assignedId), profileData);
-          onLoginSuccess(profileData);
-        } else { setPendingProfile(profileData); setAuthMode('payment'); }
-      } else if (authMode === 'payment') {
-        if (paymentMethod === 'cash' && cashOfficerKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) throw new Error("Invalid Daily Cash Key.");
-        const final = { ...pendingProfile, paymentStatus: 'paid', paymentDetails: { method: paymentMethod, refNo } };
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', final.memberId), final);
-        onLoginSuccess(final);
-      } else {
-        const snap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1)));
-        if (snap.empty) throw new Error("ID not found.");
-        const userData = snap.docs[0].data();
-        if (userData.password !== password) throw new Error("Incorrect password.");
-        onLoginSuccess(userData);
-      }
-    } catch (err) { setError(err.message); } finally { setLoading(false); }
+        await Promise.race([
+            (async () => {
+                let currentUser = user || auth.currentUser;
+                if (!currentUser) {
+                    try {
+                        const result = await signInAnonymously(auth);
+                        currentUser = result.user;
+                    } catch (err) {
+                        throw new Error(`Connection failed: ${err.message}`);
+                    }
+                }
+
+                if (authMode === 'register') {
+                    if (!hubSettings.registrationOpen) throw new Error("Registration closed.");
+                    if (password !== confirmPassword) throw new Error("Passwords mismatch.");
+                    if (!birthMonth || !birthDay) throw new Error("Birthday required.");
+                    
+                    setStatusMessage('Verifying details...');
+                    let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid';
+                    if (inputKey) {
+                        const uk = inputKey.trim().toUpperCase();
+                        if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; }
+                        else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
+                        else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
+                        else throw new Error("Invalid key.");
+                    }
+
+                    setStatusMessage('Checking registry...');
+                    const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+                    const assignedId = generateLBAId(pc, snap.size);
+                    const meta = getMemberIdMeta();
+                    const profileData = { 
+                        uid: currentUser.uid, 
+                        name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(), 
+                        firstName: firstName.toUpperCase(), 
+                        middleInitial: middleInitial.toUpperCase(), 
+                        lastName: lastName.toUpperCase(), 
+                        email: email.toLowerCase(), 
+                        password, 
+                        program, 
+                        birthMonth: parseInt(birthMonth),
+                        birthDay: parseInt(birthDay),
+                        positionCategory: pc, 
+                        specificTitle: st, 
+                        memberId: assignedId, 
+                        role, 
+                        status: 'active', 
+                        paymentStatus: pay, 
+                        lastRenewedSem: meta.sem, 
+                        lastRenewedSY: meta.sy, 
+                        joinedDate: new Date().toISOString() 
+                    };
+                    
+                    if (pc !== 'Member') {
+                        setStatusMessage('Creating profile...');
+                        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', assignedId), profileData);
+                        onLoginSuccess(profileData);
+                    } else { 
+                        setPendingProfile(profileData); 
+                        setAuthMode('payment'); 
+                    }
+                } else if (authMode === 'payment') {
+                    setStatusMessage('Processing...');
+                    if (paymentMethod === 'cash' && cashOfficerKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) throw new Error("Invalid Cash Key.");
+                    const final = { ...pendingProfile, paymentStatus: 'paid', paymentDetails: { method: paymentMethod, refNo } };
+                    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', final.memberId), final);
+                    onLoginSuccess(final);
+                } else {
+                    setStatusMessage('Logging in...');
+                    const snap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1)));
+                    if (snap.empty) throw new Error("ID not found.");
+                    const userData = snap.docs[0].data();
+                    if (userData.password !== password) throw new Error("Incorrect password.");
+                    onLoginSuccess(userData);
+                }
+            })(),
+            timeout
+        ]);
+    } catch (err) { setError(err.message); } finally { setLoading(false); setStatusMessage(''); }
   };
+
+  const activeBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]";
+  const inactiveBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723]">
@@ -235,7 +240,7 @@ const Login = ({ user, onLoginSuccess }) => {
             <div className="bg-white rounded-[40px] max-w-sm w-full p-10 shadow-2xl border-t-[12px] border-[#FDB813] text-center">
                <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6"><LifeBuoy size={32}/></div>
                <h4 className="font-serif text-2xl font-black uppercase">Account Recovery</h4>
-               <p className="text-sm font-medium text-amber-950 mt-4 leading-relaxed">To reset your Hub password, contact an authorized LBA Officer or email us at:</p>
+               <p className="text-sm font-medium text-amber-950 mt-4">Contact an officer at:</p>
                <a href={`mailto:${SOCIAL_LINKS.email}`} className="text-[#3E2723] font-black underline block mt-2">{SOCIAL_LINKS.email}</a>
                <button onClick={() => setShowForgotModal(false)} className="w-full mt-8 bg-[#3E2723] text-[#FDB813] py-4 rounded-2xl font-black uppercase text-[10px]">Close</button>
             </div>
@@ -253,7 +258,7 @@ const Login = ({ user, onLoginSuccess }) => {
             <div className="space-y-3">
                <input type="text" required placeholder="Member ID" className="w-full p-4 border border-amber-200 rounded-2xl font-bold uppercase" value={memberIdInput} onChange={(e) => setMemberIdInput(e.target.value.toUpperCase())} />
                <input type="password" required placeholder="Password" className="w-full p-4 border border-amber-200 rounded-2xl" value={password} onChange={(e) => setPassword(e.target.value)} />
-               <div className="flex justify-end pr-2"><button type="button" onClick={() => setShowForgotModal(true)} className="text-[10px] font-black uppercase text-amber-600 hover:text-amber-800 transition-colors">Forgot Password?</button></div>
+               <div className="flex justify-end pr-2"><button type="button" onClick={() => setShowForgotModal(true)} className="text-[10px] font-black uppercase text-amber-600 hover:text-amber-800">Forgot Password?</button></div>
             </div>
           )}
           {authMode === 'register' && (
@@ -268,6 +273,16 @@ const Login = ({ user, onLoginSuccess }) => {
                 <option value="">Select Program</option>
                 {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
+              
+              {/* Birthday Fields */}
+              <div className="grid grid-cols-2 gap-2">
+                <select required className="p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)}>
+                    <option value="">Birth Month</option>
+                    {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </select>
+                <input type="number" required min="1" max="31" placeholder="Day" className="p-3 border border-amber-200 rounded-xl text-xs font-bold" value={birthDay} onChange={(e) => setBirthDay(e.target.value)} />
+              </div>
+
               <input type="password" required placeholder="Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs" value={password} onChange={(e) => setPassword(e.target.value)} />
               <input type="password" required placeholder="Confirm Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
               <input type="text" placeholder="Leader Key (Optional)" className="w-full p-3 border border-amber-200 rounded-xl text-[10px] font-bold uppercase" value={inputKey} onChange={(e) => setInputKey(e.target.value.toUpperCase())} />
@@ -276,17 +291,17 @@ const Login = ({ user, onLoginSuccess }) => {
           {authMode === 'payment' && (
             <div className="space-y-4">
                <div className="flex gap-2">
-                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={paymentMethod === 'gcash' ? "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]" : "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900"}>GCash</button>
-                  <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]" : "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900"}>Cash</button>
+                  <button type="button" onClick={() => setPaymentMethod('gcash')} className={paymentMethod === 'gcash' ? activeBtnClass : inactiveBtnClass}>GCash</button>
+                  <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
-                  {paymentMethod === 'gcash' ? "GCash: 09XX XXX XXXX (Treasurer)" : "Provide the Daily Cash Key"}
+                  {paymentMethod === 'gcash' ? "GCash: 09XX XXX XXXX" : "Provide Daily Cash Key"}
                </div>
                <input type="text" required placeholder={paymentMethod === 'gcash' ? "Reference No." : "Daily Cash Key"} className="w-full p-3 border border-amber-200 rounded-xl outline-none text-xs uppercase" value={paymentMethod === 'gcash' ? refNo : cashOfficerKey} onChange={e => paymentMethod === 'gcash' ? setRefNo(e.target.value) : setCashOfficerKey(e.target.value.toUpperCase())} />
             </div>
           )}
           <button type="submit" disabled={loading} className="w-full bg-[#3E2723] text-[#FDB813] py-5 rounded-2xl hover:bg-black transition-all font-black uppercase flex justify-center items-center gap-2">
-            {loading ? <Loader2 className="animate-spin" size={20}/> : (authMode === 'payment' ? 'Complete' : authMode === 'register' ? 'Register' : 'Enter Hub')}
+            {loading ? <div className="flex items-center gap-2"><Loader2 className="animate-spin" size={20}/><span className="text-[10px]">{statusMessage}</span></div> : (authMode === 'payment' ? 'Complete' : authMode === 'register' ? 'Register' : 'Enter Hub')}
           </button>
         </form>
         {authMode !== 'payment' && (
@@ -322,114 +337,53 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [confirmDelete, setConfirmDelete] = useState(null); 
   const fileInputRef = useRef(null);
   const currentDailyKey = getDailyCashPasskey();
+  const [settingsForm, setSettingsForm] = useState({ ...profile });
+  const [savingSettings, setSavingSettings] = useState(false);
 
   const isOfficer = useMemo(() => ['Officer', 'Execomm'].includes(profile.positionCategory), [profile.positionCategory]);
 
+  // Birthday Logic
+  const isBirthday = useMemo(() => {
+    if (!profile.birthMonth || !profile.birthDay) return false;
+    const today = new Date();
+    return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate();
+  }, [profile]);
+
   useEffect(() => {
     if (!user) return;
-    
     const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
-    
     const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        // Sort in memory instead
         data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
         setSuggestions(data);
     }, (e) => {});
-
-    const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (snap) => snap.exists() && setHubSettings(snap.data()), (e) => {});
-    const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (snap) => snap.exists() && setSecureKeys(snap.data()), (e) => {});
-    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (snap) => snap.exists() && setLegacyContent(snap.data()), (e) => {});
-    
+    const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
+    const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
+    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => s.exists() && setLegacyContent(s.data()), (e) => {});
     return () => { unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); };
   }, [user]);
 
-  const filteredRegistry = useMemo(() => {
-    let res = [...members];
-    if (searchQuery) res = res.filter(m => m.name.toLowerCase().includes(searchQuery.toLowerCase()) || m.memberId.toLowerCase().includes(searchQuery.toLowerCase()));
-    res.sort((a, b) => (a[sortConfig.key] || "").localeCompare(b[sortConfig.key] || "") * (sortConfig.direction === 'asc' ? 1 : -1));
-    return res;
-  }, [members, searchQuery, sortConfig]);
-
-  const paginatedRegistry = filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
-  const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
-
-  const handleUpdatePosition = async (targetId, cat, specific = "") => {
-    if (!isOfficer) return;
-    const target = members.find(m => m.memberId === targetId);
-    if (!target) return;
-    
-    let newId = target.memberId;
-    const isL = ['Officer', 'Execomm', 'Committee'].includes(cat);
-    const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId;
-    newId = baseId + (isL ? 'C' : '');
-    const updates = { positionCategory: cat, specificTitle: specific || cat, memberId: newId, role: ['Officer', 'Execomm'].includes(cat) ? 'admin' : 'member', paymentStatus: isL ? 'exempt' : target.paymentStatus };
-    if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId));
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates });
-  };
-
-  const initiateRemoveMember = (mid, name) => {
-    setConfirmDelete({ mid, name });
-  };
-
-  const confirmRemoveMember = async () => {
-    if (!confirmDelete) return;
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+    setSavingSettings(true);
     try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid));
-    } catch(e) { console.error(e); } finally { setConfirmDelete(null); }
-  };
-
-  const handleRotateSecurityKeys = async () => {
-    const newKeys = {
-        officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(),
-        headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(),
-        commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase()
-    };
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys);
-  };
-
-  const downloadImportTemplate = () => {
-    const headers = "Name,Email,Program,PositionCategory,SpecificTitle";
-    const sample = "JUAN DELA CRUZ,juan@lpu.edu.ph,BSIT,Member,Member";
-    const blob = new Blob([headers + "\n" + sample], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "LBA_Import_Template.csv";
-    a.click();
-  };
-
-  const handleBulkImportCSV = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setIsImporting(true);
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-       try {
-          const text = evt.target.result;
-          const rows = text.split('\n').filter(r => r.trim().length > 0);
-          const batch = writeBatch(db);
-          let count = members.length;
-          for (let i = 1; i < rows.length; i++) {
-             const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim());
-             if (!name || !email) continue;
-             const mid = generateLBAId(pos, count++);
-             const meta = getMemberIdMeta();
-             const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'active', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() };
-             batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data);
-          }
-          await batch.commit();
-       } catch (err) {} finally { setIsImporting(false); e.target.value = ""; }
-    };
-    reader.readAsText(file);
+        const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) };
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated);
+        setProfile(updated);
+        alert("Profile updated successfully!");
+    } catch(err) {
+        console.error(err);
+        alert("Failed to update profile.");
+    } finally {
+        setSavingSettings(false);
+    }
   };
 
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: BarChart3 },
+    { id: 'settings', label: 'Settings', icon: Settings2 },
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'team', label: 'Brew Crew', icon: Users2 },
     { id: 'events', label: "What's Brewing?", icon: Calendar },
@@ -438,45 +392,22 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }, { id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
+  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black";
+  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5";
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
-      {/* Confirmation Modal */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
-                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={32} /></div>
-                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm Deletion</h3>
-                <p className="text-sm text-gray-600 mb-8">Are you sure you want to remove <span className="font-bold text-[#3E2723]">{confirmDelete.name}</span>?</p>
-                <div className="flex gap-3">
-                    <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
-                    <button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button>
-                </div>
-            </div>
-        </div>
-      )}
-
       <aside className="w-64 bg-[#3E2723] text-amber-50 md:flex flex-col hidden">
         <div className="p-8 border-b border-amber-900/30 text-center">
            <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA" className="w-20 h-20 object-contain mx-auto mb-4" />
            <h1 className="font-serif font-black text-[10px] uppercase">LPU Baristas' Association</h1>
         </div>
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
-          {menuItems.map(item => {
-             const active = view === item.id;
-             const Icon = item.icon; // Cap variable for JSX
-             if (active) {
-                 return (
-                    <button key={item.id} onClick={() => setView(item.id)} className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black">
-                      <Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
-                    </button>
-                 );
-             }
-             return (
-                <button key={item.id} onClick={() => setView(item.id)} className="w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5">
-                  <Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
-                </button>
-             );
-          })}
+          {menuItems.map(item => (
+            <button key={item.id} onClick={() => setView(item.id)} className={view === item.id ? activeMenuClass : inactiveMenuClass}>
+              <item.icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
+            </button>
+          ))}
         </nav>
         <div className="p-6 border-t border-amber-900/30"><button onClick={logout} className="flex items-center gap-2 text-red-400 font-black text-[10px] uppercase hover:text-red-300"><LogOut size={16} /> Exit Hub</button></div>
       </aside>
@@ -492,6 +423,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
         {view === 'home' && (
            <div className="space-y-10 animate-fadeIn">
+              {isBirthday && (
+                <div className="bg-gradient-to-r from-pink-500 to-rose-500 text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden flex items-center justify-between mb-8">
+                    <div>
+                        <h3 className="font-black text-3xl uppercase mb-2">Happy Birthday!</h3>
+                        <p className="text-pink-100 font-medium">Wishing you a brew-tiful day filled with joy and coffee! 🎉</p>
+                    </div>
+                    <div className="bg-white/20 p-4 rounded-full animate-bounce">
+                        <Cake size={40} />
+                    </div>
+                </div>
+              )}
               <div className="bg-[#3E2723] rounded-[48px] p-10 text-white relative overflow-hidden shadow-2xl border-4 border-[#FDB813]">
                 <h3 className="font-serif text-3xl font-black uppercase mb-2">{profile.name}</h3>
                 <p className="text-[#FDB813] font-black text-lg">"{profile.nickname || 'Senior Barista'}"</p>
@@ -503,117 +445,60 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            </div>
         )}
 
-        {view === 'about' && (
-           <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-6">
-              <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
-                 <StatIcon icon={History} variant="amber" />
-                 <h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3>
-              </div>
-              <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{legacyContent?.body || "History not yet written."}</p>
-           </div>
-        )}
-
-        {view === 'team' && (
-           <div className="space-y-6">
-              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
-                 <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
-                 <p className="text-amber-500 font-bold text-xs uppercase tracking-widest">Officers & Committee</p>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                 {members.filter(m => ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory)).map(m => (
-                    <div key={m.memberId} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
-                       <img src={`https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4"/>
-                       <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
-                       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase">{m.specificTitle}</span>
+        {view === 'settings' && (
+            <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
+                <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
+                    <StatIcon icon={Settings2} variant="blue" />
+                    <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
+                </div>
+                <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
+                    <div>
+                        <label className="block text-xs font-black uppercase mb-2 text-gray-500">Full Name</label>
+                        <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.name} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} />
                     </div>
-                 ))}
-              </div>
-           </div>
-        )}
-
-        {view === 'events' && (
-           <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                 <h3 className="font-serif text-3xl font-black uppercase">Events</h3>
-              </div>
-              {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => (
-                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex items-center gap-6">
-                    <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
-                       <span className="text-xl">{new Date(ev.date).getDate()}</span>
-                       <span className="text-[8px] uppercase">{new Date(ev.date).toLocaleString('default', { month: 'short' })}</span>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">First Name</label>
+                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.firstName} onChange={e => setSettingsForm({...settingsForm, firstName: e.target.value.toUpperCase()})} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Last Name</label>
+                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.lastName} onChange={e => setSettingsForm({...settingsForm, lastName: e.target.value.toUpperCase()})} />
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Month</label>
+                            <select className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.birthMonth || ""} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}>
+                                <option value="">Select</option>
+                                {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Day</label>
+                            <input type="number" min="1" max="31" className="w-full p-4 bg-gray-50 rounded-xl font-bold" value={settingsForm.birthDay || ""} onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})} />
+                        </div>
                     </div>
                     <div>
-                       <h4 className="font-black text-lg uppercase">{ev.name}</h4>
-                       <p className="text-xs opacity-60">{ev.venue} • {ev.time}</p>
+                         <label className="block text-xs font-black uppercase mb-2 text-gray-500">Email Address</label>
+                         <input type="email" className="w-full p-4 bg-gray-50 rounded-xl font-bold" value={settingsForm.email} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} />
                     </div>
-                 </div>
-              ))}
-           </div>
-        )}
-
-        {view === 'reports' && isOfficer && (
-           <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-              <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
-                 <StatIcon icon={TrendingUp} variant="amber" />
-                 <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
-              </div>
-              <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
-                 <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
-                 <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
-                    <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                    {[{l:'Officer', v:secureKeys?.officerKey||SEED_OFFICER_KEY}, {l:'Head', v:secureKeys?.headKey||SEED_HEAD_KEY}, {l:'Comm', v:secureKeys?.commKey||SEED_COMM_KEY}].map((k,i)=>(<div key={i} className="flex justify-between p-4 bg-white/5 rounded-2xl mb-2"><span className="text-[10px] font-black uppercase">{k.l} Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{k.v}</span></div>))}
-                    <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                 </div>
-              </div>
-           </div>
-        )}
-
-        {view === 'members' && isOfficer && (
-           <div className="space-y-6 animate-fadeIn text-[#3E2723]">
-              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center">
-                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
-                 <div className="flex gap-2">
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
-                    <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
-                    <button onClick={downloadImportTemplate} className="bg-amber-100 px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Template</button>
-                 </div>
-              </div>
-              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
-                 <table className="w-full text-left uppercase">
-                    <thead className="bg-[#3E2723] text-white font-serif tracking-widest"><tr className="text-[10px]"><th className="p-8 w-12"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th><th>Barista</th><th className="text-center">ID</th><th className="text-center">Designation</th><th className="text-right">Manage</th></tr></thead>
-                    <tbody className="text-[#3E2723] divide-y divide-amber-50">
-                       {paginatedRegistry.map(m => (
-                          <tr key={m.memberId} className="hover:bg-amber-50/50">
-                             <td className="p-8 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                             <td className="flex items-center gap-4 py-8"><div><p className="font-black text-xs">{m.name}</p><p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p></div></td>
-                             <td className="text-center font-mono font-black">{m.memberId}</td>
-                             <td className="text-center">
-                                <select className="bg-amber-50 text-[8px] font-black p-2 rounded-lg outline-none mb-1 block mx-auto" value={m.positionCategory} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                <select className="bg-white border border-amber-100 text-[8px] font-black p-2 rounded-lg outline-none block mx-auto" value={m.specificTitle} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
-                             </td>
-                             <td className="text-right pr-8"><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button></td>
-                          </tr>
-                       ))}
-                    </tbody>
-                 </table>
-              </div>
-           </div>
+                    <button type="submit" disabled={savingSettings} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-xl font-black uppercase hover:bg-black transition-colors">
+                        {savingSettings ? "Saving..." : "Save Changes"}
+                    </button>
+                </form>
+            </div>
         )}
       </main>
     </div>
   );
 };
 
-// --- Main Root ---
 const App = () => {
   const [profile, setProfile] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize Auth exactly once
   useEffect(() => {
     const initAuth = async () => {
       try {
@@ -622,12 +507,9 @@ const App = () => {
         } else {
            await signInAnonymously(auth);
         }
-      } catch (err) {
-        console.error("Auth init failed:", err);
-      }
+      } catch (err) {}
     };
     initAuth();
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -635,20 +517,8 @@ const App = () => {
     return () => unsubscribe();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-center text-[#3E2723]">
-        <Loader2 size={40} className="animate-spin mb-4" />
-        <p className="font-black uppercase tracking-widest text-xs animate-pulse">Establishing Secure Connection...</p>
-      </div>
-    );
-  }
-
-  return profile ? (
-    <Dashboard user={user} profile={profile} setProfile={setProfile} logout={() => { setProfile(null); signOut(auth); }} />
-  ) : (
-    <Login user={user} onLoginSuccess={setProfile} />
-  );
+  if (loading) return <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-center text-[#3E2723]"><Loader2 size={40} className="animate-spin mb-4" /><p className="font-black uppercase tracking-widest text-xs animate-pulse">Establishing Secure Connection...</p></div>;
+  return profile ? <Dashboard user={user} profile={profile} setProfile={setProfile} logout={() => { setProfile(null); signOut(auth); }} /> : <Login user={user} onLoginSuccess={setProfile} />;
 };
 
 export default App;
