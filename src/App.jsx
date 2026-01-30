@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -106,8 +106,7 @@ const getMemberIdMeta = () => {
 
 const generateLBAId = (category, currentCount = 0) => {
   const { sy, sem } = getMemberIdMeta();
-  const count = Number(currentCount) + 1;
-  const padded = String(count).padStart(4, '0');
+  const padded = String(currentCount + 1).padStart(4, '0');
   const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
   return `LBA${sy}-${sem}${padded}${isLeader ? "C" : ""}`;
 };
@@ -254,9 +253,12 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         
                         if (!snapshot.empty) {
                             const lastMember = snapshot.docs[0].data();
-                            const match = lastMember.memberId.match(/-(\d)(\d{4,})C?$/);
+                            // Safely extract number, ignoring undefined parts
+                            const memberId = lastMember.memberId || "";
+                            // Regex to find 4+ digits at the end
+                            const match = memberId.match(/(\d{4,})C?$/);
                             if (match) {
-                                currentCount = parseInt(match[2], 10);
+                                currentCount = parseInt(match[1], 10);
                             } else {
                                 const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                                 currentCount = allDocs.size;
@@ -738,6 +740,36 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           alert("Failed to submit application.");
       } finally {
           setSubmittingApp(false);
+      }
+  };
+  
+  const handleSanitizeDatabase = async () => {
+      if (!confirm("This will RE-GENERATE all Member IDs. Are you sure?")) return;
+      const batch = writeBatch(db);
+      try {
+          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc'));
+          const snapshot = await getDocs(q);
+          
+          let count = 0;
+          snapshot.docs.forEach((docSnap) => {
+             const data = docSnap.data();
+             const category = data.positionCategory || "Member";
+             const meta = getMemberIdMeta(); // Assuming current sem for simplicity, or parse from joinedDate
+             
+             // Manually generate ID here to ensure sequence
+             count++;
+             const padded = String(count).padStart(4, '0');
+             const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
+             const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`;
+             
+             batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId });
+          });
+          
+          await batch.commit();
+          alert(`Database sanitized! ${count} records updated.`);
+      } catch (err) {
+          console.error("Sanitize error", err);
+          alert("Failed to sanitize: " + err.message);
       }
   };
 
@@ -1506,18 +1538,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="space-y-2">
                         <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
                             <span className="text-[10px] font-black uppercase">Officer Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || SEED_OFFICER_KEY}</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
                         </div>
                         <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
                             <span className="text-[10px] font-black uppercase">Head Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || SEED_HEAD_KEY}</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
                         </div>
                         <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
                             <span className="text-[10px] font-black uppercase">Comm Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || SEED_COMM_KEY}</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
                         </div>
                     </div>
                     <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
+                    {/* New Sanitize Button */}
+                    <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
                  </div>
                  
                  {/* Committee Applications Viewer */}
