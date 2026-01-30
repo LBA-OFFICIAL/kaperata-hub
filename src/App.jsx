@@ -6,7 +6,7 @@ import {
 import { 
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
-  orderBy, writeBatch
+  orderBy, writeBatch, getCountFromServer
 } from 'firebase/firestore';
 import { 
   Users, Calendar, Award, Bell, LogOut, UserCircle, BarChart3, Plus, 
@@ -183,8 +183,12 @@ const Login = ({ user, onLoginSuccess }) => {
                     }
 
                     setStatusMessage('Checking registry...');
-                    const snap = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
-                    const assignedId = generateLBAId(pc, snap.size);
+                    // OPTIMIZATION: Use getCountFromServer instead of fetching all docs to calculate ID
+                    const collRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+                    const snapshot = await getCountFromServer(collRef);
+                    const currentCount = snapshot.data().count;
+                    
+                    const assignedId = generateLBAId(pc, currentCount);
                     const meta = getMemberIdMeta();
                     const profileData = { 
                         uid: currentUser.uid, 
