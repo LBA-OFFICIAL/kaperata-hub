@@ -188,6 +188,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     setStatusMessage('Checking registry...');
                     let currentCount = 0;
                     try {
+                        // Use latest doc to infer count (fallback for no billing)
                         const q = query(
                             collection(db, 'artifacts', appId, 'public', 'data', 'registry'),
                             orderBy('joinedDate', 'desc'),
@@ -384,6 +385,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const currentDailyKey = getDailyCashPasskey();
   const [settingsForm, setSettingsForm] = useState({ ...profile });
   const [savingSettings, setSavingSettings] = useState(false);
+  
+  // States for interactive features
+  const [suggestionText, setSuggestionText] = useState("");
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [newEvent, setNewEvent] = useState({ name: '', date: '', time: '', venue: '' });
+  const [showAnnounceForm, setShowAnnounceForm] = useState(false);
+  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
 
   // FIX: Case-insensitive check for officer role
   const isOfficer = useMemo(() => {
@@ -429,6 +437,42 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     } finally {
         setSavingSettings(false);
     }
+  };
+
+  const handlePostSuggestion = async (e) => {
+      e.preventDefault();
+      if (!suggestionText.trim()) return;
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), {
+              text: suggestionText,
+              authorId: profile.memberId,
+              authorName: profile.nickname || profile.name,
+              createdAt: serverTimestamp()
+          });
+          setSuggestionText("");
+      } catch (err) { console.error(err); }
+  };
+
+  const handleAddEvent = async (e) => {
+      e.preventDefault();
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...newEvent, createdAt: serverTimestamp() });
+          setShowEventForm(false);
+          setNewEvent({ name: '', date: '', time: '', venue: '' });
+      } catch (err) { console.error(err); }
+  };
+
+  const handlePostAnnouncement = async (e) => {
+      e.preventDefault();
+      try {
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), { 
+              ...newAnnouncement, 
+              date: new Date().toISOString(),
+              createdAt: serverTimestamp() 
+          });
+          setShowAnnounceForm(false);
+          setNewAnnouncement({ title: '', content: '' });
+      } catch (err) { console.error(err); }
   };
 
   const menuItems = [
@@ -541,7 +585,22 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            <div className="space-y-6">
               <div className="flex items-center justify-between">
                  <h3 className="font-serif text-3xl font-black uppercase">Events</h3>
+                 {isOfficer && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Create Event</button>}
               </div>
+              {showEventForm && (
+                  <form onSubmit={handleAddEvent} className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6 space-y-3">
+                      <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value.toUpperCase()})} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="date" required className="p-3 border rounded-xl text-xs" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
+                        <input type="time" required className="p-3 border rounded-xl text-xs" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} />
+                      </div>
+                      <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value.toUpperCase()})} />
+                      <div className="flex gap-2">
+                          <button type="button" onClick={() => setShowEventForm(false)} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
+                          <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Save Event</button>
+                      </div>
+                  </form>
+              )}
               {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => (
                  <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex items-center gap-6">
                     <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
@@ -559,7 +618,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
         {view === 'announcements' && (
            <div className="space-y-6 animate-fadeIn">
-              <h3 className="font-serif text-3xl font-black uppercase">Grind Report</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-3xl font-black uppercase">Grind Report</h3>
+                {isOfficer && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Post Notice</button>}
+              </div>
+              {showAnnounceForm && (
+                  <form onSubmit={handlePostAnnouncement} className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6 space-y-3">
+                      <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value.toUpperCase()})} />
+                      <textarea placeholder="Announcement content..." required className="w-full p-3 border rounded-xl text-xs h-24" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})}></textarea>
+                      <div className="flex gap-2">
+                          <button type="button" onClick={() => setShowAnnounceForm(false)} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
+                          <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Post Now</button>
+                      </div>
+                  </form>
+              )}
               {announcements.length === 0 ? <p className="text-center opacity-50">No announcements.</p> : announcements.map(ann => (
                  <div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden">
                     <div className="absolute top-0 right-0 p-6 opacity-10"><Megaphone size={64}/></div>
@@ -577,9 +649,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            <div className="space-y-6 animate-fadeIn">
               <h3 className="font-serif text-3xl font-black uppercase">Suggestion Box</h3>
               <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
-                 <MessageSquare size={48} className="mx-auto text-amber-300 mb-4" />
-                 <p className="text-sm text-gray-500 font-medium">Drop your thoughts here.</p>
-                 <p className="text-xs text-gray-400 mt-2">(Feature coming soon)</p>
+                 <form onSubmit={handlePostSuggestion} className="space-y-4">
+                     <MessageSquare size={48} className="mx-auto text-amber-300 mb-4" />
+                     <p className="text-sm text-gray-500 font-medium">Drop your thoughts here.</p>
+                     <textarea required value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className="w-full p-4 border border-amber-100 rounded-2xl text-xs bg-gray-50 outline-none focus:border-amber-400" placeholder="Type your suggestion anonymously..."></textarea>
+                     <button type="submit" className="bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">Submit</button>
+                 </form>
+              </div>
+              <div className="space-y-4 mt-8">
+                  {suggestions.map(s => (
+                      <div key={s.id} className="bg-white p-6 rounded-3xl border border-amber-50 shadow-sm">
+                          <p className="text-sm font-medium text-gray-700">"{s.text}"</p>
+                          <p className="text-[10px] text-amber-400 font-black mt-2 uppercase text-right">- {s.authorName}</p>
+                      </div>
+                  ))}
               </div>
            </div>
         )}
