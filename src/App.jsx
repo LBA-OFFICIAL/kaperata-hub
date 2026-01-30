@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User
+  History, BrainCircuit, FileText, Cake, Camera, User, FileBarChart, CheckSquare
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -63,7 +63,7 @@ const MONTHS = [
 
 // --- Helper Logic ---
 const getDirectLink = (url) => {
-  if (!url) return "";
+  if (!url || typeof url !== 'string') return "";
   if (url.includes('drive.google.com')) {
     const idMatch = url.match(/[-\w]{25,}/);
     if (idMatch) return `https://lh3.googleusercontent.com/d/${idMatch[0]}`;
@@ -188,7 +188,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     setStatusMessage('Checking registry...');
                     let currentCount = 0;
                     try {
-                        // Use latest doc to infer count (fallback for no billing)
                         const q = query(
                             collection(db, 'artifacts', appId, 'public', 'data', 'registry'),
                             orderBy('joinedDate', 'desc'),
@@ -210,7 +209,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
                             throw fetchErr;
                         }
-                        console.warn("Fast count failed, using fallback:", fetchErr);
                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                         currentCount = allDocs.size;
                     }
@@ -386,12 +384,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [settingsForm, setSettingsForm] = useState({ ...profile });
   const [savingSettings, setSavingSettings] = useState(false);
   
-  // States for interactive features
+  // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', date: '', time: '', venue: '' });
+  const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
+  const [isEditingLegacy, setIsEditingLegacy] = useState(false);
+  const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '' });
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
 
   // FIX: Case-insensitive check for officer role
   const isOfficer = useMemo(() => {
@@ -419,7 +420,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     }, (e) => console.error("Suggestions sync error:", e));
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
-    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => s.exists() && setLegacyContent(s.data()), (e) => {});
+    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => {
+         if(s.exists()) {
+             setLegacyContent(s.data());
+             setLegacyForm(s.data());
+         }
+    }, (e) => {});
     return () => { unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); };
   }, [user]);
 
@@ -458,22 +464,136 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       try {
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...newEvent, createdAt: serverTimestamp() });
           setShowEventForm(false);
-          setNewEvent({ name: '', date: '', time: '', venue: '' });
+          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
       } catch (err) { console.error(err); }
   };
 
   const handlePostAnnouncement = async (e) => {
       e.preventDefault();
       try {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), { 
-              ...newAnnouncement, 
-              date: new Date().toISOString(),
-              createdAt: serverTimestamp() 
-          });
+          if (editingAnnouncement) {
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', editingAnnouncement.id), {
+                 ...newAnnouncement,
+                 lastEdited: serverTimestamp()
+             });
+             setEditingAnnouncement(null);
+          } else {
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), { 
+                 ...newAnnouncement, 
+                 date: new Date().toISOString(),
+                 createdAt: serverTimestamp() 
+             });
+          }
           setShowAnnounceForm(false);
           setNewAnnouncement({ title: '', content: '' });
       } catch (err) { console.error(err); }
   };
+  
+  const handleDeleteAnnouncement = async (id) => {
+      if(!confirm("Delete this announcement?")) return;
+      try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', id));
+      } catch(err) { console.error(err); }
+  };
+
+  const handleEditAnnouncement = (ann) => {
+      setNewAnnouncement({ title: ann.title, content: ann.content });
+      setEditingAnnouncement(ann);
+      setShowAnnounceForm(true);
+  };
+
+  const handleSaveLegacy = async () => {
+      try {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), legacyForm);
+          setIsEditingLegacy(false);
+      } catch(err) { console.error(err); }
+  };
+
+  // Registry Helpers
+  const filteredRegistry = useMemo(() => {
+    let res = [...members];
+    if (searchQuery) res = res.filter(m => (m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase())) || (m.memberId && m.memberId.toLowerCase().includes(searchQuery.toLowerCase())));
+    res.sort((a, b) => (a[sortConfig.key] || "").localeCompare(b[sortConfig.key] || "") * (sortConfig.direction === 'asc' ? 1 : -1));
+    return res;
+  }, [members, searchQuery, sortConfig]);
+
+  const paginatedRegistry = filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
+  const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
+
+  const handleUpdatePosition = async (targetId, cat, specific = "") => {
+    if (!isOfficer) return;
+    const target = members.find(m => m.memberId === targetId);
+    if (!target) return;
+    
+    let newId = target.memberId;
+    const isL = ['Officer', 'Execomm', 'Committee'].includes(cat);
+    const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId;
+    newId = baseId + (isL ? 'C' : '');
+    const updates = { positionCategory: cat, specificTitle: specific || cat, memberId: newId, role: ['Officer', 'Execomm'].includes(cat) ? 'admin' : 'member', paymentStatus: isL ? 'exempt' : target.paymentStatus };
+    if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId));
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates });
+  };
+
+  const initiateRemoveMember = (mid, name) => {
+    setConfirmDelete({ mid, name });
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!confirmDelete) return;
+    try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid));
+    } catch(e) { console.error(e); } finally { setConfirmDelete(null); }
+  };
+  
+  const handleBulkImportCSV = async (e) => {
+    // ... Existing bulk import logic ...
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+       try {
+          const text = evt.target.result;
+          const rows = text.split('\n').filter(r => r.trim().length > 0);
+          const batch = writeBatch(db);
+          let count = members.length;
+          for (let i = 1; i < rows.length; i++) {
+             const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim());
+             if (!name || !email) continue;
+             const mid = generateLBAId(pos, count++);
+             const meta = getMemberIdMeta();
+             const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'active', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() };
+             batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data);
+          }
+          await batch.commit();
+       } catch (err) {} finally { setIsImporting(false); e.target.value = ""; }
+    };
+    reader.readAsText(file);
+  };
+  
+  const downloadImportTemplate = () => {
+      // ... same as before
+    const headers = "Name,Email,Program,PositionCategory,SpecificTitle";
+    const sample = "JUAN DELA CRUZ,juan@lpu.edu.ph,BSIT,Member,Member";
+    const blob = new Blob([headers + "\n" + sample], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = "LBA_Import_Template.csv";
+    a.click();
+  };
+
+  const handleRotateSecurityKeys = async () => {
+    const newKeys = {
+        officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(),
+        headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(),
+        commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase()
+    };
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys);
+  };
+
 
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: BarChart3 },
@@ -497,11 +617,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            <h1 className="font-serif font-black text-[10px] uppercase">LPU Baristas' Association</h1>
         </div>
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
-          {menuItems.map(item => (
-            <button key={item.id} onClick={() => setView(item.id)} className={view === item.id ? activeMenuClass : inactiveMenuClass}>
-              <item.icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
-            </button>
-          ))}
+          {menuItems.map(item => {
+             const active = view === item.id;
+             const Icon = item.icon; // Cap variable for JSX
+             return (
+                <button key={item.id} onClick={() => setView(item.id)} className={active ? activeMenuClass : inactiveMenuClass}>
+                  <Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
+                </button>
+             );
+          })}
         </nav>
         <div className="p-6 border-t border-amber-900/30"><button onClick={logout} className="flex items-center gap-2 text-red-400 font-black text-[10px] uppercase hover:text-red-300"><LogOut size={16} /> Exit Hub</button></div>
       </aside>
@@ -522,44 +646,128 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
         {view === 'home' && (
            <div className="space-y-10 animate-fadeIn">
-              {isBirthday && (
-                <div className="bg-gradient-to-r from-pink-500 to-rose-500 text-white p-8 rounded-[40px] shadow-xl relative overflow-hidden flex items-center justify-between mb-8">
+              {/* Profile Card & Notices Grid */}
+              <div className="bg-[#3E2723] rounded-[48px] p-8 text-white relative overflow-hidden shadow-2xl border-4 border-[#FDB813] mb-8">
+                  {/* ... (Existing Profile Header) ... */}
+                  <div className="flex flex-col md:flex-row gap-6 items-start md:items-center mb-6">
+                      <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-24 h-24 rounded-full object-cover border-4 border-white/20" />
+                      <div>
+                          <h3 className="font-serif text-3xl font-black uppercase mb-1">{profile.nickname ? `${profile.nickname}` : profile.name}</h3>
+                          <p className="text-[#FDB813] font-black text-lg">"{profile.specificTitle || 'Barista'}"</p>
+                      </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                     <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
+                     <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
+                     <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
+                     <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                 {/* Left Column: Notices & Upcoming Events */}
+                 <div className="lg:col-span-2 space-y-6">
+                    {/* Latest Notices */}
                     <div>
-                        <h3 className="font-black text-3xl uppercase mb-2">Happy Birthday!</h3>
-                        <p className="text-pink-100 font-medium">Wishing you a brew-tiful day filled with joy and coffee! 🎉</p>
+                        <h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                          <Bell size={20} className="text-amber-600"/> Latest Notices
+                        </h3>
+                        <div className="space-y-4">
+                           {announcements.length === 0 ? <p className="text-xs text-gray-500">No new notices.</p> : announcements.slice(0, 2).map(ann => (
+                             <div key={ann.id} className="bg-white p-6 rounded-3xl border border-amber-100 shadow-sm">
+                                <div className="flex justify-between items-start mb-2">
+                                  <h4 className="font-black text-sm uppercase text-[#3E2723]">{ann.title}</h4>
+                                  <span className="text-[8px] font-bold text-gray-400 uppercase">{formatDate(ann.date)}</span>
+                                </div>
+                                <p className="text-xs text-gray-600 line-clamp-2">{ann.content}</p>
+                             </div>
+                           ))}
+                        </div>
                     </div>
-                    <div className="bg-white/20 p-4 rounded-full animate-bounce">
-                        <Cake size={40} />
+
+                    {/* Upcoming Events */}
+                    <div>
+                        <h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                          <Calendar size={20} className="text-amber-600"/> Upcoming Events
+                        </h3>
+                        <div className="space-y-4">
+                           {events.length === 0 ? <p className="text-xs text-gray-500">No upcoming events.</p> : events.slice(0, 3).map(ev => (
+                             <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
+                                <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
+                                   <span className="text-sm">{new Date(ev.startDate).getDate()}</span>
+                                   <span className="text-[8px] uppercase">{new Date(ev.startDate).toLocaleString('default', { month: 'short' })}</span>
+                                </div>
+                                <div className="min-w-0">
+                                   <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
+                                   <p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p>
+                                </div>
+                             </div>
+                           ))}
+                        </div>
                     </div>
-                </div>
-              )}
-              <div className="bg-[#3E2723] rounded-[48px] p-10 text-white relative overflow-hidden shadow-2xl border-4 border-[#FDB813]">
-                {/* Updated to show nickname and avatar on the main card as requested */}
-                <div className="flex items-center gap-6 mb-4">
-                     <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-24 h-24 rounded-full object-cover border-4 border-white/20" />
-                     <div>
-                        <h3 className="font-serif text-3xl font-black uppercase mb-1">{profile.nickname ? `${profile.nickname}` : profile.name}</h3>
-                        <p className="text-[#FDB813] font-black text-lg">"{profile.specificTitle || 'Barista'}"</p>
-                     </div>
-                </div>
-                
-                <div className="mt-6 flex flex-wrap gap-2">
-                   <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
-                   <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
-                   <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
-                   <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
-                </div>
+                 </div>
+
+                 {/* Right Column: Achievements & History */}
+                 <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-[32px] border border-amber-100 h-full">
+                       <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                         <Trophy size={16} className="text-amber-500"/> Trophy Case
+                       </h3>
+                       <div className="grid grid-cols-3 gap-2">
+                          {/* Dynamic Badges */}
+                          <div title="Member" className="aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">☕</div>
+                          {isOfficer && <div title="Officer" className="aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>}
+                          {(new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && <div title="Veteran" className="aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>}
+                       </div>
+                    </div>
+                    
+                    <div className="bg-white p-6 rounded-[32px] border border-amber-100">
+                       <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                         <Clock size={16} className="text-blue-500"/> Activity Log
+                       </h3>
+                       <ul className="space-y-3">
+                          <li className="flex items-center gap-3">
+                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                             <div>
+                               <p className="text-[10px] font-bold">Logged In</p>
+                               <p className="text-[8px] text-gray-400">Just now</p>
+                             </div>
+                          </li>
+                          <li className="flex items-center gap-3 opacity-50">
+                             <div className="w-2 h-2 rounded-full bg-gray-300"></div>
+                             <div>
+                               <p className="text-[10px] font-bold">Joined Association</p>
+                               <p className="text-[8px] text-gray-400">{formatDate(profile.joinedDate)}</p>
+                             </div>
+                          </li>
+                       </ul>
+                    </div>
+                 </div>
               </div>
            </div>
         )}
 
         {view === 'about' && (
            <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-6">
-              <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
-                 <StatIcon icon={History} variant="amber" />
-                 <h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3>
+              <div className="flex items-center justify-between border-b pb-4 border-amber-100">
+                 <div className="flex items-center gap-4">
+                    <StatIcon icon={History} variant="amber" />
+                    <h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3>
+                 </div>
+                 {isOfficer && <button onClick={() => setIsEditingLegacy(!isEditingLegacy)} className="text-amber-500 text-xs font-bold uppercase underline">Edit</button>}
               </div>
-              <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{legacyContent?.body || "History not yet written."}</p>
+              {isEditingLegacy ? (
+                  <div className="space-y-4">
+                      <input type="text" placeholder="Image URL" className="w-full p-3 border rounded-xl text-xs" value={legacyForm.imageUrl} onChange={e => setLegacyForm({...legacyForm, imageUrl: e.target.value})} />
+                      <textarea className="w-full p-3 border rounded-xl text-xs h-64" value={legacyForm.body} onChange={e => setLegacyForm({...legacyForm, body: e.target.value})}></textarea>
+                      <button onClick={handleSaveLegacy} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl text-xs font-bold uppercase">Save Story</button>
+                  </div>
+              ) : (
+                  <>
+                    {legacyContent?.imageUrl && <img src={getDirectLink(legacyContent.imageUrl)} className="w-full h-64 object-cover rounded-3xl mb-4" />}
+                    <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{legacyContent?.body || "History not yet written."}</p>
+                  </>
+              )}
            </div>
         )}
 
@@ -590,11 +798,25 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               {showEventForm && (
                   <form onSubmit={handleAddEvent} className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6 space-y-3">
                       <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value.toUpperCase()})} />
+                      <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs h-20" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})}></textarea>
                       <div className="grid grid-cols-2 gap-2">
-                        <input type="date" required className="p-3 border rounded-xl text-xs" value={newEvent.date} onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
-                        <input type="time" required className="p-3 border rounded-xl text-xs" value={newEvent.time} onChange={e => setNewEvent({...newEvent, time: e.target.value})} />
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Start</label>
+                            <input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} />
+                            <input type="time" required className="p-2 border rounded-xl text-xs w-full mt-1" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} />
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">End</label>
+                            <input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} />
+                            <input type="time" required className="p-2 border rounded-xl text-xs w-full mt-1" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} />
+                        </div>
                       </div>
                       <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value.toUpperCase()})} />
+                      <input type="text" placeholder="Evaluation Link (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} />
+                      <div className="flex items-center gap-2 p-2">
+                          <input type="checkbox" id="req" checked={newEvent.attendanceRequired} onChange={e => setNewEvent({...newEvent, attendanceRequired: e.target.checked})} />
+                          <label htmlFor="req" className="text-xs font-bold text-gray-600">Attendance Required</label>
+                      </div>
                       <div className="flex gap-2">
                           <button type="button" onClick={() => setShowEventForm(false)} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
                           <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Save Event</button>
@@ -602,14 +824,31 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   </form>
               )}
               {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => (
-                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex items-center gap-6">
-                    <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
-                       <span className="text-xl">{new Date(ev.date).getDate()}</span>
-                       <span className="text-[8px] uppercase">{new Date(ev.date).toLocaleString('default', { month: 'short' })}</span>
+                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col gap-4">
+                    <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-4">
+                            <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
+                                <span className="text-xl">{new Date(ev.startDate).getDate()}</span>
+                                <span className="text-[8px] uppercase">{new Date(ev.startDate).toLocaleString('default', { month: 'short' })}</span>
+                            </div>
+                            <div>
+                                <h4 className="font-black text-lg uppercase">{ev.name}</h4>
+                                <p className="text-xs opacity-60 font-bold">{ev.venue}</p>
+                                <p className="text-[10px] opacity-50">{ev.startTime} - {ev.endTime}</p>
+                            </div>
+                        </div>
+                        {ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Mandatory</span>}
                     </div>
-                    <div>
-                       <h4 className="font-black text-lg uppercase">{ev.name}</h4>
-                       <p className="text-xs opacity-60">{ev.venue} • {ev.time}</p>
+                    <p className="text-xs text-gray-600">{ev.description}</p>
+                    
+                    {/* Event Actions */}
+                    <div className="flex gap-2 pt-2 border-t border-gray-100">
+                        {ev.evaluationLink && (
+                            <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="flex-1 text-center bg-green-100 text-green-700 py-2 rounded-xl text-[10px] font-bold uppercase">Evaluate</a>
+                        )}
+                        {isOfficer && (
+                            <button onClick={() => alert("Attendance report generation coming soon.")} className="flex-1 bg-blue-100 text-blue-700 py-2 rounded-xl text-[10px] font-bold uppercase">Report</button>
+                        )}
                     </div>
                  </div>
               ))}
@@ -627,16 +866,24 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                       <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value.toUpperCase()})} />
                       <textarea placeholder="Announcement content..." required className="w-full p-3 border rounded-xl text-xs h-24" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})}></textarea>
                       <div className="flex gap-2">
-                          <button type="button" onClick={() => setShowAnnounceForm(false)} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
+                          <button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); setNewAnnouncement({title:'', content:''}); }} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
                           <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Post Now</button>
                       </div>
                   </form>
               )}
               {announcements.length === 0 ? <p className="text-center opacity-50">No announcements.</p> : announcements.map(ann => (
-                 <div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden">
+                 <div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden group">
                     <div className="absolute top-0 right-0 p-6 opacity-10"><Megaphone size={64}/></div>
                     <div className="relative z-10">
-                       <h4 className="font-black text-xl uppercase text-[#3E2723] mb-2">{ann.title}</h4>
+                       <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-black text-xl uppercase text-[#3E2723]">{ann.title}</h4>
+                            {isOfficer && (
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleEditAnnouncement(ann)} className="text-blue-500 text-xs underline">Edit</button>
+                                    <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-500 text-xs underline">Delete</button>
+                                </div>
+                            )}
+                       </div>
                        <p className="text-xs text-gray-600 leading-relaxed mb-4">{ann.content}</p>
                        <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">{formatDate(ann.date)}</span>
                     </div>
@@ -743,7 +990,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
                     <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                    {[{l:'Officer', v:secureKeys?.officerKey||SEED_OFFICER_KEY}, {l:'Head', v:secureKeys?.headKey||SEED_HEAD_KEY}, {l:'Comm', v:secureKeys?.commKey||SEED_COMM_KEY}].map((k,i)=>(<div key={i} className="flex justify-between p-4 bg-white/5 rounded-2xl mb-2"><span className="text-[10px] font-black uppercase">{k.l} Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{k.v}</span></div>))}
+                    {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
+                    <div className="space-y-2">
+                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                            <span className="text-[10px] font-black uppercase">Officer Key</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || SEED_OFFICER_KEY}</span>
+                        </div>
+                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                            <span className="text-[10px] font-black uppercase">Head Key</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || SEED_HEAD_KEY}</span>
+                        </div>
+                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                            <span className="text-[10px] font-black uppercase">Comm Key</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || SEED_COMM_KEY}</span>
+                        </div>
+                    </div>
                     <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
                  </div>
               </div>
@@ -766,9 +1027,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <thead className="bg-[#3E2723] text-white font-serif tracking-widest"><tr className="text-[10px]"><th className="p-8 w-12"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th><th>Barista</th><th className="text-center">ID</th><th className="text-center">Designation</th><th className="text-right">Manage</th></tr></thead>
                     <tbody className="text-[#3E2723] divide-y divide-amber-50">
                        {paginatedRegistry.map(m => (
-                          <tr key={m.memberId} className="hover:bg-amber-50/50">
+                          <tr key={m.id || m.memberId} className="hover:bg-amber-50/50">
                              <td className="p-8 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
                              <td className="py-8">
+                                {/* FIX: Move div inside td properly */}
                                 <div className="flex items-center gap-4">
                                   <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
                                   <div><p className="font-black text-xs">{m.name}</p><p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p></div>
@@ -776,8 +1038,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              </td>
                              <td className="text-center font-mono font-black">{m.memberId}</td>
                              <td className="text-center">
-                                <select className="bg-amber-50 text-[8px] font-black p-2 rounded-lg outline-none mb-1 block mx-auto" value={m.positionCategory} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                <select className="bg-white border border-amber-100 text-[8px] font-black p-2 rounded-lg outline-none block mx-auto" value={m.specificTitle} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                <select className="bg-amber-50 text-[8px] font-black p-2 rounded-lg outline-none mb-1 block mx-auto" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                <select className="bg-white border border-amber-100 text-[8px] font-black p-2 rounded-lg outline-none block mx-auto" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                              </td>
                              <td className="text-right pr-8"><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button></td>
                           </tr>
