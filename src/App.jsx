@@ -6,7 +6,7 @@ import {
 import { 
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
-  orderBy, writeBatch
+  orderBy, writeBatch, arrayUnion
 } from 'firebase/firestore'; 
 import { 
   Users, Calendar, Award, Bell, LogOut, UserCircle, BarChart3, Plus, 
@@ -408,6 +408,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
   const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '' });
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+  
+  // New States for Accolades & Bulk Email
+  const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { memberId }
+  const [accoladeText, setAccoladeText] = useState("");
 
   // FIX: Case-insensitive check for officer role
   const isOfficer = useMemo(() => {
@@ -524,6 +528,37 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch(err) { console.error(err); }
   };
 
+  // --- NEW FEATURES ---
+  const handleBulkEmail = () => {
+    const recipients = selectedBaristas.length > 0 
+        ? members.filter(m => selectedBaristas.includes(m.memberId))
+        : filteredRegistry;
+    
+    const emails = recipients
+        .map(m => m.email)
+        .filter(e => e)
+        .join(',');
+        
+    if (!emails) return alert("No valid emails found.");
+    window.location.href = `mailto:?bcc=${emails}`;
+  };
+
+  const handleGiveAccolade = async () => {
+      if (!accoladeText.trim() || !showAccoladeModal) return;
+      try {
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', showAccoladeModal.memberId);
+          await updateDoc(memberRef, {
+              accolades: arrayUnion(accoladeText)
+          });
+          setAccoladeText("");
+          setShowAccoladeModal(null);
+          alert("Accolade awarded!");
+      } catch (err) {
+          console.error("Error giving accolade:", err);
+          alert("Failed to award accolade.");
+      }
+  };
+
   // Registry Helpers
   const filteredRegistry = useMemo(() => {
     let res = [...members];
@@ -626,6 +661,36 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
+      {/* Confirmation Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
+                <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={32} /></div>
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm Deletion</h3>
+                <p className="text-sm text-gray-600 mb-8">Are you sure you want to remove <span className="font-bold text-[#3E2723]">{confirmDelete.name}</span>?</p>
+                <div className="flex gap-3">
+                    <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                    <button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Accolade Modal */}
+      {showAccoladeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
+                <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trophy size={32} /></div>
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
+                <input type="text" placeholder="Achievement Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} />
+                <div className="flex gap-3">
+                    <button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                    <button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs hover:bg-yellow-600">Award</button>
+                </div>
+            </div>
+        </div>
+      )}
+
       <aside className="w-64 bg-[#3E2723] text-amber-50 md:flex flex-col hidden">
         <div className="p-8 border-b border-amber-900/30 text-center">
            <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA" className="w-20 h-20 object-contain mx-auto mb-4" />
@@ -734,6 +799,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           {isOfficer && <div title="Officer" className="aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>}
                           {/* Safe check for memberId before calculation */}
                           {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && <div title="Veteran" className="aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>}
+                          
+                          {/* Added Custom Accolades */}
+                          {profile.accolades?.map((acc, i) => (
+                             <div key={i} title={acc} className="aspect-square bg-purple-50 rounded-2xl flex items-center justify-center text-2xl cursor-help">🏆</div>
+                          ))}
                        </div>
                     </div>
                     
@@ -1032,7 +1102,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
               <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center">
                  <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
+                 {/* Added Bulk Email Button */}
                  <div className="flex gap-2">
+                    <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
                     <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                     <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
                     <button onClick={downloadImportTemplate} className="bg-amber-100 px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Template</button>
@@ -1049,7 +1121,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 {/* FIX: Move div inside td properly */}
                                 <div className="flex items-center gap-4">
                                   <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
-                                  <div><p className="font-black text-xs">{m.name}</p><p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p></div>
+                                  <div>
+                                      <p className="font-black text-xs">{m.name}</p>
+                                      <p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p>
+                                      {/* Added Accolades Display in Row */}
+                                      <div className="flex gap-1 mt-1">
+                                          {m.accolades?.map((acc, i) => (
+                                              <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded">🏆</span>
+                                          ))}
+                                      </div>
+                                  </div>
                                 </div>
                              </td>
                              <td className="text-center font-mono font-black">{m.memberId}</td>
@@ -1057,7 +1138,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <select className="bg-amber-50 text-[8px] font-black p-2 rounded-lg outline-none mb-1 block mx-auto" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
                                 <select className="bg-white border border-amber-100 text-[8px] font-black p-2 rounded-lg outline-none block mx-auto" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                              </td>
-                             <td className="text-right pr-8"><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button></td>
+                             <td className="text-right pr-8">
+                                 <div className="flex items-center justify-end gap-2">
+                                     <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2" title="Award Accolade"><Trophy size={16}/></button>
+                                     <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button>
+                                 </div>
+                             </td>
                           </tr>
                        ))}
                     </tbody>
