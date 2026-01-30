@@ -188,7 +188,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     setStatusMessage('Checking registry...');
                     let currentCount = 0;
                     try {
-                        // Use latest doc to infer count (fallback for no billing)
                         const q = query(
                             collection(db, 'artifacts', appId, 'public', 'data', 'registry'),
                             orderBy('joinedDate', 'desc'),
@@ -210,7 +209,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
                             throw fetchErr;
                         }
-                        console.warn("Fast count failed, using fallback:", fetchErr);
                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                         currentCount = allDocs.size;
                     }
@@ -386,7 +384,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [settingsForm, setSettingsForm] = useState({ ...profile });
   const [savingSettings, setSavingSettings] = useState(false);
 
-  const isOfficer = useMemo(() => ['Officer', 'Execomm'].includes(profile.positionCategory), [profile.positionCategory]);
+  // FIX: Case-insensitive check for officer role
+  const isOfficer = useMemo(() => {
+     if (!profile?.positionCategory) return false;
+     const pc = profile.positionCategory.toUpperCase();
+     return ['OFFICER', 'EXECOMM', 'COMMITTEE'].includes(pc);
+  }, [profile?.positionCategory]);
 
   // Birthday Logic
   const isBirthday = useMemo(() => {
@@ -681,9 +684,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                        {paginatedRegistry.map(m => (
                           <tr key={m.memberId} className="hover:bg-amber-50/50">
                              <td className="p-8 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                             <td className="flex items-center gap-4 py-8">
-                                <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
-                                <div><p className="font-black text-xs">{m.name}</p><p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p></div>
+                             <td className="py-8">
+                                <div className="flex items-center gap-4">
+                                  <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
+                                  <div><p className="font-black text-xs">{m.name}</p><p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p></div>
+                                </div>
                              </td>
                              <td className="text-center font-mono font-black">{m.memberId}</td>
                              <td className="text-center">
