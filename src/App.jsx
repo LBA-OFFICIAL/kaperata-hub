@@ -7,7 +7,7 @@ import {
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
   orderBy, writeBatch
-} from 'firebase/firestore';
+} from 'firebase/firestore'; // Removed getCountFromServer to avoid billing requirement
 import { 
   Users, Calendar, Award, Bell, LogOut, UserCircle, BarChart3, Plus, 
   ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, Users2, 
@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake
+  History, BrainCircuit, FileText, Cake, Camera, User
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -113,7 +113,7 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
   return <div className={className}><Icon size={24} /></div>;
 };
 
-const Login = ({ user, onLoginSuccess }) => {
+const Login = ({ user, onLoginSuccess, initialError }) => {
   const [authMode, setAuthMode] = useState('login'); 
   const [memberIdInput, setMemberIdInput] = useState('');
   const [password, setPassword] = useState('');
@@ -129,13 +129,17 @@ const Login = ({ user, onLoginSuccess }) => {
   const [paymentMethod, setPaymentMethod] = useState(''); 
   const [refNo, setRefNo] = useState('');
   const [cashOfficerKey, setCashOfficerKey] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError || '');
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(''); 
   const [pendingProfile, setPendingProfile] = useState(null);
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true });
   const [secureKeys, setSecureKeys] = useState(null);
   const [showForgotModal, setShowForgotModal] = useState(false);
+
+  useEffect(() => {
+    if(initialError) setError(initialError);
+  }, [initialError]);
 
   useEffect(() => {
     if (!user) return;
@@ -203,7 +207,6 @@ const Login = ({ user, onLoginSuccess }) => {
                             }
                         }
                     } catch (fetchErr) {
-                        // If this error is permission denied, we should throw it immediately so the outer catch handles it
                         if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
                             throw fetchErr;
                         }
@@ -263,7 +266,6 @@ const Login = ({ user, onLoginSuccess }) => {
         ]);
     } catch (err) { 
         console.error("Auth error:", err);
-        // Better error message for the specific Firestore missing/permission error
         if (err.message.includes("database (default) does not exist")) {
             setError("Database missing: Please create a Firestore Database in your Firebase Console.");
         } else if (err.code === 'permission-denied' || err.message.includes("insufficient permission")) {
@@ -395,14 +397,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   useEffect(() => {
     if (!user) return;
-    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
-    const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
-    const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => {});
+    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Registry sync error:", e));
+    const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Events sync error:", e));
+    const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Announcements sync error:", e));
     const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
         setSuggestions(data);
-    }, (e) => {});
+    }, (e) => console.error("Suggestions sync error:", e));
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
     const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => s.exists() && setLegacyContent(s.data()), (e) => {});
@@ -427,7 +429,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: BarChart3 },
-    { id: 'settings', label: 'Settings', icon: Settings2 },
+    // Removed Settings from menu
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'team', label: 'Brew Crew', icon: Users2 },
     { id: 'events', label: "What's Brewing?", icon: Calendar },
@@ -459,9 +461,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <header className="flex justify-between items-center mb-10">
           <h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2>
-          <div className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm">
-            <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full" />
-            <div className="hidden sm:block"><p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || "Barista"}</p><p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p></div>
+          {/* Made profile clickable for settings */}
+          <div 
+            onClick={() => setView('settings')}
+            className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors"
+            title="Edit Profile"
+          >
+            <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover" />
+            <div className="hidden sm:block"><p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || profile.name.split(' ')[0]}</p><p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p></div>
           </div>
         </header>
 
@@ -479,10 +486,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
               )}
               <div className="bg-[#3E2723] rounded-[48px] p-10 text-white relative overflow-hidden shadow-2xl border-4 border-[#FDB813]">
-                <h3 className="font-serif text-3xl font-black uppercase mb-2">{profile.name}</h3>
-                <p className="text-[#FDB813] font-black text-lg">"{profile.nickname || 'Senior Barista'}"</p>
+                <h3 className="font-serif text-3xl font-black uppercase mb-2">{profile.nickname ? `Hello, ${profile.nickname}!` : profile.name}</h3>
+                <p className="text-[#FDB813] font-black text-lg">"{profile.specificTitle || 'Barista'}"</p>
                 <div className="mt-6 flex gap-2">
-                   <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.specificTitle}</div>
+                   <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
                    <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
                 </div>
               </div>
@@ -496,20 +503,32 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
                 </div>
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
+                    {/* Read-Only Member ID */}
+                    <div>
+                        <label className="block text-xs font-black uppercase mb-2 text-gray-400">Member ID (Read-Only)</label>
+                        <input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.memberId} />
+                    </div>
+
+                    {/* Nickname & Avatar */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Nickname</label>
+                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" placeholder="Call sign..." value={settingsForm.nickname || ""} onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})} />
+                        </div>
+                        <div>
+                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Photo URL</label>
+                             <div className="relative">
+                                <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs pl-10 truncate" placeholder="https://..." value={settingsForm.photoUrl || ""} onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})} />
+                                <Camera className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                             </div>
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-xs font-black uppercase mb-2 text-gray-500">Full Name</label>
                         <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.name} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} />
                     </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">First Name</label>
-                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.firstName} onChange={e => setSettingsForm({...settingsForm, firstName: e.target.value.toUpperCase()})} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Last Name</label>
-                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.lastName} onChange={e => setSettingsForm({...settingsForm, lastName: e.target.value.toUpperCase()})} />
-                        </div>
-                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Month</label>
@@ -533,6 +552,43 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </form>
             </div>
         )}
+        
+        {/* MEMBERS VIEW (Registry) */}
+        {view === 'members' && isOfficer && (
+           <div className="space-y-6 animate-fadeIn text-[#3E2723]">
+              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center">
+                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
+                 <div className="flex gap-2">
+                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
+                    <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
+                    <button onClick={downloadImportTemplate} className="bg-amber-100 px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Template</button>
+                 </div>
+              </div>
+              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
+                 <table className="w-full text-left uppercase">
+                    <thead className="bg-[#3E2723] text-white font-serif tracking-widest"><tr className="text-[10px]"><th className="p-8 w-12"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th><th>Barista</th><th className="text-center">ID</th><th className="text-center">Designation</th><th className="text-right">Manage</th></tr></thead>
+                    <tbody className="text-[#3E2723] divide-y divide-amber-50">
+                       {paginatedRegistry.map(m => (
+                          <tr key={m.memberId} className="hover:bg-amber-50/50">
+                             <td className="p-8 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
+                             <td className="flex items-center gap-4 py-8">
+                                <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
+                                <div><p className="font-black text-xs">{m.name}</p><p className="text-[8px] opacity-60">"{m.nickname || m.program}"</p></div>
+                             </td>
+                             <td className="text-center font-mono font-black">{m.memberId}</td>
+                             <td className="text-center">
+                                <select className="bg-amber-50 text-[8px] font-black p-2 rounded-lg outline-none mb-1 block mx-auto" value={m.positionCategory} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                <select className="bg-white border border-amber-100 text-[8px] font-black p-2 rounded-lg outline-none block mx-auto" value={m.specificTitle} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                             </td>
+                             <td className="text-right pr-8"><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2"><Trash2 size={16}/></button></td>
+                          </tr>
+                       ))}
+                    </tbody>
+                 </table>
+              </div>
+           </div>
+        )}
+
       </main>
     </div>
   );
@@ -542,6 +598,7 @@ const App = () => {
   const [profile, setProfile] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
     const initAuth = async () => {
@@ -554,15 +611,33 @@ const App = () => {
       } catch (err) {}
     };
     initAuth();
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+         // Auto-fetch profile if user is already logged in
+         try {
+             const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('uid', '==', currentUser.uid));
+             const snap = await getDocs(q);
+             if (!snap.empty) {
+                 setProfile(snap.docs[0].data());
+             }
+         } catch (e) {
+             console.warn("Profile fetch error", e); // Use warn instead of error to avoid clutter
+             if (e.code === 'permission-denied') {
+                 setAuthError("Database Locked: Please go to Firebase Console > Firestore > Rules and change 'allow read, write: if false;' to 'if true;'.");
+                 await signOut(auth);
+             } else {
+                 setAuthError("Connection Error: " + e.message);
+             }
+         }
+      }
       setLoading(false);
     });
     return () => unsubscribe();
   }, []);
 
   if (loading) return <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-center text-[#3E2723]"><Loader2 size={40} className="animate-spin mb-4" /><p className="font-black uppercase tracking-widest text-xs animate-pulse">Establishing Secure Connection...</p></div>;
-  return profile ? <Dashboard user={user} profile={profile} setProfile={setProfile} logout={() => { setProfile(null); signOut(auth); }} /> : <Login user={user} onLoginSuccess={setProfile} />;
+  return profile ? <Dashboard user={user} profile={profile} setProfile={setProfile} logout={() => { setProfile(null); signOut(auth); }} /> : <Login user={user} onLoginSuccess={setProfile} initialError={authError} />;
 };
 
 export default App;
