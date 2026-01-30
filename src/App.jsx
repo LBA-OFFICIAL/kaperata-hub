@@ -253,8 +253,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         
                         if (!snapshot.empty) {
                             const lastMember = snapshot.docs[0].data();
-                            // Attempt to extract the sequence number from the last ID (e.g., LBA24-10042 -> 42)
-                            // Correct regex: Find hyphen, one digit (sem), then capture only the last 4 digits
                             const match = lastMember.memberId.match(/-(\d)(\d{4,})C?$/);
                             if (match) {
                                 currentCount = parseInt(match[2], 10);
@@ -267,7 +265,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
                             throw fetchErr;
                         }
-                        console.warn("Fast count failed, using fallback:", fetchErr);
                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                         currentCount = allDocs.size;
                     }
@@ -585,7 +582,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), { ...newEvent });
              setEditingEvent(null);
           } else {
-             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...newEvent, createdAt: serverTimestamp(), attendees: [] });
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...newEvent, createdAt: serverTimestamp(), attendees: [], registered: [] });
           }
           setShowEventForm(false);
           setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
@@ -638,6 +635,39 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           console.error("Attendance update failed", err);
       }
   };
+
+  const handleDownloadAttendance = () => {
+    if (!attendanceEvent) return;
+    const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId));
+    
+    // Safety check in case sorting fails with undefined names
+    const sortedMembers = [...presentMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+         + "Name,ID,Position\n"
+         + sortedMembers.map(e => `${e.name},${e.memberId},${e.specificTitle}`).join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  const handleRegisterEvent = async (ev) => {
+      const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
+      const isRegistered = ev.registered?.includes(profile.memberId);
+      try {
+          if (isRegistered) {
+              await updateDoc(eventRef, { registered: arrayRemove(profile.memberId) });
+          } else {
+              await updateDoc(eventRef, { registered: arrayUnion(profile.memberId) });
+          }
+      } catch (err) { console.error(err); }
+  };
+
 
   const handlePostAnnouncement = async (e) => {
       e.preventDefault();
@@ -887,7 +917,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         <h3 className="text-xl font-black uppercase text-[#3E2723]">Attendance Check</h3>
                         <p className="text-xs text-amber-600 font-bold mt-1">{attendanceEvent.name} • {getEventDay(attendanceEvent.startDate)} {getEventMonth(attendanceEvent.startDate)}</p>
                     </div>
-                    <button onClick={() => setAttendanceEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                    <div className="flex gap-2">
+                        <button onClick={handleDownloadAttendance} className="p-2 bg-green-100 text-green-700 rounded-full hover:bg-green-200" title="Download List"><Download size={20}/></button>
+                        <button onClick={() => setAttendanceEvent(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                    </div>
                 </div>
                 
                 <div className="flex justify-between items-center mb-4 px-2">
@@ -898,7 +931,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    {members.sort((a,b) => a.name.localeCompare(b.name)).map(m => {
+                    {/* Safe sort logic to prevent blank page crashes */}
+                    {[...members].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => {
                         const isPresent = attendanceEvent.attendees?.includes(m.memberId);
                         return (
                             <div key={m.memberId} 
@@ -906,7 +940,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                  className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent hover:bg-amber-50'}`}>
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>
-                                        {m.name.charAt(0)}
+                                        {m.name ? m.name.charAt(0) : "?"}
                                     </div>
                                     <div>
                                         <p className={`text-xs font-bold uppercase ${isPresent ? 'text-green-900' : 'text-gray-600'}`}>{m.name}</p>
@@ -980,8 +1014,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   <div className="flex flex-col md:flex-row gap-6 items-start md:items-center mb-6">
                       <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-24 h-24 rounded-full object-cover border-4 border-white/20" />
                       <div>
-                          <h3 className="font-serif text-3xl font-black uppercase mb-1">{profile.nickname ? `${profile.nickname}` : profile.name}</h3>
-                          <p className="text-[#FDB813] font-black text-lg">"{profile.specificTitle || 'Barista'}"</p>
+                          {/* Updated Layout: Full Name, Nickname, Title */}
+                          <h3 className="font-serif text-2xl sm:text-3xl font-black uppercase leading-tight">{profile.name}</h3>
+                          <p className="text-white/90 font-bold text-lg uppercase tracking-wide">"{profile.nickname || 'Barista'}"</p>
+                          <p className="text-[#FDB813] font-black text-sm uppercase mt-1">{profile.specificTitle || 'Member'}</p>
                       </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1278,6 +1314,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               )}
               {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => {
                  const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                 const isRegistered = ev.registered?.includes(profile.memberId);
+                 
                  return (
                  <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col gap-4">
                     <div className="flex justify-between items-start">
@@ -1292,21 +1330,31 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <p className="text-[10px] opacity-50">{ev.startTime} - {ev.endTime}</p>
                             </div>
                         </div>
-                        {ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Mandatory</span>}
+                        {ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Attendance Req.</span>}
                     </div>
                     {/* Render with whitespace-pre-wrap to preserve formatting */}
                     <p className="text-xs text-gray-600 whitespace-pre-wrap">{ev.description}</p>
                     
                     {/* Event Actions */}
-                    <div className="flex gap-2 pt-2 border-t border-gray-100 items-center justify-between">
-                        <div>
-                        {ev.evaluationLink && (
-                            <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block">Post-Event Evaluation</a>
-                        )}
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
+                        <div className="flex gap-2">
+                            {/* Registration Button for All Users */}
+                            <button 
+                                onClick={() => handleRegisterEvent(ev)} 
+                                className={`py-2 px-4 rounded-xl text-[10px] font-bold uppercase transition-colors ${isRegistered ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
+                            >
+                                {isRegistered ? "Unregister" : "Register"}
+                            </button>
+
+                            {ev.evaluationLink && (
+                                <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors">Post-Event Evaluation</a>
+                            )}
                         </div>
                         {isOfficer && (
                             <div className="flex gap-2">
-                                <button onClick={() => setAttendanceEvent(ev)} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase">Attendance Check</button>
+                                {ev.attendanceRequired && (
+                                    <button onClick={() => setAttendanceEvent(ev)} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200 transition-colors">Attendance Check</button>
+                                )}
                                 <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit</button>
                                 <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete</button>
                             </div>
