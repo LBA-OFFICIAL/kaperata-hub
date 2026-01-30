@@ -96,7 +96,7 @@ const getDailyCashPasskey = () => {
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return ""; // Safe check for invalid dates
+  if (isNaN(d.getTime())) return ""; 
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
@@ -403,6 +403,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
   const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
+  const [editingEvent, setEditingEvent] = useState(null); // Added for editing events
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
@@ -420,12 +421,49 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
      return ['OFFICER', 'EXECOMM', 'COMMITTEE'].includes(pc);
   }, [profile?.positionCategory]);
 
+  // FIX: Stricter check for Terminal access (Officers/Execomm only, no Committee)
+  const isAdmin = useMemo(() => {
+     if (!profile?.positionCategory) return false;
+     const pc = String(profile.positionCategory).toUpperCase();
+     return ['OFFICER', 'EXECOMM'].includes(pc);
+  }, [profile?.positionCategory]);
+
   // Birthday Logic
   const isBirthday = useMemo(() => {
     if (!profile.birthMonth || !profile.birthDay) return false;
     const today = new Date();
     return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate();
   }, [profile]);
+
+  // Team Hierarchy Filtering
+  const teamStructure = useMemo(() => {
+    const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Helper to check title case-insensitively
+    const hasTitle = (m, title) => m.specificTitle?.toUpperCase().includes(title.toUpperCase());
+    const isCat = (m, cat) => m.positionCategory?.toUpperCase() === cat.toUpperCase();
+
+    return {
+        // Tier 1: President & VP
+        tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")),
+        
+        // Tier 2: Secretaries
+        tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")),
+        
+        // Tier 3: Other Officers (Treasurer, Auditor, etc.)
+        tier3: sortedMembers.filter(m => 
+            !hasTitle(m, "President") && 
+            !hasTitle(m, "Secretary") && 
+            isCat(m, "Officer")
+        ),
+        
+        // Committees
+        committees: {
+            heads: sortedMembers.filter(m => isCat(m, "Committee") && hasTitle(m, "Head")),
+            members: sortedMembers.filter(m => isCat(m, "Committee") && !hasTitle(m, "Head"))
+        }
+    };
+  }, [members]);
 
   useEffect(() => {
     if (!user) return;
@@ -481,10 +519,38 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleAddEvent = async (e) => {
       e.preventDefault();
       try {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...newEvent, createdAt: serverTimestamp() });
+          if (editingEvent) {
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), { ...newEvent });
+             setEditingEvent(null);
+          } else {
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...newEvent, createdAt: serverTimestamp() });
+          }
           setShowEventForm(false);
           setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
       } catch (err) { console.error(err); }
+  };
+
+  const handleEditEvent = (ev) => {
+      setNewEvent({
+          name: ev.name,
+          startDate: ev.startDate,
+          endDate: ev.endDate,
+          startTime: ev.startTime,
+          endTime: ev.endTime,
+          venue: ev.venue,
+          description: ev.description,
+          attendanceRequired: ev.attendanceRequired || false,
+          evaluationLink: ev.evaluationLink || ''
+      });
+      setEditingEvent(ev);
+      setShowEventForm(true);
+  };
+
+  const handleDeleteEvent = async (id) => {
+      if(!confirm("Delete this event?")) return;
+      try {
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id));
+      } catch(err) { console.error(err); }
   };
 
   const handlePostAnnouncement = async (e) => {
@@ -598,7 +664,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
   
   const handleBulkImportCSV = async (e) => {
-    // ... Existing bulk import logic ...
     const file = e.target.files[0];
     if (!file) return;
     setIsImporting(true);
@@ -624,7 +689,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
   
   const downloadImportTemplate = () => {
-      // ... same as before
     const headers = "Name,Email,Program,PositionCategory,SpecificTitle";
     const sample = "JUAN DELA CRUZ,juan@lpu.edu.ph,BSIT,Member,Member";
     const blob = new Blob([headers + "\n" + sample], { type: 'text/csv' });
@@ -653,11 +717,23 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     { id: 'events', label: "What's Brewing?", icon: Calendar },
     { id: 'announcements', label: 'Grind Report', icon: Bell },
     { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare },
-    ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }, { id: 'reports', label: 'Terminal', icon: FileText }] : [])
+    ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }] : []),
+    // Only show reports/terminal to actual Admins (Officer/Execomm), not Committees
+    ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black";
   const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5";
+
+  // Card component for team members
+  const MemberCard = ({ m }) => (
+      <div key={m.memberId} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
+         <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
+         <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
+         {m.nickname && <p className="text-[10px] text-gray-500 mb-2">"{m.nickname}"</p>}
+         <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase">{m.specificTitle}</span>
+      </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
@@ -863,14 +939,56 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
                  <p className="text-amber-500 font-bold text-xs uppercase tracking-widest">Officers & Committee</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                 {members.filter(m => ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory)).map(m => (
-                    <div key={m.memberId} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
-                       <img src={`https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4"/>
-                       <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
-                       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase">{m.specificTitle}</span>
-                    </div>
-                 ))}
+              
+              {/* Hierarchy Display */}
+              <div className="space-y-8">
+                  {/* Tier 1: Pres & VP */}
+                  {teamStructure.tier1.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 justify-center max-w-2xl mx-auto">
+                          {teamStructure.tier1.map(m => <MemberCard key={m.id} m={m} />)}
+                      </div>
+                  )}
+                  
+                  {/* Tier 2: Secretaries */}
+                  {teamStructure.tier2.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 justify-center max-w-2xl mx-auto">
+                          {teamStructure.tier2.map(m => <MemberCard key={m.id} m={m} />)}
+                      </div>
+                  )}
+                  
+                  {/* Tier 3: Other Officers */}
+                  {teamStructure.tier3.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+                          {teamStructure.tier3.map(m => <MemberCard key={m.id} m={m} />)}
+                      </div>
+                  )}
+                  
+                  {/* Committees Section */}
+                  {(teamStructure.committees.heads.length > 0 || teamStructure.committees.members.length > 0) && (
+                      <div className="pt-8 border-t border-amber-200">
+                          <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] text-center mb-6">Committees</h4>
+                          
+                          {/* Heads Row */}
+                          {teamStructure.committees.heads.length > 0 && (
+                              <div className="mb-6">
+                                  <p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Heads</p>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                      {teamStructure.committees.heads.map(m => <MemberCard key={m.id} m={m} />)}
+                                  </div>
+                              </div>
+                          )}
+                          
+                          {/* Members Row */}
+                          {teamStructure.committees.members.length > 0 && (
+                              <div>
+                                  <p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Members</p>
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                      {teamStructure.committees.members.map(m => <MemberCard key={m.id} m={m} />)}
+                                  </div>
+                              </div>
+                          )}
+                      </div>
+                  )}
               </div>
            </div>
         )}
@@ -925,15 +1043,22 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         </div>
                         {ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Mandatory</span>}
                     </div>
-                    <p className="text-xs text-gray-600">{ev.description}</p>
+                    {/* Render with whitespace-pre-wrap to preserve formatting */}
+                    <p className="text-xs text-gray-600 whitespace-pre-wrap">{ev.description}</p>
                     
                     {/* Event Actions */}
-                    <div className="flex gap-2 pt-2 border-t border-gray-100">
+                    <div className="flex gap-2 pt-2 border-t border-gray-100 items-center justify-between">
+                        <div>
                         {ev.evaluationLink && (
-                            <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="flex-1 text-center bg-green-100 text-green-700 py-2 rounded-xl text-[10px] font-bold uppercase">Evaluate</a>
+                            <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block">Evaluate</a>
                         )}
+                        </div>
                         {isOfficer && (
-                            <button onClick={() => alert("Attendance report generation coming soon.")} className="flex-1 bg-blue-100 text-blue-700 py-2 rounded-xl text-[10px] font-bold uppercase">Report</button>
+                            <div className="flex gap-2">
+                                <button onClick={() => alert("Attendance report generation coming soon.")} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase">Report</button>
+                                <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit</button>
+                                <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete</button>
+                            </div>
                         )}
                     </div>
                  </div>
@@ -1063,7 +1188,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             </div>
         )}
         
-        {view === 'reports' && isOfficer && (
+        {view === 'reports' && isAdmin && (
            <div className="space-y-10 animate-fadeIn text-[#3E2723]">
               <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
                  <StatIcon icon={TrendingUp} variant="amber" />
