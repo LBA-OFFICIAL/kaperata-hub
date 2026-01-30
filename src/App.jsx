@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -384,8 +384,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [announcements, setAnnouncements] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
-  // Initialize with seed values to prevent null crash before fetch
-  const [secureKeys, setSecureKeys] = useState({ officerKey: SEED_OFFICER_KEY, headKey: SEED_HEAD_KEY, commKey: SEED_COMM_KEY });
+  const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
   
   const [searchQuery, setSearchQuery] = useState("");
@@ -437,13 +436,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate();
   }, [profile]);
 
-  // Team Hierarchy Filtering
+  // Team Hierarchy Filtering - FIXED: Safe property access
   const teamStructure = useMemo(() => {
-    const sortedMembers = [...members].sort((a, b) => a.name.localeCompare(b.name));
+    if (!members) return { tier1: [], tier2: [], tier3: [], committees: { heads: [], members: [] } };
     
-    // Helper to check title case-insensitively
-    const hasTitle = (m, title) => m.specificTitle?.toUpperCase().includes(title.toUpperCase());
-    const isCat = (m, cat) => m.positionCategory?.toUpperCase() === cat.toUpperCase();
+    const sortedMembers = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    
+    // Helper to check title case-insensitively with safety
+    const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
+    const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
 
     return {
         tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")),
@@ -726,7 +727,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Card component for team members
   const MemberCard = ({ m }) => (
-      <div key={m.memberId} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
+      <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm">
          <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
          <h4 className="font-black text-xs uppercase mb-1">{m.name}</h4>
          {m.nickname && <p className="text-[10px] text-gray-500 mb-2">"{m.nickname}"</p>}
@@ -944,21 +945,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   {/* Tier 1: Pres & VP */}
                   {teamStructure.tier1.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 justify-center max-w-2xl mx-auto">
-                          {teamStructure.tier1.map(m => <MemberCard key={m.id} m={m} />)}
+                          {teamStructure.tier1.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
                       </div>
                   )}
                   
                   {/* Tier 2: Secretaries */}
                   {teamStructure.tier2.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 justify-center max-w-2xl mx-auto">
-                          {teamStructure.tier2.map(m => <MemberCard key={m.id} m={m} />)}
+                          {teamStructure.tier2.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
                       </div>
                   )}
                   
                   {/* Tier 3: Other Officers */}
                   {teamStructure.tier3.length > 0 && (
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                          {teamStructure.tier3.map(m => <MemberCard key={m.id} m={m} />)}
+                          {teamStructure.tier3.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
                       </div>
                   )}
                   
@@ -972,7 +973,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                               <div className="mb-6">
                                   <p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Heads</p>
                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                      {teamStructure.committees.heads.map(m => <MemberCard key={m.id} m={m} />)}
+                                      {teamStructure.committees.heads.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
                                   </div>
                               </div>
                           )}
@@ -982,7 +983,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                               <div>
                                   <p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Members</p>
                                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                      {teamStructure.committees.members.map(m => <MemberCard key={m.id} m={m} />)}
+                                      {teamStructure.committees.members.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
                                   </div>
                               </div>
                           )}
@@ -1260,11 +1261,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           <tr key={m.id || m.memberId} className="hover:bg-amber-50/50">
                              <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
                              <td className="py-4 px-4">
+                                {/* FIX: Move div inside td properly */}
                                 <div className="flex items-center gap-4">
                                   <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" />
                                   <div className="min-w-0">
                                       <p className="font-black text-xs truncate">{m.name}</p>
                                       <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
+                                      {/* Added Accolades Display in Row */}
                                       <div className="flex flex-wrap gap-1 mt-1">
                                           {m.accolades?.map((acc, i) => (
                                               <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
