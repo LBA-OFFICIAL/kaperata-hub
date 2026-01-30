@@ -157,14 +157,15 @@ const Login = ({ user, onLoginSuccess }) => {
     setError('');
     setLoading(true);
     
-    let currentUser = user;
+    let currentUser = user || auth.currentUser;
     if (!currentUser) {
         try {
             const result = await signInAnonymously(auth);
             currentUser = result.user;
         } catch (err) {
             console.error("Auto-auth failed:", err);
-            setError("Connection failed. Please refresh the page.");
+            // Display the specific error message to help debugging
+            setError(`Connection failed: ${err.message} (Enable Anonymous Auth in Firebase Console)`);
             setLoading(false);
             return;
         }
