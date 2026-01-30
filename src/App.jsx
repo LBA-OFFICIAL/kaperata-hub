@@ -253,9 +253,11 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         
                         if (!snapshot.empty) {
                             const lastMember = snapshot.docs[0].data();
-                            const match = lastMember.memberId.match(/(\d{4,})C?$/);
+                            // Attempt to extract the sequence number from the last ID (e.g., LBA24-10042 -> 42)
+                            // Correct regex: Find hyphen, one digit (sem), then capture only the last 4 digits
+                            const match = lastMember.memberId.match(/-(\d)(\d{4,})C?$/);
                             if (match) {
-                                currentCount = parseInt(match[1], 10);
+                                currentCount = parseInt(match[2], 10);
                             } else {
                                 const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                                 currentCount = allDocs.size;
@@ -265,6 +267,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
                             throw fetchErr;
                         }
+                        console.warn("Fast count failed, using fallback:", fetchErr);
                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
                         currentCount = allDocs.size;
                     }
@@ -462,7 +465,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [attendanceEvent, setAttendanceEvent] = useState(null);
 
   // New States for Accolades & Bulk Email
-  const [showAccoladeModal, setShowAccoladeModal] = useState(null); 
+  const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { memberId }
   const [accoladeText, setAccoladeText] = useState("");
   const [exportFilter, setExportFilter] = useState('all');
 
@@ -493,6 +496,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     
     const sortedMembers = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     
+    // Helper to check title case-insensitively with safety
     const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
     const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
 
@@ -520,6 +524,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         setSuggestions(data);
     }, (e) => console.error("Suggestions sync error:", e));
     
+    // Fetch committee applications for officers
     let unsubApps;
     if (isAdmin) {
         unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => {
@@ -679,6 +684,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       e.preventDefault();
       setSubmittingApp(true);
       try {
+          // Check for existing application to prevent duplicates
           const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId));
           const snap = await getDocs(q);
           if(!snap.empty) {
@@ -841,6 +847,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: BarChart3 },
+    // Removed Settings from menu
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'team', label: 'Brew Crew', icon: Users2 },
     { id: 'events', label: "What's Brewing?", icon: Calendar },
