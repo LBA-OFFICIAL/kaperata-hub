@@ -116,16 +116,13 @@ const getEventMonth = (dateStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  let className = "p-3 rounded-2xl ";
-  switch (variant) {
-    case 'amber': className += "bg-amber-100 text-amber-600"; break;
-    case 'indigo': className += "bg-indigo-100 text-indigo-600"; break;
-    case 'green': className += "bg-green-100 text-green-600"; break;
-    case 'blue': className += "bg-blue-100 text-blue-600"; break;
-    case 'red': className += "bg-red-100 text-red-600"; break;
-    default: className += "bg-gray-100 text-gray-600";
-  }
-  return <div className={className}><Icon size={24} /></div>;
+  // Use explicit returns to avoid string interpolation issues in some environments
+  if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
+  if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
+  if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
+  if (variant === 'blue') return <div className="p-3 rounded-2xl bg-blue-100 text-blue-600"><Icon size={24} /></div>;
+  if (variant === 'red') return <div className="p-3 rounded-2xl bg-red-100 text-red-600"><Icon size={24} /></div>;
+  return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
 };
 
 const Login = ({ user, onLoginSuccess, initialError }) => {
