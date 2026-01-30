@@ -486,11 +486,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
               )}
               <div className="bg-[#3E2723] rounded-[48px] p-10 text-white relative overflow-hidden shadow-2xl border-4 border-[#FDB813]">
-                <h3 className="font-serif text-3xl font-black uppercase mb-2">{profile.nickname ? `Hello, ${profile.nickname}!` : profile.name}</h3>
-                <p className="text-[#FDB813] font-black text-lg">"{profile.specificTitle || 'Barista'}"</p>
-                <div className="mt-6 flex gap-2">
+                {/* Updated to show nickname and avatar on the main card as requested */}
+                <div className="flex items-center gap-6 mb-4">
+                     <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-24 h-24 rounded-full object-cover border-4 border-white/20" />
+                     <div>
+                        <h3 className="font-serif text-3xl font-black uppercase mb-1">{profile.nickname ? `${profile.nickname}` : profile.name}</h3>
+                        <p className="text-[#FDB813] font-black text-lg">"{profile.specificTitle || 'Barista'}"</p>
+                     </div>
+                </div>
+                
+                <div className="mt-6 flex flex-wrap gap-2">
                    <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
                    <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
+                   <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
+                   <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
                 </div>
               </div>
            </div>
@@ -578,10 +587,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
                 </div>
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
-                    {/* Read-Only Member ID */}
-                    <div>
-                        <label className="block text-xs font-black uppercase mb-2 text-gray-400">Member ID (Read-Only)</label>
-                        <input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.memberId} />
+                    {/* Read-Only Member ID & Role */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-black uppercase mb-2 text-gray-400">Member ID</label>
+                            <input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.memberId} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-black uppercase mb-2 text-gray-400">Role / Position</label>
+                            <input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.positionCategory} />
+                        </div>
                     </div>
 
                     {/* Nickname & Avatar */}
