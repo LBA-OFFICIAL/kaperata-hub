@@ -93,6 +93,11 @@ const getDailyCashPasskey = () => {
   return `KBA-${now.getDate()}-${(now.getMonth() + 1) + (now.getFullYear() % 100)}`;
 };
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
@@ -256,17 +261,17 @@ const Login = ({ user, onLoginSuccess }) => {
         <form onSubmit={handleAuth} className="space-y-4">
           {authMode === 'login' && (
             <div className="space-y-3">
-               <input type="text" required placeholder="Member ID" className="w-full p-4 border border-amber-200 rounded-2xl font-bold uppercase" value={memberIdInput} onChange={(e) => setMemberIdInput(e.target.value.toUpperCase())} />
-               <input type="password" required placeholder="Password" className="w-full p-4 border border-amber-200 rounded-2xl" value={password} onChange={(e) => setPassword(e.target.value)} />
+               <input type="text" required placeholder="Member ID" className="w-full p-4 border border-amber-200 rounded-2xl font-bold uppercase text-xs" value={memberIdInput} onChange={(e) => setMemberIdInput(e.target.value.toUpperCase())} />
+               <input type="password" required placeholder="Password" className="w-full p-4 border border-amber-200 rounded-2xl font-bold text-xs" value={password} onChange={(e) => setPassword(e.target.value)} />
                <div className="flex justify-end pr-2"><button type="button" onClick={() => setShowForgotModal(true)} className="text-[10px] font-black uppercase text-amber-600 hover:text-amber-800">Forgot Password?</button></div>
             </div>
           )}
           {authMode === 'register' && (
             <div className="space-y-3">
               <div className="grid grid-cols-5 gap-2">
-                <input type="text" required placeholder="FIRST" className="col-span-2 p-3 border border-amber-200 rounded-xl outline-none text-[10px] font-bold uppercase" value={firstName} onChange={(e) => setFirstName(e.target.value.toUpperCase())} />
-                <input type="text" placeholder="MI" maxLength="1" className="p-3 border border-amber-200 rounded-xl outline-none text-[10px] text-center font-bold uppercase" value={middleInitial} onChange={(e) => setMiddleInitial(e.target.value.toUpperCase())} />
-                <input type="text" required placeholder="LAST" className="col-span-2 p-3 border border-amber-200 rounded-xl outline-none text-[10px] font-bold uppercase" value={lastName} onChange={(e) => setLastName(e.target.value.toUpperCase())} />
+                <input type="text" required placeholder="FIRST" className="col-span-2 p-3 border border-amber-200 rounded-xl outline-none text-xs font-bold uppercase" value={firstName} onChange={(e) => setFirstName(e.target.value.toUpperCase())} />
+                <input type="text" placeholder="MI" maxLength="1" className="p-3 border border-amber-200 rounded-xl outline-none text-xs text-center font-bold uppercase" value={middleInitial} onChange={(e) => setMiddleInitial(e.target.value.toUpperCase())} />
+                <input type="text" required placeholder="LAST" className="col-span-2 p-3 border border-amber-200 rounded-xl outline-none text-xs font-bold uppercase" value={lastName} onChange={(e) => setLastName(e.target.value.toUpperCase())} />
               </div>
               <input type="email" required placeholder="LPU Email" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={email} onChange={(e) => setEmail(e.target.value)} />
               <select required className="w-full p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={program} onChange={(e) => setProgram(e.target.value)}>
@@ -283,9 +288,9 @@ const Login = ({ user, onLoginSuccess }) => {
                 <input type="number" required min="1" max="31" placeholder="Day" className="p-3 border border-amber-200 rounded-xl text-xs font-bold" value={birthDay} onChange={(e) => setBirthDay(e.target.value)} />
               </div>
 
-              <input type="password" required placeholder="Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs" value={password} onChange={(e) => setPassword(e.target.value)} />
-              <input type="password" required placeholder="Confirm Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-              <input type="text" placeholder="Leader Key (Optional)" className="w-full p-3 border border-amber-200 rounded-xl text-[10px] font-bold uppercase" value={inputKey} onChange={(e) => setInputKey(e.target.value.toUpperCase())} />
+              <input type="password" required placeholder="Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input type="password" required placeholder="Confirm Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+              <input type="text" placeholder="Leader Key (Optional)" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold uppercase" value={inputKey} onChange={(e) => setInputKey(e.target.value.toUpperCase())} />
             </div>
           )}
           {authMode === 'payment' && (
@@ -300,7 +305,7 @@ const Login = ({ user, onLoginSuccess }) => {
                <input type="text" required placeholder={paymentMethod === 'gcash' ? "Reference No." : "Daily Cash Key"} className="w-full p-3 border border-amber-200 rounded-xl outline-none text-xs uppercase" value={paymentMethod === 'gcash' ? refNo : cashOfficerKey} onChange={e => paymentMethod === 'gcash' ? setRefNo(e.target.value) : setCashOfficerKey(e.target.value.toUpperCase())} />
             </div>
           )}
-          <button type="submit" disabled={loading} className="w-full bg-[#3E2723] text-[#FDB813] py-5 rounded-2xl hover:bg-black transition-all font-black uppercase flex justify-center items-center gap-2">
+          <button type="submit" disabled={loading} className="w-full bg-[#3E2723] text-[#FDB813] py-5 rounded-2xl hover:bg-black transition-all font-black uppercase flex justify-center items-center gap-2 text-xs">
             {loading ? <div className="flex items-center gap-2"><Loader2 className="animate-spin" size={20}/><span className="text-[10px]">{statusMessage}</span></div> : (authMode === 'payment' ? 'Complete' : authMode === 'register' ? 'Register' : 'Enter Hub')}
           </button>
         </form>
@@ -454,36 +459,36 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
                     <div>
                         <label className="block text-xs font-black uppercase mb-2 text-gray-500">Full Name</label>
-                        <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.name} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} />
+                        <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.name} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} />
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">First Name</label>
-                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.firstName} onChange={e => setSettingsForm({...settingsForm, firstName: e.target.value.toUpperCase()})} />
+                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.firstName} onChange={e => setSettingsForm({...settingsForm, firstName: e.target.value.toUpperCase()})} />
                         </div>
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Last Name</label>
-                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.lastName} onChange={e => setSettingsForm({...settingsForm, lastName: e.target.value.toUpperCase()})} />
+                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.lastName} onChange={e => setSettingsForm({...settingsForm, lastName: e.target.value.toUpperCase()})} />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Month</label>
-                            <select className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase" value={settingsForm.birthMonth || ""} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}>
+                            <select className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.birthMonth || ""} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}>
                                 <option value="">Select</option>
                                 {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                             </select>
                         </div>
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Day</label>
-                            <input type="number" min="1" max="31" className="w-full p-4 bg-gray-50 rounded-xl font-bold" value={settingsForm.birthDay || ""} onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})} />
+                            <input type="number" min="1" max="31" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={settingsForm.birthDay || ""} onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})} />
                         </div>
                     </div>
                     <div>
                          <label className="block text-xs font-black uppercase mb-2 text-gray-500">Email Address</label>
-                         <input type="email" className="w-full p-4 bg-gray-50 rounded-xl font-bold" value={settingsForm.email} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} />
+                         <input type="email" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={settingsForm.email} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} />
                     </div>
-                    <button type="submit" disabled={savingSettings} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-xl font-black uppercase hover:bg-black transition-colors">
+                    <button type="submit" disabled={savingSettings} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-xl font-black uppercase hover:bg-black transition-colors text-xs">
                         {savingSettings ? "Saving..." : "Save Changes"}
                     </button>
                 </form>
