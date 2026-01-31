@@ -186,7 +186,6 @@ const getEventDateParts = (startStr, endStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  // Use explicit returns to avoid string interpolation issues in some environments
   if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
   if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
   if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
@@ -196,7 +195,6 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
 };
 
 // Moved MemberCard outside Dashboard to prevent re-declaration
-// Updated to have fixed width for better centering in flex layout
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64">
        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
@@ -333,7 +331,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     if (pc !== 'Member') {
                         setStatusMessage('Creating profile...');
                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', assignedId), profileData);
-                        // Save session
                         localStorage.setItem('lba_profile', JSON.stringify(profileData));
                         onLoginSuccess(profileData);
                     } else { 
@@ -345,7 +342,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     if (paymentMethod === 'cash' && cashOfficerKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) throw new Error("Invalid Cash Key.");
                     const final = { ...pendingProfile, paymentStatus: 'paid', paymentDetails: { method: paymentMethod, refNo } };
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', final.memberId), final);
-                    // Save session
                     localStorage.setItem('lba_profile', JSON.stringify(final));
                     onLoginSuccess(final);
                 } else {
@@ -357,7 +353,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
-                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -366,7 +361,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         userData.uid = currentUser.uid;
                     }
                     
-                    // Save session to local storage for persistence on refresh
                     localStorage.setItem('lba_profile', JSON.stringify(userData));
                     onLoginSuccess(userData);
                 }
@@ -450,7 +444,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                   <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
-                  {/* Updated GCash number */}
                   {paymentMethod === 'gcash' ? "GCash: +639063751402" : "Provide Daily Cash Key"}
                </div>
                <input type="text" required placeholder={paymentMethod === 'gcash' ? "Reference No." : "Daily Cash Key"} className="w-full p-3 border border-amber-200 rounded-xl outline-none text-xs uppercase" value={paymentMethod === 'gcash' ? refNo : cashOfficerKey} onChange={e => paymentMethod === 'gcash' ? setRefNo(e.target.value) : setCashOfficerKey(e.target.value.toUpperCase())} />
@@ -733,11 +726,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     if (!attendanceEvent) return;
     const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId));
     
-    // Robust CSV generation using Blob
-    const headers = ["Name", "ID", "Position"];
-    const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle]);
+    // Safety check in case sorting fails with undefined names
+    const sortedMembers = [...presentMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+         + "Name,ID,Position\n"
+         + sortedMembers.map(e => `${e.name},${e.memberId},${e.specificTitle}`).join("\n");
     
-    generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
   
   const handleRegisterEvent = async (ev) => {
@@ -810,6 +812,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), {
               memberId: profile.memberId,
               name: profile.name,
+              email: profile.email,
               committee: targetCommittee,
               role: committeeForm.role,
               status: 'pending',
@@ -1767,10 +1770,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {/* MEMBERS VIEW (Registry) */}
         {view === 'members' && isOfficer && (
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
-              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
-                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
+              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center">
+                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
                  {/* Added Bulk Email & Export Buttons */}
-                 <div className="flex gap-2 w-full md:w-auto justify-end">
+                 <div className="flex gap-2">
                     {/* Filter Dropdown */}
                     <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
                         <option value="all">All</option>
@@ -1787,8 +1790,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
                  </div>
               </div>
-              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-x-auto">
-                 <table className="w-full text-left uppercase table-fixed min-w-[600px]">
+              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
+                 <table className="w-full text-left uppercase table-fixed">
                     <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
                         <tr className="text-[10px]">
                             <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
