@@ -337,6 +337,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
                     // IMPORTANT: Update the UID on the existing record to match the current session
+                    // This ensures persistence works if the anonymous UID has rotated
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -463,10 +464,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'memberId', direction: 'asc' });
   const [selectedBaristas, setSelectedBaristas] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -1263,16 +1263,34 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                        <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
                          <Trophy size={16} className="text-amber-500"/> Trophy Case
                        </h3>
-                       <div className="grid grid-cols-3 gap-2">
+                       <div className="grid grid-cols-3 gap-3">
                           {/* Dynamic Badges */}
-                          <div title="Member" className="aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">☕</div>
-                          {isOfficer && <div title="Officer" className="aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>}
+                          <div className="flex flex-col items-center gap-1">
+                             <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">☕</div>
+                             <span className="text-[8px] font-black uppercase text-amber-900/60 text-center">Member</span>
+                          </div>
+                          
+                          {isOfficer && (
+                              <div className="flex flex-col items-center gap-1">
+                                  <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>
+                                  <span className="text-[8px] font-black uppercase text-indigo-900/60 text-center">Officer</span>
+                              </div>
+                          )}
+                          
                           {/* Safe check for memberId before calculation */}
-                          {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && <div title="Veteran" className="aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>}
+                          {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && (
+                              <div className="flex flex-col items-center gap-1">
+                                  <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>
+                                  <span className="text-[8px] font-black uppercase text-yellow-900/60 text-center">Veteran</span>
+                              </div>
+                          )}
                           
                           {/* Added Custom Accolades */}
                           {profile.accolades?.map((acc, i) => (
-                             <div key={i} title={acc} className="aspect-square bg-purple-50 rounded-2xl flex items-center justify-center text-2xl cursor-help">🏆</div>
+                             <div key={i} className="flex flex-col items-center gap-1">
+                                <div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex items-center justify-center text-2xl cursor-help">🏆</div>
+                                <span className="text-[8px] font-black uppercase text-purple-900/60 text-center leading-tight line-clamp-2">{acc}</span>
+                             </div>
                           ))}
                        </div>
                     </div>
@@ -1315,6 +1333,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               {isEditingLegacy ? (
                   <div className="space-y-4">
                       <input type="text" placeholder="Image URL" className="w-full p-3 border rounded-xl text-xs" value={legacyForm.imageUrl} onChange={e => setLegacyForm({...legacyForm, imageUrl: e.target.value})} />
+                      <p className="text-[10px] text-gray-400">Preferred Image Size: 16:9 (Landscape)</p>
                       <textarea className="w-full p-3 border rounded-xl text-xs h-64" value={legacyForm.body} onChange={e => setLegacyForm({...legacyForm, body: e.target.value})}></textarea>
                       <button onClick={handleSaveLegacy} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl text-xs font-bold uppercase">Save Story</button>
                   </div>
@@ -1400,7 +1419,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                                </div>
+                               </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
@@ -1613,17 +1632,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {view === 'settings' && (
             <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
                 <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
-                    <button onClick={() => setView('home')} className="md:hidden mr-2 text-gray-500 hover:bg-gray-100 p-2 rounded-full"><Users size={20}/></button> {/* Using Users icon as a placeholder for back arrow since ChevronLeft is not imported, or just reuse Users temporarily. Actually, I can use ChevronLeft if I import it, which I did.*/}
-                    {/* Better: Use ChevronLeft since it is imported now */}
-                    <div className="flex items-center gap-4 w-full">
-                         <button onClick={() => setView('home')} className="text-gray-400 hover:text-amber-600 transition-colors">
-                             <ChevronLeft size={24} />
-                         </button>
-                         <div>
-                            <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
-                            <button onClick={() => setView('home')} className="text-[10px] font-bold text-gray-400 uppercase hover:text-amber-600 underline decoration-2 underline-offset-4">Back to Dashboard</button>
-                         </div>
-                    </div>
+                    <StatIcon icon={Settings2} variant="blue" />
+                    <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
                 </div>
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
                     {/* Read-Only Member ID & Role */}
@@ -1688,86 +1698,31 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <StatIcon icon={TrendingUp} variant="amber" />
                  <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
               </div>
-
-              {/* Membership Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
-                      <p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
-                      <p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
-                      <p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
-                      <p className="text-2xl font-black text-purple-600">{committeeApps.length}</p>
-                  </div>
-              </div>
-
               <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
                  <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
                  <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 {/* OPERATIONS & FINANCIALS */}
-                 <div className="space-y-6">
-                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                             <h4 className="font-black uppercase text-sm">Registration Status</h4>
-                             <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>
-                                 {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
-                             </button>
+                 <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
+                    <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
+                    {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
+                    <div className="space-y-2">
+                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                            <span className="text-[10px] font-black uppercase">Officer Key</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
                         </div>
-                        <hr className="border-amber-100 my-4"/>
-                        <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
-                        <div className="flex gap-2 mb-4">
-                            <select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}>
-                                <option value="all">All Semesters</option>
-                                {semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
+                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                            <span className="text-[10px] font-black uppercase">Head Key</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                            <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                <p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p>
-                                <p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p>
-                            </div>
-                            <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                <p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p>
-                                <p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p>
-                            </div>
+                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                            <span className="text-[10px] font-black uppercase">Comm Key</span>
+                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
                         </div>
-                        <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
-                            <FileBarChart size={14}/> Download Report
-                        </button>
-                     </div>
-
-                     <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
-                        <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                        {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
-                        <div className="space-y-2">
-                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                <span className="text-[10px] font-black uppercase">Officer Key</span>
-                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
-                            </div>
-                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                <span className="text-[10px] font-black uppercase">Head Key</span>
-                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
-                            </div>
-                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                <span className="text-[10px] font-black uppercase">Comm Key</span>
-                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
-                            </div>
-                        </div>
-                        <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                        {/* New Sanitize Button */}
-                        <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
-                     </div>
+                    </div>
+                    <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
+                    {/* New Sanitize Button */}
+                    <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
                  </div>
                  
                  {/* Committee Applications Viewer */}
@@ -1795,6 +1750,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                         <button onClick={() => handleUpdateAppStatus(app.id, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
                                         <button onClick={() => handleUpdateAppStatus(app.id, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
                                         <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                        <a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a>
                                     </div>
                                     <p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
                                 </div>
@@ -1907,12 +1863,11 @@ const App = () => {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
            await signInWithCustomToken(auth, __initial_auth_token);
         } else {
-           // Wait for auth state to resolve instead of forcing anonymous immediately
+           await signInAnonymously(auth);
         }
       } catch (err) {}
     };
     initAuth();
-    
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -1937,11 +1892,6 @@ const App = () => {
                  setAuthError("Connection Error: " + e.message);
              }
          }
-      } else {
-          // No user, but maybe we have a token or need anon sign in
-          // Only sign in anonymously if we really have no user
-          // But wait! If we do this too fast, we overwrite the previous session.
-          // Let's rely on the button in Login to start the session if needed.
       }
       setLoading(false);
     });
