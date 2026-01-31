@@ -196,6 +196,7 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
 };
 
 // Moved MemberCard outside Dashboard to prevent re-declaration
+// Updated to have fixed width for better centering in flex layout
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64">
        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
@@ -741,10 +742,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     // Safety check in case sorting fails with undefined names
     const sortedMembers = [...presentMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
-    const headers = ["Name", "ID", "Position"];
-    const rows = sortedMembers.map(e => [e.name, e.memberId, e.specificTitle]);
+    const csvContent = "data:text/csv;charset=utf-8," 
+         + "Name,ID,Position\n"
+         + sortedMembers.map(e => `${e.name},${e.memberId},${e.specificTitle}`).join("\n");
     
-    generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
   
   const handleRegisterEvent = async (ev) => {
@@ -1234,6 +1242,48 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
         {view === 'home' && (
            <div className="space-y-10 animate-fadeIn">
+              {/* Birthday Banner */}
+              {isBirthday && (
+                  <div className="bg-gradient-to-r from-pink-500 to-rose-500 p-8 rounded-[40px] shadow-xl mb-8 flex items-center gap-6 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 p-8 opacity-10"><Cake size={120} /></div>
+                      <div className="bg-white/20 p-4 rounded-full text-white"><Cake size={40} /></div>
+                      <div className="text-white z-10">
+                          <h3 className="font-serif text-3xl font-black uppercase">Happy Birthday!</h3>
+                          <p className="font-medium text-white/90">Wishing you the happiest of days, {profile.nickname || profile.name.split(' ')[0]}! 🎂</p>
+                      </div>
+                  </div>
+              )}
+
+              {/* Applicant Dashboard: Status Card */}
+              {userApplications.length > 0 && (
+                  <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm mb-8">
+                      <h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                          <Briefcase size={16} className="text-amber-500"/> Your Applications
+                      </h4>
+                      <div className="space-y-3">
+                          {userApplications.map(app => (
+                              <div key={app.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-xl">
+                                  <div>
+                                      <p className="font-bold text-xs uppercase text-[#3E2723]">{app.committee}</p>
+                                      <p className="text-[10px] text-gray-500">{app.role}</p>
+                                  </div>
+                                  <div className="text-right">
+                                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
+                                          app.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                          app.status === 'denied' ? 'bg-red-100 text-red-700' :
+                                          app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' :
+                                          'bg-yellow-100 text-yellow-700'
+                                      }`}>
+                                          {app.status === 'for_interview' ? 'For Interview - Check Email' : (app.status || 'Submitted - For Review')}
+                                      </span>
+                                      <p className="text-[8px] text-gray-400 mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
               {/* Profile Card & Notices Grid */}
               <div className="bg-[#3E2723] rounded-[48px] p-8 text-white relative overflow-hidden shadow-2xl border-4 border-[#FDB813] mb-8">
                   {/* ... (Existing Profile Header) ... */}
