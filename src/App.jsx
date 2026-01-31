@@ -497,6 +497,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [savingSettings, setSavingSettings] = useState(false);
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
+  const [expandedEventId, setExpandedEventId] = useState(null); // Added for event collapse
   
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
@@ -840,9 +841,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   // --- NEW ACTIONS FOR TERMINAL ---
-  const handleUpdateAppStatus = async (id, status) => {
+  const handleUpdateAppStatus = async (app, status) => {
       try {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id), { status });
+          const batch = writeBatch(db);
+          const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id);
+          batch.update(appRef, { status });
+
+          if (status === 'accepted') {
+              const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId);
+              batch.update(memberRef, {
+                  accolades: arrayUnion(`${app.committee} - ${app.role}`)
+              });
+          }
+
+          await batch.commit();
       } catch (err) { console.error(err); }
   };
 
@@ -1464,7 +1476,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                                </div>
+                               </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
@@ -1562,6 +1574,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => {
                  const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
                  const isRegistered = ev.registered?.includes(profile.memberId);
+                 const isExpanded = expandedEventId === ev.id;
+                 const registeredCount = ev.registered?.length || 0;
                  
                  return (
                  <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col gap-4">
@@ -1581,6 +1595,35 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                     {/* Render with whitespace-pre-wrap to preserve formatting */}
                     <p className="text-xs text-gray-600 whitespace-pre-wrap">{ev.description}</p>
+                    
+                    {/* Registration Toggle Section */}
+                    <div className="border-t border-gray-100 pt-2">
+                        <button 
+                            onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
+                            className="w-full flex justify-between items-center text-xs font-bold text-gray-500 hover:text-amber-600"
+                        >
+                            <span>Registered: {registeredCount}</span>
+                            {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                        </button>
+                        
+                        {isExpanded && (
+                            <div className="mt-2 p-3 bg-gray-50 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
+                                {registeredCount > 0 ? (
+                                    <ul className="space-y-1">
+                                        {members
+                                            .filter(m => ev.registered?.includes(m.memberId))
+                                            .sort((a,b) => (a.name || "").localeCompare(b.name || ""))
+                                            .map(m => (
+                                                <li key={m.memberId} className="text-[10px] text-gray-600 truncate">• {m.name}</li>
+                                            ))
+                                        }
+                                    </ul>
+                                ) : (
+                                    <p className="text-[10px] text-gray-400 italic">No one registered yet.</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
                     
                     {/* Event Actions */}
                     <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
@@ -1856,8 +1899,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     </div>
                                     <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
                                     <div className="flex gap-2 pt-3 border-t border-amber-200/50">
-                                        <button onClick={() => handleUpdateAppStatus(app.id, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
-                                        <button onClick={() => handleUpdateAppStatus(app.id, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
+                                        <button onClick={() => handleUpdateAppStatus(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">Interview</button>
+                                        <button onClick={() => handleUpdateAppStatus(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
+                                        <button onClick={() => handleUpdateAppStatus(app, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
                                         <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
                                         <a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a>
                                     </div>
@@ -1876,10 +1920,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {/* MEMBERS VIEW (Registry) */}
         {view === 'members' && isOfficer && (
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
-              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center">
-                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
+              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
+                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
                  {/* Added Bulk Email & Export Buttons */}
-                 <div className="flex gap-2">
+                 <div className="flex gap-2 w-full md:w-auto justify-end">
                     {/* Filter Dropdown */}
                     <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
                         <option value="all">All</option>
@@ -1896,8 +1940,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
                  </div>
               </div>
-              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
-                 <table className="w-full text-left uppercase table-fixed">
+              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-x-auto">
+                 <table className="w-full text-left uppercase table-fixed min-w-[600px]">
                     <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
                         <tr className="text-[10px]">
                             <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
