@@ -186,6 +186,7 @@ const getEventDateParts = (startStr, endStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
+  // Use explicit returns to avoid string interpolation issues in some environments
   if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
   if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
   if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
@@ -195,6 +196,7 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
 };
 
 // Moved MemberCard outside Dashboard to prevent re-declaration
+// Updated to have fixed width for better centering in flex layout
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64">
        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
@@ -353,6 +355,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
+                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -444,6 +447,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                   <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
+                  {/* Updated GCash number */}
                   {paymentMethod === 'gcash' ? "GCash: +639063751402" : "Provide Daily Cash Key"}
                </div>
                <input type="text" required placeholder={paymentMethod === 'gcash' ? "Reference No." : "Daily Cash Key"} className="w-full p-3 border border-amber-200 rounded-xl outline-none text-xs uppercase" value={paymentMethod === 'gcash' ? refNo : cashOfficerKey} onChange={e => paymentMethod === 'gcash' ? setRefNo(e.target.value) : setCashOfficerKey(e.target.value.toUpperCase())} />
@@ -474,6 +478,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [announcements, setAnnouncements] = useState([]);
   const [suggestions, setSuggestions] = useState([]);
   const [committeeApps, setCommitteeApps] = useState([]); 
+  const [userApplications, setUserApplications] = useState([]);
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
@@ -614,6 +619,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         }, (e) => console.error("Apps sync error:", e));
     }
 
+    // Fetch user's own applications
+    const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => {
+        const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
+        setUserApplications(data);
+    });
+
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
     const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => {
@@ -626,8 +637,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     return () => { 
         unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); 
         if (unsubApps) unsubApps();
+        unsubUserApps();
     };
-  }, [user, isAdmin]);
+  }, [user, isAdmin, profile.memberId]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -858,14 +870,23 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       }
 
       // Logic: Include everyone, but mark exempt
-      const headers = ["Name", "ID", "Category", "Payment Status", "Method", "Ref No"];
-      const rows = filtered.map(m => {
+      const csvData = filtered.map(m => {
           const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
           const status = isExempt ? 'EXEMPT' : (m.paymentStatus === 'paid' ? 'PAID' : 'UNPAID');
-          return [m.name, m.memberId, m.positionCategory, status, m.paymentDetails?.method || '', m.paymentDetails?.refNo || ''];
+          return `${m.name},${m.memberId},${m.positionCategory},${status},${m.paymentDetails?.method || ''},${m.paymentDetails?.refNo || ''}`;
       });
 
-      generateCSV(headers, rows, `LBA_Financials_${financialFilter}.csv`);
+      const csvContent = "data:text/csv;charset=utf-8," 
+           + "Name,ID,Category,Payment Status,Method,Ref No\n"
+           + csvData.join("\n");
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `LBA_Financials_${financialFilter}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
   };
   
   const handleSanitizeDatabase = async () => {
@@ -1403,6 +1424,36 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {view === 'committee_hunt' && (
            <div className="space-y-6 animate-fadeIn">
               <h3 className="font-serif text-3xl font-black uppercase text-center mb-8">Join the Team</h3>
+              
+              {/* Applicant Dashboard: Status Card */}
+              {userApplications.length > 0 && (
+                  <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm mb-8">
+                      <h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                          <Briefcase size={16} className="text-amber-500"/> Your Applications
+                      </h4>
+                      <div className="space-y-3">
+                          {userApplications.map(app => (
+                              <div key={app.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-xl">
+                                  <div>
+                                      <p className="font-bold text-xs uppercase text-[#3E2723]">{app.committee}</p>
+                                      <p className="text-[10px] text-gray-500">{app.role}</p>
+                                  </div>
+                                  <div className="text-right">
+                                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
+                                          app.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                          app.status === 'denied' ? 'bg-red-100 text-red-700' :
+                                          'bg-yellow-100 text-yellow-700'
+                                      }`}>
+                                          {app.status === 'pending' || !app.status ? 'Submitted - For Review' : app.status}
+                                      </span>
+                                      <p className="text-[8px] text-gray-400 mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              )}
+
               <div className="space-y-4">
                  {COMMITTEES_INFO.map((comm) => (
                     <div key={comm.id} className="bg-white rounded-[32px] border border-amber-100 overflow-hidden shadow-sm transition-all">
@@ -1413,7 +1464,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                               </div>
+                                </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
@@ -1701,31 +1752,86 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <StatIcon icon={TrendingUp} variant="amber" />
                  <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
               </div>
+
+              {/* Membership Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
+                      <p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
+                      <p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
+                      <p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
+                      <p className="text-2xl font-black text-purple-600">{committeeApps.length}</p>
+                  </div>
+              </div>
+
               <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
                  <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
                  <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
               </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
-                    <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                    {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                            <span className="text-[10px] font-black uppercase">Officer Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
+                 {/* OPERATIONS & FINANCIALS */}
+                 <div className="space-y-6">
+                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+                        <div className="flex justify-between items-center mb-6">
+                             <h4 className="font-black uppercase text-sm">Registration Status</h4>
+                             <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>
+                                 {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
+                             </button>
                         </div>
-                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                            <span className="text-[10px] font-black uppercase">Head Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
+                        <hr className="border-amber-100 my-4"/>
+                        <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
+                        <div className="flex gap-2 mb-4">
+                            <select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}>
+                                <option value="all">All Semesters</option>
+                                {semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
                         </div>
-                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                            <span className="text-[10px] font-black uppercase">Comm Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                            <div className="p-3 bg-gray-50 rounded-xl text-center">
+                                <p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p>
+                                <p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 rounded-xl text-center">
+                                <p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p>
+                                <p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p>
+                            </div>
                         </div>
-                    </div>
-                    <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                    {/* New Sanitize Button */}
-                    <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
+                        <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
+                            <FileBarChart size={14}/> Download Report
+                        </button>
+                     </div>
+
+                     <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
+                        <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
+                        {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-[10px] font-black uppercase">Officer Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
+                            </div>
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-[10px] font-black uppercase">Head Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
+                            </div>
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-[10px] font-black uppercase">Comm Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
+                            </div>
+                        </div>
+                        <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
+                        {/* New Sanitize Button */}
+                        <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
+                     </div>
                  </div>
                  
                  {/* Committee Applications Viewer */}
