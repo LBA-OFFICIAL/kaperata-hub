@@ -84,6 +84,16 @@ const COMMITTEES_INFO = [
   }
 ];
 
+const SOCIAL_LINKS = { 
+  facebook: "https://fb.com/lpubaristas.official", 
+  instagram: "https://instagram.com/lpubaristas.official", 
+  tiktok: "https://tiktok.com/@lpubaristas.official",
+  email: "lpubaristas.official@gmail.com" 
+};
+const SEED_OFFICER_KEY = "KAPERATA_OFFICER_2024";
+const SEED_HEAD_KEY = "KAPERATA_HEAD_2024";
+const SEED_COMM_KEY = "KAPERATA_COMM_2024";
+
 // --- Helper Logic ---
 const getDirectLink = (url) => {
   if (!url || typeof url !== 'string') return "";
@@ -94,7 +104,6 @@ const getDirectLink = (url) => {
   return url;
 };
 
-// Ensure URL has protocol
 const ensureAbsoluteUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -303,6 +312,8 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     if (pc !== 'Member') {
                         setStatusMessage('Creating profile...');
                         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', assignedId), profileData);
+                        // Save session
+                        localStorage.setItem('lba_profile', JSON.stringify(profileData));
                         onLoginSuccess(profileData);
                     } else { 
                         setPendingProfile(profileData); 
@@ -313,6 +324,8 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     if (paymentMethod === 'cash' && cashOfficerKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) throw new Error("Invalid Cash Key.");
                     const final = { ...pendingProfile, paymentStatus: 'paid', paymentDetails: { method: paymentMethod, refNo } };
                     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', final.memberId), final);
+                    // Save session
+                    localStorage.setItem('lba_profile', JSON.stringify(final));
                     onLoginSuccess(final);
                 } else {
                     setStatusMessage('Logging in...');
@@ -324,7 +337,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
                     // IMPORTANT: Update the UID on the existing record to match the current session
-                    // This ensures persistence works if the anonymous UID has rotated
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -332,7 +344,9 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         });
                         userData.uid = currentUser.uid;
                     }
-
+                    
+                    // Save session to local storage for persistence on refresh
+                    localStorage.setItem('lba_profile', JSON.stringify(userData));
                     onLoginSuccess(userData);
                 }
             })(),
@@ -508,7 +522,41 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate();
   }, [profile]);
 
-  // Team Hierarchy Filtering - FIXED: Safe property access
+  // Financial Stats
+  const financialStats = useMemo(() => {
+    if (!members) return { totalPaid: 0, cashCount: 0, gcashCount: 0, exemptCount: 0 };
+    
+    let filtered = members;
+    if (financialFilter !== 'all') {
+        const [sy, sem] = financialFilter.split('-');
+        filtered = members.filter(m => m.lastRenewedSY === sy && m.lastRenewedSem === sem);
+    }
+    
+    // Exempt logic: Officers, Execomm, Committee are exempt from cash/revenue reports
+    const payingMembers = filtered.filter(m => {
+        const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
+        return !isExempt && m.paymentStatus === 'paid';
+    });
+
+    const cashPayments = payingMembers.filter(m => m.paymentDetails?.method === 'cash').length;
+    const gcashPayments = payingMembers.filter(m => m.paymentDetails?.method === 'gcash').length;
+    
+    return { 
+        totalPaid: payingMembers.length,
+        cashCount: cashPayments,
+        gcashCount: gcashPayments,
+        exemptCount: filtered.length - payingMembers.length
+    };
+  }, [members, financialFilter]);
+
+  // Unique Semesters for filter
+  const semesterOptions = useMemo(() => {
+    if(!members) return [];
+    const sems = new Set(members.map(m => `${m.lastRenewedSY}-${m.lastRenewedSem}`));
+    return Array.from(sems).filter(s => s !== "undefined-undefined").sort().reverse();
+  }, [members]);
+
+  // Team Hierarchy Filtering
   const teamStructure = useMemo(() => {
     if (!members) return { tier1: [], tier2: [], tier3: [], committees: { heads: [], members: [] } };
     
@@ -573,6 +621,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) };
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated);
         setProfile(updated);
+        // Update local storage too
+        localStorage.setItem('lba_profile', JSON.stringify(updated));
         alert("Profile updated successfully!");
     } catch(err) {
         console.error(err);
@@ -1597,31 +1647,86 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <StatIcon icon={TrendingUp} variant="amber" />
                  <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
               </div>
+
+              {/* Membership Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
+                      <p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
+                      <p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
+                      <p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                      <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
+                      <p className="text-2xl font-black text-purple-600">{committeeApps.length}</p>
+                  </div>
+              </div>
+
               <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
                  <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
                  <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
               </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
-                    <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                    {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                            <span className="text-[10px] font-black uppercase">Officer Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
+                 {/* OPERATIONS & FINANCIALS */}
+                 <div className="space-y-6">
+                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+                        <div className="flex justify-between items-center mb-6">
+                             <h4 className="font-black uppercase text-sm">Registration Status</h4>
+                             <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>
+                                 {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
+                             </button>
                         </div>
-                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                            <span className="text-[10px] font-black uppercase">Head Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
+                        <hr className="border-amber-100 my-4"/>
+                        <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
+                        <div className="flex gap-2 mb-4">
+                            <select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}>
+                                <option value="all">All Semesters</option>
+                                {semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
                         </div>
-                        <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                            <span className="text-[10px] font-black uppercase">Comm Key</span>
-                            <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
+                        <div className="grid grid-cols-2 gap-2 mb-4">
+                            <div className="p-3 bg-gray-50 rounded-xl text-center">
+                                <p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p>
+                                <p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p>
+                            </div>
+                            <div className="p-3 bg-gray-50 rounded-xl text-center">
+                                <p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p>
+                                <p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p>
+                            </div>
                         </div>
-                    </div>
-                    <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                    {/* New Sanitize Button */}
-                    <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
+                        <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
+                            <FileBarChart size={14}/> Download Report
+                        </button>
+                     </div>
+
+                     <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
+                        <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
+                        {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
+                        <div className="space-y-2">
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-[10px] font-black uppercase">Officer Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
+                            </div>
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-[10px] font-black uppercase">Head Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
+                            </div>
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                <span className="text-[10px] font-black uppercase">Comm Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
+                            </div>
+                        </div>
+                        <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
+                        {/* New Sanitize Button */}
+                        <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
+                     </div>
                  </div>
                  
                  {/* Committee Applications Viewer */}
