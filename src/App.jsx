@@ -104,6 +104,7 @@ const getDirectLink = (url) => {
   return url;
 };
 
+// Ensure URL has protocol
 const ensureAbsoluteUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
@@ -139,11 +140,13 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-// Safe date helpers for event rendering
+// Safe date helpers for event rendering - UPDATED TO PREVENT CRASHES
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
     
     const start = new Date(startStr);
+    if (isNaN(start.getTime())) return { day: '?', month: '?' };
+
     const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase();
     const startDay = start.getDate();
 
@@ -152,6 +155,10 @@ const getEventDateParts = (startStr, endStr) => {
     }
 
     const end = new Date(endStr);
+    if (isNaN(end.getTime())) {
+        return { day: `${startDay}`, month: startMonth };
+    }
+
     const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase();
     const endDay = end.getDate();
 
@@ -337,7 +344,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
                     // IMPORTANT: Update the UID on the existing record to match the current session
-                    // This ensures persistence works if the anonymous UID has rotated
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -464,9 +470,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: 'memberId', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
   const [selectedBaristas, setSelectedBaristas] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -1419,7 +1426,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                               </div>
+                                </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
@@ -1632,8 +1639,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {view === 'settings' && (
             <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
                 <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
-                    <StatIcon icon={Settings2} variant="blue" />
-                    <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
+                    <button onClick={() => setView('home')} className="md:hidden mr-2 text-gray-500 hover:bg-gray-100 p-2 rounded-full"><Users size={20}/></button> {/* Using Users icon as a placeholder for back arrow since ChevronLeft is not imported, or just reuse Users temporarily. Actually, I can use ChevronLeft if I import it, which I did.*/}
+                    {/* Better: Use ChevronLeft since it is imported now */}
+                    <div className="flex items-center gap-4 w-full">
+                         <button onClick={() => setView('home')} className="text-gray-400 hover:text-amber-600 transition-colors">
+                             <ChevronLeft size={24} />
+                         </button>
+                         <div>
+                            <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
+                            <button onClick={() => setView('home')} className="text-[10px] font-bold text-gray-400 uppercase hover:text-amber-600 underline decoration-2 underline-offset-4">Back to Dashboard</button>
+                         </div>
+                    </div>
                 </div>
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
                     {/* Read-Only Member ID & Role */}
@@ -1767,10 +1783,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {/* MEMBERS VIEW (Registry) */}
         {view === 'members' && isOfficer && (
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
-              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center">
-                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
+              <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
+                 <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
                  {/* Added Bulk Email & Export Buttons */}
-                 <div className="flex gap-2">
+                 <div className="flex gap-2 w-full md:w-auto justify-end">
                     {/* Filter Dropdown */}
                     <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
                         <option value="all">All</option>
@@ -1787,8 +1803,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
                  </div>
               </div>
-              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
-                 <table className="w-full text-left uppercase table-fixed">
+              <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-x-auto">
+                 <table className="w-full text-left uppercase table-fixed min-w-[600px]">
                     <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
                         <tr className="text-[10px]">
                             <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
@@ -1854,8 +1870,13 @@ const App = () => {
     // Check local storage first
     const storedProfile = localStorage.getItem('lba_profile');
     if (storedProfile) {
-        setProfile(JSON.parse(storedProfile));
-        setLoading(false);
+        try {
+            setProfile(JSON.parse(storedProfile));
+            setLoading(false);
+        } catch (e) {
+            console.error("Storage parse error", e);
+            localStorage.removeItem('lba_profile');
+        }
     }
 
     const initAuth = async () => {
@@ -1868,6 +1889,7 @@ const App = () => {
       } catch (err) {}
     };
     initAuth();
+    
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
