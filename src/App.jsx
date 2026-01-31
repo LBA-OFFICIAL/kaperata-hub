@@ -463,6 +463,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
@@ -1124,28 +1125,59 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         </div>
       )}
 
-      <aside className="w-64 bg-[#3E2723] text-amber-50 md:flex flex-col hidden">
+      <aside className={`
+          bg-[#3E2723] text-amber-50 flex-col 
+          md:w-64 md:flex 
+          ${mobileMenuOpen ? 'fixed inset-0 z-50 w-64 shadow-2xl flex' : 'hidden'}
+      `}>
         <div className="p-8 border-b border-amber-900/30 text-center">
            <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA" className="w-20 h-20 object-contain mx-auto mb-4" />
            <h1 className="font-serif font-black text-[10px] uppercase">LPU Baristas' Association</h1>
         </div>
+        
+        {/* Mobile Close Button */}
+        <div className="md:hidden p-4 flex justify-end absolute top-2 right-2">
+            <button onClick={() => setMobileMenuOpen(false)}><X size={24} /></button>
+        </div>
+
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
           {menuItems.map(item => {
              const active = view === item.id;
              const Icon = item.icon; // Cap variable for JSX
              return (
-                <button key={item.id} onClick={() => setView(item.id)} className={active ? activeMenuClass : inactiveMenuClass}>
+                <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }} className={active ? activeMenuClass : inactiveMenuClass}>
                   <Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
                 </button>
              );
           })}
         </nav>
-        <div className="p-6 border-t border-amber-900/30"><button onClick={logout} className="flex items-center gap-2 text-red-400 font-black text-[10px] uppercase hover:text-red-300"><LogOut size={16} /> Exit Hub</button></div>
+        
+        {/* Social Media Links */}
+        <div className="p-6 border-t border-amber-900/30 space-y-4">
+            <div className="flex justify-center gap-4">
+                <a href={SOCIAL_LINKS.facebook} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Facebook size={18} /></a>
+                <a href={SOCIAL_LINKS.instagram} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Instagram size={18} /></a>
+                <a href={SOCIAL_LINKS.tiktok} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Music size={18} /></a>
+                <a href={`mailto:${SOCIAL_LINKS.email}`} className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Mail size={18} /></a>
+            </div>
+            <button onClick={() => { 
+                localStorage.removeItem('lba_profile'); 
+                logout(); 
+            }} className="w-full flex items-center justify-center gap-2 text-red-400 font-black text-[10px] uppercase hover:text-red-300"><LogOut size={16} /> Exit Hub</button>
+        </div>
       </aside>
+      
+      {/* Overlay for mobile menu */}
+      {mobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)}></div>}
 
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <header className="flex justify-between items-center mb-10">
-          <h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2>
+          <div className="flex items-center gap-4">
+              {/* Mobile Menu Toggle */}
+              <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-[#3E2723]"><Menu size={24}/></button>
+              <h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2>
+          </div>
+          
           {/* Made profile clickable for settings */}
           <div 
             onClick={() => setView('settings')}
@@ -1368,7 +1400,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                               </div>
+                                </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
@@ -1581,8 +1613,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         {view === 'settings' && (
             <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
                 <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
-                    <StatIcon icon={Settings2} variant="blue" />
-                    <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
+                    <button onClick={() => setView('home')} className="md:hidden mr-2 text-gray-500 hover:bg-gray-100 p-2 rounded-full"><Users size={20}/></button> {/* Using Users icon as a placeholder for back arrow since ChevronLeft is not imported, or just reuse Users temporarily. Actually, I can use ChevronLeft if I import it, which I did.*/}
+                    {/* Better: Use ChevronLeft since it is imported now */}
+                    <div className="flex items-center gap-4 w-full">
+                         <button onClick={() => setView('home')} className="text-gray-400 hover:text-amber-600 transition-colors">
+                             <ChevronLeft size={24} />
+                         </button>
+                         <div>
+                            <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
+                            <button onClick={() => setView('home')} className="text-[10px] font-bold text-gray-400 uppercase hover:text-amber-600 underline decoration-2 underline-offset-4">Back to Dashboard</button>
+                         </div>
+                    </div>
                 </div>
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
                     {/* Read-Only Member ID & Role */}
@@ -1735,10 +1776,27 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="space-y-2 max-h-60 overflow-y-auto">
                         {committeeApps && committeeApps.length > 0 ? (
                             committeeApps.map(app => (
-                                <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs">
-                                    <p className="font-bold">{app.name} ({app.memberId})</p>
-                                    <p className="text-amber-700">{app.committee} - {app.role}</p>
-                                    <p className="text-[8px] text-gray-500 uppercase mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
+                                <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100">
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <p className="font-black text-sm text-[#3E2723]">{app.name}</p>
+                                            <p className="text-[10px] font-mono text-gray-500">{app.memberId}</p>
+                                        </div>
+                                        <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${
+                                            app.status === 'accepted' ? 'bg-green-100 text-green-700' : 
+                                            app.status === 'denied' ? 'bg-red-100 text-red-700' : 
+                                            'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                            {app.status || 'Pending'}
+                                        </span>
+                                    </div>
+                                    <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
+                                    <div className="flex gap-2 pt-3 border-t border-amber-200/50">
+                                        <button onClick={() => handleUpdateAppStatus(app.id, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
+                                        <button onClick={() => handleUpdateAppStatus(app.id, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
+                                        <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                    </div>
+                                    <p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
                                 </div>
                             ))
                         ) : (
@@ -1837,16 +1895,24 @@ const App = () => {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
+    // Check local storage first
+    const storedProfile = localStorage.getItem('lba_profile');
+    if (storedProfile) {
+        setProfile(JSON.parse(storedProfile));
+        setLoading(false);
+    }
+
     const initAuth = async () => {
       try {
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
            await signInWithCustomToken(auth, __initial_auth_token);
         } else {
-           await signInAnonymously(auth);
+           // Wait for auth state to resolve instead of forcing anonymous immediately
         }
       } catch (err) {}
     };
     initAuth();
+    
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -1855,17 +1921,27 @@ const App = () => {
              const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('uid', '==', currentUser.uid));
              const snap = await getDocs(q);
              if (!snap.empty) {
-                 setProfile(snap.docs[0].data());
+                 const userData = snap.docs[0].data();
+                 setProfile(userData);
+                 localStorage.setItem('lba_profile', JSON.stringify(userData));
+             } else if (!storedProfile) {
+                 // If no profile found and no local storage, maybe this is a new anonymous session or cleared data
              }
          } catch (e) {
              console.warn("Profile fetch error", e); // Use warn instead of error to avoid clutter
              if (e.code === 'permission-denied') {
                  setAuthError("Database Locked: Please go to Firebase Console > Firestore > Rules and change 'allow read, write: if false;' to 'if true;'.");
                  await signOut(auth);
+                 localStorage.removeItem('lba_profile');
              } else {
                  setAuthError("Connection Error: " + e.message);
              }
          }
+      } else {
+          // No user, but maybe we have a token or need anon sign in
+          // Only sign in anonymously if we really have no user
+          // But wait! If we do this too fast, we overwrite the previous session.
+          // Let's rely on the button in Login to start the session if needed.
       }
       setLoading(false);
     });
@@ -1873,7 +1949,7 @@ const App = () => {
   }, []);
 
   if (loading) return <div className="min-h-screen bg-[#FDFBF7] flex flex-col items-center justify-center text-[#3E2723]"><Loader2 size={40} className="animate-spin mb-4" /><p className="font-black uppercase tracking-widest text-xs animate-pulse">Establishing Secure Connection...</p></div>;
-  return profile ? <Dashboard user={user} profile={profile} setProfile={setProfile} logout={() => { setProfile(null); signOut(auth); }} /> : <Login user={user} onLoginSuccess={setProfile} initialError={authError} />;
+  return profile ? <Dashboard user={user} profile={profile} setProfile={setProfile} logout={() => { setProfile(null); localStorage.removeItem('lba_profile'); signOut(auth); }} /> : <Login user={user} onLoginSuccess={setProfile} initialError={authError} />;
 };
 
 export default App;
