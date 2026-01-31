@@ -497,7 +497,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [savingSettings, setSavingSettings] = useState(false);
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
-  const [expandedEventId, setExpandedEventId] = useState(null); // Added for event collapse
+  const [expandedEventId, setExpandedEventId] = useState(null); 
   
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
@@ -1454,9 +1454,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                       <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
                                           app.status === 'accepted' ? 'bg-green-100 text-green-700' :
                                           app.status === 'denied' ? 'bg-red-100 text-red-700' :
+                                          app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' :
                                           'bg-yellow-100 text-yellow-700'
                                       }`}>
-                                          {app.status === 'pending' || !app.status ? 'Submitted - For Review' : app.status}
+                                          {app.status === 'for_interview' ? 'For Interview - Check Email' : (app.status || 'Submitted - For Review')}
                                       </span>
                                       <p className="text-[8px] text-gray-400 mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
                                   </div>
@@ -1812,7 +1813,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   </div>
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
                       <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
-                      <p className="text-2xl font-black text-purple-600">{committeeApps.length}</p>
+                      <p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p>
                   </div>
               </div>
 
@@ -1881,8 +1882,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
                     <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
                     <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {committeeApps && committeeApps.length > 0 ? (
-                            committeeApps.map(app => (
+                        {committeeApps && committeeApps.filter(app => !['accepted','denied'].includes(app.status)).length > 0 ? (
+                            committeeApps.filter(app => !['accepted','denied'].includes(app.status)).map(app => (
                                 <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100">
                                     <div className="flex justify-between items-start mb-2">
                                         <div>
@@ -1890,11 +1891,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                             <p className="text-[10px] font-mono text-gray-500">{app.memberId}</p>
                                         </div>
                                         <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${
-                                            app.status === 'accepted' ? 'bg-green-100 text-green-700' : 
-                                            app.status === 'denied' ? 'bg-red-100 text-red-700' : 
+                                            app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 
                                             'bg-yellow-100 text-yellow-700'
                                         }`}>
-                                            {app.status || 'Pending'}
+                                            {app.status === 'for_interview' ? 'Interview' : 'Pending'}
                                         </span>
                                     </div>
                                     <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
