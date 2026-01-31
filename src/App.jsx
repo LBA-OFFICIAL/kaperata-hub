@@ -104,11 +104,31 @@ const getDirectLink = (url) => {
   return url;
 };
 
-// Ensure URL has protocol
 const ensureAbsoluteUrl = (url) => {
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) return url;
   return 'https://' + url;
+};
+
+// Robust CSV Generator using Blob
+const generateCSV = (headers, rows, filename) => {
+    const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
 };
 
 const getMemberIdMeta = () => {
@@ -140,13 +160,11 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-// Safe date helpers for event rendering - UPDATED TO PREVENT CRASHES
+// Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
     
     const start = new Date(startStr);
-    if (isNaN(start.getTime())) return { day: '?', month: '?' };
-
     const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase();
     const startDay = start.getDate();
 
@@ -155,10 +173,6 @@ const getEventDateParts = (startStr, endStr) => {
     }
 
     const end = new Date(endStr);
-    if (isNaN(end.getTime())) {
-        return { day: `${startDay}`, month: startMonth };
-    }
-
     const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase();
     const endDay = end.getDate();
 
@@ -719,20 +733,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     if (!attendanceEvent) return;
     const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId));
     
-    // Safety check in case sorting fails with undefined names
-    const sortedMembers = [...presentMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
-
-    const csvContent = "data:text/csv;charset=utf-8," 
-         + "Name,ID,Position\n"
-         + sortedMembers.map(e => `${e.name},${e.memberId},${e.specificTitle}`).join("\n");
+    // Robust CSV generation using Blob
+    const headers = ["Name", "ID", "Position"];
+    const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle]);
     
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
   };
   
   const handleRegisterEvent = async (ev) => {
@@ -850,23 +855,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       }
 
       // Logic: Include everyone, but mark exempt
-      const csvData = filtered.map(m => {
+      const headers = ["Name", "ID", "Category", "Payment Status", "Method", "Ref No"];
+      const rows = filtered.map(m => {
           const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
           const status = isExempt ? 'EXEMPT' : (m.paymentStatus === 'paid' ? 'PAID' : 'UNPAID');
-          return `${m.name},${m.memberId},${m.positionCategory},${status},${m.paymentDetails?.method || ''},${m.paymentDetails?.refNo || ''}`;
+          return [m.name, m.memberId, m.positionCategory, status, m.paymentDetails?.method || '', m.paymentDetails?.refNo || ''];
       });
 
-      const csvContent = "data:text/csv;charset=utf-8," 
-           + "Name,ID,Category,Payment Status,Method,Ref No\n"
-           + csvData.join("\n");
-      
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `LBA_Financials_${financialFilter}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      generateCSV(headers, rows, `LBA_Financials_${financialFilter}.csv`);
   };
   
   const handleSanitizeDatabase = async () => {
@@ -906,17 +902,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       else if (exportFilter === 'officers') dataToExport = dataToExport.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
       else if (exportFilter === 'committee') dataToExport = dataToExport.filter(m => m.positionCategory === 'Committee');
       
-      const csvContent = "data:text/csv;charset=utf-8," 
-           + "Name,ID,Email,Program,Position,Status\n"
-           + dataToExport.map(e => `${e.name},${e.memberId},${e.email},${e.program},${e.specificTitle},${e.status}`).join("\n");
-      
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `LBA_Registry_${exportFilter}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      const headers = ["Name", "ID", "Email", "Program", "Position", "Status"];
+      const rows = dataToExport.map(e => [e.name, e.memberId, e.email, e.program, e.specificTitle, e.status]);
+
+      generateCSV(headers, rows, `LBA_Registry_${exportFilter}.csv`);
   };
 
   const handleBulkEmail = () => {
@@ -1013,14 +1002,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
   
   const downloadImportTemplate = () => {
-    const headers = "Name,Email,Program,PositionCategory,SpecificTitle";
-    const sample = "JUAN DELA CRUZ,juan@lpu.edu.ph,BSIT,Member,Member";
-    const blob = new Blob([headers + "\n" + sample], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = "LBA_Import_Template.csv";
-    a.click();
+    const headers = ["Name", "Email", "Program", "PositionCategory", "SpecificTitle"];
+    const rows = [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]];
+    generateCSV(headers, rows, "LBA_Import_Template.csv");
   };
 
   const handleRotateSecurityKeys = async () => {
@@ -1426,7 +1410,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                                </div>
+                               </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
