@@ -196,7 +196,6 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
 };
 
 // Moved MemberCard outside Dashboard to prevent re-declaration
-// Updated to have fixed width for better centering in flex layout
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64">
        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
@@ -485,7 +484,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortConfig, setSortConfig] = useState({ key: 'name', direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'memberId', direction: 'asc' });
   const [selectedBaristas, setSelectedBaristas] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -742,17 +741,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     // Safety check in case sorting fails with undefined names
     const sortedMembers = [...presentMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-         + "Name,ID,Position\n"
-         + sortedMembers.map(e => `${e.name},${e.memberId},${e.specificTitle}`).join("\n");
+    const headers = ["Name", "ID", "Position"];
+    const rows = sortedMembers.map(e => [e.name, e.memberId, e.specificTitle]);
     
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
   };
   
   const handleRegisterEvent = async (ev) => {
@@ -882,48 +874,72 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       }
 
       // Logic: Include everyone, but mark exempt
-      const csvData = filtered.map(m => {
+      const headers = ["Name", "ID", "Category", "Payment Status", "Method", "Ref No"];
+      const rows = filtered.map(m => {
           const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
           const status = isExempt ? 'EXEMPT' : (m.paymentStatus === 'paid' ? 'PAID' : 'UNPAID');
-          return `${m.name},${m.memberId},${m.positionCategory},${status},${m.paymentDetails?.method || ''},${m.paymentDetails?.refNo || ''}`;
+          return [m.name, m.memberId, m.positionCategory, status, m.paymentDetails?.method || '', m.paymentDetails?.refNo || ''];
       });
 
-      const csvContent = "data:text/csv;charset=utf-8," 
-           + "Name,ID,Category,Payment Status,Method,Ref No\n"
-           + csvData.join("\n");
-      
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `LBA_Financials_${financialFilter}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      generateCSV(headers, rows, `LBA_Financials_${financialFilter}.csv`);
   };
   
   const handleSanitizeDatabase = async () => {
-      if (!confirm("This will RE-GENERATE all Member IDs. Are you sure?")) return;
-      const batch = writeBatch(db);
+      if (!confirm("This will REMOVE DUPLICATES (by Name) and RE-GENERATE Member IDs. Are you sure?")) return;
+      
       try {
-          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc'));
+          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry')); // remove orderBy to get all, sort in memory to be safe against missing fields
           const snapshot = await getDocs(q);
           
-          let count = 0;
-          snapshot.docs.forEach((docSnap) => {
-             const data = docSnap.data();
-             const category = data.positionCategory || "Member";
-             const meta = getMemberIdMeta(); 
-             
-             count++;
-             const padded = String(count).padStart(4, '0');
-             const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
-             const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`;
-             
-             batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId });
+          if (snapshot.empty) return;
+
+          // Sort in memory to handle potentially missing joinedDate safely
+          const docs = snapshot.docs.sort((a, b) => {
+              const dateA = a.data().joinedDate || "";
+              const dateB = b.data().joinedDate || "";
+              return dateA.localeCompare(dateB);
           });
+
+          const seenNames = new Set();
+          let count = 0;
+          let batch = writeBatch(db);
+          let operationCount = 0;
+
+          for (const docSnap of docs) {
+              const data = docSnap.data();
+              const normalizedName = (data.name || "").trim().toUpperCase();
+
+              if (seenNames.has(normalizedName)) {
+                  batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id));
+                  operationCount++;
+              } else {
+                  seenNames.add(normalizedName);
+                  count++;
+                  
+                  const meta = getMemberIdMeta();
+                  const padded = String(count).padStart(4, '0');
+                  const isLeader = ['Officer', 'Execomm', 'Committee'].includes(data.positionCategory || "Member");
+                  const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`;
+                  
+                  // Only update if ID actually changed to save writes? 
+                  // Actually, since we are re-sequencing based on filtered list, it's likely to change if duplicates were removed early in the list.
+                  // Just update always for consistency.
+                  batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId });
+                  operationCount++;
+              }
+
+              if (operationCount >= 450) {
+                  await batch.commit();
+                  batch = writeBatch(db);
+                  operationCount = 0;
+              }
+          }
           
-          await batch.commit();
-          alert(`Database sanitized! ${count} records updated.`);
+          if (operationCount > 0) {
+              await batch.commit();
+          }
+
+          alert(`Database sanitized! ${count} unique records kept. Duplicates removed.`);
       } catch (err) {
           console.error("Sanitize error", err);
           alert("Failed to sanitize: " + err.message);
@@ -988,7 +1004,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
 
   const handleUpdatePosition = async (targetId, cat, specific = "") => {
-    if (!isOfficer) return;
+    if (!isAdmin) return; // RESTRICTED: Only Admins (Officer/Execomm) can update positions
     const target = members.find(m => m.memberId === targetId);
     if (!target) return;
     
@@ -1630,12 +1646,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
                         <div className="flex gap-2">
                             {/* Registration Button for All Users */}
-                            <button 
-                                onClick={() => handleRegisterEvent(ev)} 
-                                className={`py-2 px-4 rounded-xl text-[10px] font-bold uppercase transition-colors ${isRegistered ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
-                            >
-                                {isRegistered ? "Unregister" : "Register"}
-                            </button>
+                            {ev.attendanceRequired && (
+                                <button 
+                                    onClick={() => handleRegisterEvent(ev)} 
+                                    className={`py-2 px-4 rounded-xl text-[10px] font-bold uppercase transition-colors ${isRegistered ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
+                                >
+                                    {isRegistered ? "Unregister" : "Register"}
+                                </button>
+                            )}
 
                             {ev.evaluationLink && (
                                 <a href={ensureAbsoluteUrl(ev.evaluationLink)} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors flex items-center gap-1">
@@ -1974,14 +1992,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
                              <td className="text-center">
                                 <div className="flex flex-col gap-1 items-center">
-                                    <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                    <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                                 </div>
                              </td>
                              <td className="text-right p-4">
                                  <div className="flex items-center justify-end gap-1">
                                      <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
-                                     <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                                     {isAdmin && <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>}
                                  </div>
                              </td>
                           </tr>
