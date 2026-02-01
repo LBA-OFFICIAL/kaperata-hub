@@ -160,6 +160,19 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+// Fixed Missing Helpers
+const getEventDay = (dateStr) => {
+    if (!dateStr) return "?";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "?" : d.getDate();
+};
+
+const getEventMonth = (dateStr) => {
+    if (!dateStr) return "???";
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
+};
+
 // Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
@@ -642,6 +655,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [user, isAdmin, profile.memberId]);
 
+  // Real-time Sync for Attendance Event
+  useEffect(() => {
+    if (attendanceEvent && events.length > 0) {
+      const liveEvent = events.find(e => e.id === attendanceEvent.id);
+      if (liveEvent) {
+        setAttendanceEvent(liveEvent);
+      }
+    }
+  }, [events]);
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setSavingSettings(true);
@@ -712,7 +735,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   const handleToggleAttendance = async (memberId) => {
-      if (!attendanceEvent) return;
+      if (!attendanceEvent || !memberId) return;
       
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', attendanceEvent.id);
       const isPresent = attendanceEvent.attendees?.includes(memberId);
@@ -742,17 +765,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     // Safety check in case sorting fails with undefined names
     const sortedMembers = [...presentMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
-    const csvContent = "data:text/csv;charset=utf-8," 
-         + "Name,ID,Position\n"
-         + sortedMembers.map(e => `${e.name},${e.memberId},${e.specificTitle}`).join("\n");
+    const headers = ["Name", "ID", "Position"];
+    const rows = sortedMembers.map(e => [e.name, e.memberId, e.specificTitle]);
     
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
   };
   
   const handleRegisterEvent = async (ev) => {
@@ -894,60 +910,27 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   
   const handleSanitizeDatabase = async () => {
       if (!confirm("This will REMOVE DUPLICATES (by Name) and RE-GENERATE Member IDs. Are you sure?")) return;
-      
+      const batch = writeBatch(db);
       try {
-          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry')); // remove orderBy to get all, sort in memory to be safe against missing fields
+          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc'));
           const snapshot = await getDocs(q);
           
-          if (snapshot.empty) return;
-
-          // Sort in memory to handle potentially missing joinedDate safely
-          const docs = snapshot.docs.sort((a, b) => {
-              const dateA = a.data().joinedDate || "";
-              const dateB = b.data().joinedDate || "";
-              return dateA.localeCompare(dateB);
-          });
-
-          const seenNames = new Set();
           let count = 0;
-          let batch = writeBatch(db);
-          let operationCount = 0;
-
-          for (const docSnap of docs) {
-              const data = docSnap.data();
-              const normalizedName = (data.name || "").trim().toUpperCase();
-
-              if (seenNames.has(normalizedName)) {
-                  batch.delete(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id));
-                  operationCount++;
-              } else {
-                  seenNames.add(normalizedName);
-                  count++;
-                  
-                  const meta = getMemberIdMeta();
-                  const padded = String(count).padStart(4, '0');
-                  const isLeader = ['Officer', 'Execomm', 'Committee'].includes(data.positionCategory || "Member");
-                  const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`;
-                  
-                  // Only update if ID actually changed to save writes? 
-                  // Actually, since we are re-sequencing based on filtered list, it's likely to change if duplicates were removed early in the list.
-                  // Just update always for consistency.
-                  batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId });
-                  operationCount++;
-              }
-
-              if (operationCount >= 450) {
-                  await batch.commit();
-                  batch = writeBatch(db);
-                  operationCount = 0;
-              }
-          }
+          snapshot.docs.forEach((docSnap) => {
+             const data = docSnap.data();
+             const category = data.positionCategory || "Member";
+             const meta = getMemberIdMeta(); 
+             
+             count++;
+             const padded = String(count).padStart(4, '0');
+             const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
+             const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`;
+             
+             batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId });
+          });
           
-          if (operationCount > 0) {
-              await batch.commit();
-          }
-
-          alert(`Database sanitized! ${count} unique records kept. Duplicates removed.`);
+          await batch.commit();
+          alert(`Database sanitized! ${count} records updated.`);
       } catch (err) {
           console.error("Sanitize error", err);
           alert("Failed to sanitize: " + err.message);
