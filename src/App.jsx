@@ -50,6 +50,9 @@ const appId = rawAppId.replace(/[\/.]/g, '_');
 
 // --- Global Constants ---
 const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
+// Icon for homescreen shortcut / favicon
+const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMPvN_dIM3fIwY";
+
 const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Auditor", "Business Manager", "P.R.O.", "Overall Committee Head"];
 const COMMITTEE_TITLES = ["Committee Head", "Committee Member"];
 const PROGRAMS = ["CAKO", "CLOCA", "CLOHS", "HRA", "ITM/ITTM"];
@@ -365,6 +368,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
+                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -650,6 +654,28 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         setUserApplications(data);
     });
+
+    // --- ADDED: Set Icons in Head ---
+    const setIcons = () => {
+        const head = document.head;
+        let linkIcon = document.querySelector("link[rel~='icon']");
+        if (!linkIcon) {
+            linkIcon = document.createElement('link');
+            linkIcon.rel = 'icon';
+            head.appendChild(linkIcon);
+        }
+        linkIcon.href = APP_ICON_URL;
+
+        let linkApple = document.querySelector("link[rel='apple-touch-icon']");
+        if (!linkApple) {
+            linkApple = document.createElement('link');
+            linkApple.rel = 'apple-touch-icon';
+            head.appendChild(linkApple);
+        }
+        linkApple.href = APP_ICON_URL;
+    };
+    setIcons();
+    // --------------------------------
 
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
@@ -1760,17 +1786,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                      {volEvents.length > 0 && (
                          <div>
                              <h4 className="font-serif text-xl font-black uppercase text-amber-600 mb-4 flex items-center gap-2"><Hand size={20}/> Volunteer Opportunities</h4>
-                             <div className="space-y-4">
+                             <div className="space-y-4"> {/* Changed back to vertical list for full width */}
                                 {volEvents.map(ev => {
                                    const isExpanded = expandedEventId === ev.id;
                                    
                                    return (
-                                     <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm relative overflow-hidden flex flex-col h-full">
+                                     <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm relative overflow-hidden flex flex-col h-full w-full">
                                         <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl">Volunteer Needed</div>
                                         <h4 className="font-black text-lg uppercase text-[#3E2723] mb-1">{ev.name}</h4>
                                         <p className="text-xs text-gray-500 mb-4 whitespace-pre-wrap">{ev.description}</p>
                                         
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4"> {/* Shift boxes grid: 2 cols on mobile, 4 on desktop */}
                                             {ev.shifts && ev.shifts.map(shift => {
                                                 const signedUp = shift.volunteers.includes(profile.memberId);
                                                 const slotsLeft = shift.capacity - shift.volunteers.length;
