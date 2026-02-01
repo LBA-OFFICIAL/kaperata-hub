@@ -668,6 +668,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [user, isAdmin, profile.memberId]);
 
+  // Real-time Sync for Attendance Event
+  useEffect(() => {
+    if (attendanceEvent && events.length > 0) {
+      const liveEvent = events.find(e => e.id === attendanceEvent.id);
+      if (liveEvent) {
+        setAttendanceEvent(liveEvent);
+      }
+    }
+  }, [events]);
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     setSavingSettings(true);
@@ -1170,31 +1180,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                 </div>
                 
-                {/* Refined Attendance Logic: 
-                  - If the event is a Volunteer event, show those who signed up via shifts.
-                  - If it's a general event with registration, show those who registered.
-                  - Else, show all members (if open). 
-                  Currently, we rely on the `registered` array for general events.
-                */}
                 {(() => {
+                    // Filter members who registered for this event
                     let targetList = members;
-
-                    // If it's a volunteer event, the 'registered' logic is inside 'shifts'.
-                    // However, we track attendance globally on the event.
-                    // For now, let's filter by the `registered` array if it exists and has length.
-                    // If it's a volunteer event, 'registered' might not be used directly if we use shifts.
-                    // Let's assume standard behavior: filter by those who clicked "Register" or "Volunteer".
-                    // The handleVolunteerSignup updates shifts, but not the root 'registered' array in my previous code.
-                    // Let's adapt: For volunteer events, we aggregate volunteers from shifts.
-                    
                     if (attendanceEvent.isVolunteer && attendanceEvent.shifts) {
                         const volunteerIds = attendanceEvent.shifts.flatMap(s => s.volunteers);
                         targetList = members.filter(m => volunteerIds.includes(m.memberId));
                     } else if (attendanceEvent.registered && attendanceEvent.registered.length > 0) {
                         targetList = members.filter(m => attendanceEvent.registered.includes(m.memberId));
-                    } 
-                    // If no one registered yet, show empty list logic below will handle it
-
+                    }
+                    
                     const sortedMembers = [...targetList].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
                     return (
@@ -1708,6 +1703,41 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <input type="time" required className="p-2 border rounded-xl text-xs w-full mt-1" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} />
                         </div>
                       </div>
+                      <div className="mb-3">
+                        <div className="flex items-center gap-2 mb-2">
+                            <input type="checkbox" id="volunteerToggle" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
+                            <label htmlFor="volunteerToggle" className="text-xs font-bold text-[#3E2723]">Volunteer Event</label>
+                        </div>
+                        {newEvent.isVolunteer && (
+                            <div className="bg-amber-50 p-4 rounded-xl space-y-3 border border-amber-100">
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="openAll" checked={newEvent.openForAll} onChange={e => setNewEvent({...newEvent, openForAll: e.target.checked})} />
+                                    <label htmlFor="openAll" className="text-[10px] font-bold text-gray-600">Open for All (No Role Restrictions)</label>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-gray-500 mb-1 uppercase">Manage Shifts</p>
+                                    <div className="flex gap-2 mb-2">
+                                        <input type="date" className="p-2 rounded-lg text-xs border w-1/3" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
+                                        <select className="p-2 rounded-lg text-xs border w-1/3" value={tempShift.session} onChange={e => setTempShift({...tempShift, session: e.target.value})}>
+                                            <option value="AM">AM</option>
+                                            <option value="PM">PM</option>
+                                            <option value="Whole Day">Whole Day</option>
+                                        </select>
+                                        <input type="number" className="p-2 rounded-lg text-xs border w-20" placeholder="Slots" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} />
+                                        <button type="button" onClick={addShift} className="bg-[#3E2723] text-white p-2 rounded-lg text-xs"><Plus size={16}/></button>
+                                    </div>
+                                    <div className="space-y-1 max-h-24 overflow-y-auto">
+                                        {newEvent.shifts.map(s => (
+                                            <div key={s.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100">
+                                                <span className="text-[10px]">{s.date} • {s.session} • {s.capacity} Slots</span>
+                                                <button type="button" onClick={() => removeShift(s.id)} className="text-red-400"><X size={12}/></button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                      </div>
                       <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value.toUpperCase()})} />
                       <input type="text" placeholder="Evaluation Link (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} />
                       <div className="flex items-center gap-2 p-2">
@@ -1720,92 +1750,181 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                       </div>
                   </form>
               )}
-              {events.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : events.map(ev => {
-                 const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
-                 const isRegistered = ev.registered?.includes(profile.memberId);
-                 const isExpanded = expandedEventId === ev.id;
-                 const registeredCount = ev.registered?.length || 0;
-                 
-                 return (
-                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col gap-4">
-                    <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-4">
-                            <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
-                                <span className="text-xl font-bold">{day}</span>
-                                <span className="text-[10px] uppercase font-bold">{month}</span>
-                            </div>
-                            <div>
-                                <h4 className="font-black text-lg uppercase">{ev.name}</h4>
-                                <p className="text-xs opacity-60 font-bold">{ev.venue}</p>
-                                <p className="text-[10px] opacity-50">{ev.startTime} - {ev.endTime}</p>
-                            </div>
-                        </div>
-                        {ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Attendance Req.</span>}
-                    </div>
-                    {/* Render with whitespace-pre-wrap to preserve formatting */}
-                    <p className="text-xs text-gray-600 whitespace-pre-wrap">{ev.description}</p>
-                    
-                    {/* Registration Toggle Section */}
-                    <div className="border-t border-gray-100 pt-2">
-                        <button 
-                            onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
-                            className="w-full flex justify-between items-center text-xs font-bold text-gray-500 hover:text-amber-600"
-                        >
-                            <span>Registered: {registeredCount}</span>
-                            {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                        </button>
-                        
-                        {isExpanded && (
-                            <div className="mt-2 p-3 bg-gray-50 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
-                                {registeredCount > 0 ? (
-                                    <ul className="space-y-1">
-                                        {members
-                                            .filter(m => ev.registered?.includes(m.memberId))
-                                            .sort((a,b) => (a.name || "").localeCompare(b.name || ""))
-                                            .map(m => (
-                                                <li key={m.memberId} className="text-[10px] text-gray-600 truncate">• {m.name}</li>
-                                            ))
-                                        }
-                                    </ul>
-                                ) : (
-                                    <p className="text-[10px] text-gray-400 italic">No one registered yet.</p>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Event Actions */}
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
-                        <div className="flex gap-2">
-                            {/* Registration Button for All Users */}
-                            {ev.attendanceRequired && (
-                                <button 
-                                    onClick={() => handleRegisterEvent(ev)} 
-                                    className={`py-2 px-4 rounded-xl text-[10px] font-bold uppercase transition-colors ${isRegistered ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
-                                >
-                                    {isRegistered ? "Unregister" : "Register"}
-                                </button>
-                            )}
+              
+              {/* Separate Volunteer Events from General Events */}
+              {(() => {
+                const volEvents = events.filter(e => e.isVolunteer);
+                const generalEvents = events.filter(e => !e.isVolunteer);
+                
+                return (
+                 <div className="space-y-8">
+                     {volEvents.length > 0 && (
+                         <div>
+                             <h4 className="font-serif text-xl font-black uppercase text-amber-600 mb-4 flex items-center gap-2"><Hand size={20}/> Volunteer Opportunities</h4>
+                             <div className="space-y-4">
+                                {volEvents.map(ev => {
+                                   const isExpanded = expandedEventId === ev.id;
+                                   
+                                   return (
+                                     <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl">Volunteer Needed</div>
+                                        <h4 className="font-black text-lg uppercase text-[#3E2723] mb-1">{ev.name}</h4>
+                                        <p className="text-xs text-gray-500 mb-4">{ev.description}</p>
+                                        
+                                        <div className="space-y-2">
+                                            {ev.shifts && ev.shifts.map(shift => {
+                                                const signedUp = shift.volunteers.includes(profile.memberId);
+                                                const slotsLeft = shift.capacity - shift.volunteers.length;
+                                                const isFull = slotsLeft <= 0;
+                                                
+                                                return (
+                                                    <div key={shift.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                                        <div>
+                                                            <p className="text-xs font-bold text-gray-700">{shift.date} • {shift.session}</p>
+                                                            <p className="text-[9px] text-gray-500">{isFull && !signedUp ? "FULL" : `${slotsLeft} slots left`}</p>
+                                                        </div>
+                                                        {signedUp ? (
+                                                            <button onClick={() => handleVolunteerSignup(ev, shift.id)} className="px-4 py-2 bg-red-100 text-red-600 rounded-lg text-[9px] font-black uppercase hover:bg-red-200">Leave</button>
+                                                        ) : (
+                                                            <button 
+                                                                onClick={() => handleVolunteerSignup(ev, shift.id)} 
+                                                                disabled={isFull}
+                                                                className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase ${isFull ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
+                                                            >
+                                                                Volunteer
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                        
+                                        {/* Officer View for Volunteers */}
+                                        {isOfficer && (
+                                            <div className="mt-4 pt-4 border-t border-dashed border-gray-200">
+                                                <button onClick={() => setExpandedEventId(isExpanded ? null : ev.id)} className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1">
+                                                    {isExpanded ? "Hide Volunteers" : "View Volunteers"} <ChevronDown size={12} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
+                                                </button>
+                                                {isExpanded && (
+                                                    <div className="mt-2 space-y-2">
+                                                        {ev.shifts.map(shift => (
+                                                            <div key={shift.id} className="text-[10px]">
+                                                                <span className="font-bold text-gray-600">{shift.date} ({shift.session}):</span>
+                                                                <span className="text-gray-500 ml-1">
+                                                                    {shift.volunteers.length > 0 ? 
+                                                                        members.filter(m => shift.volunteers.includes(m.memberId)).map(m => m.name).join(", ") 
+                                                                        : "None"}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-2 mt-2">
+                                                    <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit Event</button>
+                                                    <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete Event</button>
+                                                </div>
+                                            </div>
+                                        )}
+                                     </div>
+                                   )
+                                })}
+                             </div>
+                         </div>
+                     )}
 
-                            {ev.evaluationLink && (
-                                <a href={ensureAbsoluteUrl(ev.evaluationLink)} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors flex items-center gap-1">
-                                    <ExternalLink size={12}/> Post-Event Evaluation
-                                </a>
-                            )}
+                     {/* General Events List */}
+                     <div>
+                        {volEvents.length > 0 && <h4 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4">Upcoming Events</h4>}
+                        <div className="space-y-4">
+                            {generalEvents.length === 0 ? <p className="text-center opacity-50 py-10">No upcoming events.</p> : generalEvents.map(ev => {
+                                const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                                const isRegistered = ev.registered?.includes(profile.memberId);
+                                const isExpanded = expandedEventId === ev.id;
+                                const registeredCount = ev.registered?.length || 0;
+                                
+                                return (
+                                <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col gap-4">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
+                                                <span className="text-xl font-bold">{day}</span>
+                                                <span className="text-[10px] uppercase font-bold">{month}</span>
+                                            </div>
+                                            <div>
+                                                <h4 className="font-black text-lg uppercase">{ev.name}</h4>
+                                                <p className="text-xs opacity-60 font-bold">{ev.venue}</p>
+                                                <p className="text-[10px] opacity-50">{ev.startTime} - {ev.endTime}</p>
+                                            </div>
+                                        </div>
+                                        {ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Attendance Req.</span>}
+                                    </div>
+                                    <p className="text-xs text-gray-600 whitespace-pre-wrap">{ev.description}</p>
+                                    
+                                    {/* Registration Toggle Section */}
+                                    <div className="border-t border-gray-100 pt-2">
+                                        <button 
+                                            onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
+                                            className="w-full flex justify-between items-center text-xs font-bold text-gray-500 hover:text-amber-600"
+                                        >
+                                            <span>Registered: {registeredCount}</span>
+                                            {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                                        </button>
+                                        
+                                        {isExpanded && (
+                                            <div className="mt-2 p-3 bg-gray-50 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
+                                                {registeredCount > 0 ? (
+                                                    <ul className="space-y-1">
+                                                        {members
+                                                            .filter(m => ev.registered?.includes(m.memberId))
+                                                            .sort((a,b) => (a.name || "").localeCompare(b.name || ""))
+                                                            .map(m => (
+                                                                <li key={m.memberId} className="text-[10px] text-gray-600 truncate">• {m.name}</li>
+                                                            ))
+                                                        }
+                                                    </ul>
+                                                ) : (
+                                                    <p className="text-[10px] text-gray-400 italic">No one registered yet.</p>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Event Actions */}
+                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
+                                        <div className="flex gap-2">
+                                            {ev.attendanceRequired && (
+                                                <button 
+                                                    onClick={() => handleRegisterEvent(ev)} 
+                                                    className={`py-2 px-4 rounded-xl text-[10px] font-bold uppercase transition-colors ${isRegistered ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
+                                                >
+                                                    {isRegistered ? "Unregister" : "Register"}
+                                                </button>
+                                            )}
+
+                                            {ev.evaluationLink && (
+                                                <a href={ensureAbsoluteUrl(ev.evaluationLink)} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors flex items-center gap-1">
+                                                    <ExternalLink size={12}/> Post-Event Evaluation
+                                                </a>
+                                            )}
+                                        </div>
+                                        {isOfficer && (
+                                            <div className="flex gap-2">
+                                                {ev.attendanceRequired && (
+                                                    <button onClick={() => setAttendanceEvent(ev)} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200 transition-colors">Attendance Check</button>
+                                                )}
+                                                <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit</button>
+                                                <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                );
+                            })}
                         </div>
-                        {isOfficer && (
-                            <div className="flex gap-2">
-                                {ev.attendanceRequired && (
-                                    <button onClick={() => setAttendanceEvent(ev)} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200 transition-colors">Attendance Check</button>
-                                )}
-                                <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit</button>
-                                <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete</button>
-                            </div>
-                        )}
-                    </div>
+                     </div>
                  </div>
-                 );
-              })}
+               );
+              })()}
            </div>
         )}
 
