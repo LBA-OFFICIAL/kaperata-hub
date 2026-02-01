@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand, Image, Link as LinkIcon
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -56,7 +56,7 @@ const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMP
 const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Auditor", "Business Manager", "P.R.O.", "Overall Committee Head"];
 const COMMITTEE_TITLES = ["Committee Head", "Committee Member"];
 const PROGRAMS = ["CAKO", "CLOCA", "CLOHS", "HRA", "ITM/ITTM"];
-const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Blacklisted"];
+const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Org Adviser", "Blacklisted"];
 const MONTHS = [
   { value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" },
   { value: 4, label: "April" }, { value: 5, label: "May" }, { value: 6, label: "June" },
@@ -512,6 +512,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [financialFilter, setFinancialFilter] = useState('all');
   const [expandedEventId, setExpandedEventId] = useState(null); 
   const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
+  // Legacy Editing State
+  const [isEditingLegacy, setIsEditingLegacy] = useState(false);
+  const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [] });
+  const [tempAchievement, setTempAchievement] = useState("");
 
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
@@ -535,8 +539,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [editingEvent, setEditingEvent] = useState(null); 
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
-  const [isEditingLegacy, setIsEditingLegacy] = useState(false);
-  const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '' });
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   
   // Committee Hunt State
@@ -682,7 +684,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => {
          if(s.exists()) {
              setLegacyContent(s.data());
-             setLegacyForm(s.data());
+             setLegacyForm({ 
+                 ...s.data(), 
+                 achievements: s.data().achievements || [] // Ensure array exists
+             });
          }
     }, (e) => {});
     
@@ -725,13 +730,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       e.preventDefault();
       if (!suggestionText.trim()) return;
       try {
+          // Use 'Anonymous' as authorName
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), {
               text: suggestionText,
               authorId: profile.memberId,
-              authorName: profile.nickname || profile.name,
+              authorName: "Anonymous",
               createdAt: serverTimestamp()
           });
           setSuggestionText("");
+          alert("Suggestion submitted anonymously!");
       } catch (err) { console.error(err); }
   };
 
@@ -751,6 +758,23 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         ...prev,
         shifts: prev.shifts.filter(s => s.id !== id)
     }));
+  };
+
+  // Legacy Achievements Handling
+  const handleAddAchievement = () => {
+      if (!tempAchievement.trim()) return;
+      setLegacyForm(prev => ({
+          ...prev,
+          achievements: [...(prev.achievements || []), tempAchievement.trim()]
+      }));
+      setTempAchievement("");
+  };
+
+  const handleRemoveAchievement = (index) => {
+      setLegacyForm(prev => ({
+          ...prev,
+          achievements: prev.achievements.filter((_, i) => i !== index)
+      }));
   };
 
   const handleAddEvent = async (e) => {
@@ -1156,6 +1180,25 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys);
   };
 
+  // Suggestion Download Helper
+  const handleDownloadSuggestions = () => {
+    // Filter suggestions locally for the last 7 days
+    const filteredSuggestions = suggestions.filter(s => {
+        if (!s.createdAt) return true; 
+        const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        return date > oneWeekAgo;
+    });
+
+    const headers = ["Date", "Suggestion"];
+    const rows = filteredSuggestions.map(s => [
+        s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now",
+        s.text
+    ]);
+    generateCSV(headers, rows, `LBA_Suggestions_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
 
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: BarChart3 },
@@ -1529,13 +1572,56 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   <div className="space-y-4">
                       <input type="text" placeholder="Image URL" className="w-full p-3 border rounded-xl text-xs" value={legacyForm.imageUrl} onChange={e => setLegacyForm({...legacyForm, imageUrl: e.target.value})} />
                       <p className="text-[10px] text-gray-400">Preferred Image Size: 16:9 (Landscape)</p>
+                      
+                      <div className="flex gap-2">
+                        <input type="text" placeholder="Gallery Folder URL (Optional)" className="flex-1 p-3 border rounded-xl text-xs" value={legacyForm.galleryUrl || ""} onChange={e => setLegacyForm({...legacyForm, galleryUrl: e.target.value})} />
+                        {legacyForm.galleryUrl && <a href={ensureAbsoluteUrl(legacyForm.galleryUrl)} target="_blank" className="p-3 bg-gray-100 rounded-xl text-gray-500 hover:text-amber-600"><LinkIcon size={16}/></a>}
+                      </div>
+
                       <textarea className="w-full p-3 border rounded-xl text-xs h-64" value={legacyForm.body} onChange={e => setLegacyForm({...legacyForm, body: e.target.value})}></textarea>
-                      <button onClick={handleSaveLegacy} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl text-xs font-bold uppercase">Save Story</button>
+                      
+                      <div className="border-t border-amber-100 pt-4">
+                          <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">Milestones & Achievements</p>
+                          <div className="flex gap-2 mb-2">
+                              <input type="text" placeholder="Add an event or recognition..." className="flex-1 p-3 border rounded-xl text-xs" value={tempAchievement} onChange={e => setTempAchievement(e.target.value)} />
+                              <button onClick={handleAddAchievement} className="bg-amber-500 text-white p-3 rounded-xl"><Plus size={16}/></button>
+                          </div>
+                          <ul className="space-y-2">
+                              {legacyForm.achievements?.map((ach, i) => (
+                                  <li key={i} className="flex justify-between items-center text-xs bg-gray-50 p-2 rounded-lg">
+                                      <span>• {ach}</span>
+                                      <button onClick={() => handleRemoveAchievement(i)} className="text-red-400"><X size={12}/></button>
+                                  </li>
+                              ))}
+                          </ul>
+                      </div>
+
+                      <button onClick={handleSaveLegacy} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl text-xs font-bold uppercase w-full">Save Story</button>
                   </div>
               ) : (
                   <>
                     {legacyContent?.imageUrl && <img src={getDirectLink(legacyContent.imageUrl)} className="w-full h-64 object-cover rounded-3xl mb-4" />}
-                    <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap">{legacyContent?.body || "History not yet written."}</p>
+                    <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap mb-6">{legacyContent?.body || "History not yet written."}</p>
+                    
+                    {legacyContent?.galleryUrl && (
+                        <a href={ensureAbsoluteUrl(legacyContent.galleryUrl)} target="_blank" className="flex items-center justify-center gap-2 w-full p-4 bg-amber-50 text-amber-800 rounded-2xl font-bold uppercase text-xs hover:bg-amber-100 transition-colors mb-8">
+                            <Image size={16}/> View Photo Gallery
+                        </a>
+                    )}
+
+                    {legacyContent?.achievements?.length > 0 && (
+                        <div>
+                            <h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Award size={16} className="text-amber-500"/> Milestones & Achievements</h4>
+                            <ul className="space-y-3">
+                                {legacyContent.achievements.map((ach, i) => (
+                                    <li key={i} className="flex items-start gap-3 text-xs text-gray-600">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0"></div>
+                                        <span>{ach}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                   </>
               )}
            </div>
@@ -1645,7 +1731,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                                </div>
+                               </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
@@ -1786,7 +1872,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                      {volEvents.length > 0 && (
                          <div>
                              <h4 className="font-serif text-xl font-black uppercase text-amber-600 mb-4 flex items-center gap-2"><Hand size={20}/> Volunteer Opportunities</h4>
-                             <div className="space-y-4"> {/* Changed back to vertical list for full width */}
+                             <div className="space-y-4"> {/* Changed to space-y-4 for vertical list */}
                                 {volEvents.map(ev => {
                                    const isExpanded = expandedEventId === ev.id;
                                    
@@ -1796,7 +1882,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                         <h4 className="font-black text-lg uppercase text-[#3E2723] mb-1">{ev.name}</h4>
                                         <p className="text-xs text-gray-500 mb-4 whitespace-pre-wrap">{ev.description}</p>
                                         
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4"> {/* Shift boxes grid: 2 cols on mobile, 4 on desktop */}
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4"> {/* Grid for shifts */}
                                             {ev.shifts && ev.shifts.map(shift => {
                                                 const signedUp = shift.volunteers.includes(profile.memberId);
                                                 const slotsLeft = shift.capacity - shift.volunteers.length;
@@ -2003,13 +2089,43 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                      <button type="submit" className="bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">Submit</button>
                  </form>
               </div>
-              <div className="space-y-4 mt-8">
-                  {suggestions.map(s => (
-                      <div key={s.id} className="bg-white p-6 rounded-3xl border border-amber-50 shadow-sm">
-                          <p className="text-sm font-medium text-gray-700">"{s.text}"</p>
-                          <p className="text-[10px] text-amber-400 font-black mt-2 uppercase text-right">- {s.authorName}</p>
-                      </div>
-                  ))}
+              
+              {/* Suggestion List with 7-day filter & CSV download */}
+              <div className="mt-8">
+                {isOfficer && (
+                    <div className="flex justify-end mb-4">
+                         <button onClick={handleDownloadSuggestions} className="bg-green-100 text-green-700 px-4 py-2 rounded-xl text-[10px] font-bold uppercase hover:bg-green-200 transition-colors flex items-center gap-1">
+                             <FileBarChart size={14}/> Download Summary
+                         </button>
+                    </div>
+                )}
+                
+                <div className="space-y-4">
+                  {(() => {
+                      const sevenDaysAgo = new Date();
+                      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                      
+                      const filteredSuggestions = suggestions.filter(s => {
+                          if (!s.createdAt) return true; // keep if date missing for safety
+                          const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
+                          return date > sevenDaysAgo;
+                      });
+
+                      if (filteredSuggestions.length === 0) {
+                          return <p className="text-center text-xs text-gray-400">No suggestions this week.</p>;
+                      }
+
+                      return filteredSuggestions.map(s => (
+                          <div key={s.id} className="bg-white p-6 rounded-3xl border border-amber-50 shadow-sm">
+                              <p className="text-sm font-medium text-gray-700">"{s.text}"</p>
+                              <div className="flex justify-between items-center mt-3 border-t border-gray-50 pt-2">
+                                  <p className="text-[9px] text-gray-400 uppercase font-bold">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p>
+                                  <p className="text-[10px] text-amber-400 font-black uppercase">- {s.authorName}</p>
+                              </div>
+                          </div>
+                      ));
+                  })()}
+                </div>
               </div>
            </div>
         )}
