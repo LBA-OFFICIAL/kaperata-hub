@@ -762,11 +762,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     if (!attendanceEvent) return;
     const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId));
     
-    // Safety check in case sorting fails with undefined names
-    const sortedMembers = [...presentMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
-
+    // Robust CSV generation using Blob
     const headers = ["Name", "ID", "Position"];
-    const rows = sortedMembers.map(e => [e.name, e.memberId, e.specificTitle]);
+    const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle]);
     
     generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
   };
@@ -1108,38 +1106,53 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                 </div>
                 
-                <div className="flex justify-between items-center mb-4 px-2">
-                    <span className="text-xs font-bold text-gray-500 uppercase">Registry List</span>
-                    <span className="text-xs font-bold bg-[#3E2723] text-[#FDB813] px-3 py-1 rounded-full">
-                        Present: {attendanceEvent.attendees?.length || 0} / {members.length}
-                    </span>
-                </div>
+                {(() => {
+                    // Filter members who registered for this event
+                    const registeredMembers = members.filter(m => attendanceEvent.registered?.includes(m.memberId));
+                    const sortedMembers = [...registeredMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
-                <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    {/* Safe sort logic to prevent blank page crashes */}
-                    {[...members].sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => {
-                        const isPresent = attendanceEvent.attendees?.includes(m.memberId);
-                        // Using unique ID for key to prevent crashes
-                        return (
-                            <div key={m.id} 
-                                 onClick={() => handleToggleAttendance(m.memberId)}
-                                 className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent hover:bg-amber-50'}`}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>
-                                        {m.name ? m.name.charAt(0) : "?"}
-                                    </div>
-                                    <div>
-                                        <p className={`text-xs font-bold uppercase ${isPresent ? 'text-green-900' : 'text-gray-600'}`}>{m.name}</p>
-                                        <p className="text-[9px] text-gray-400">{m.memberId}</p>
-                                    </div>
-                                </div>
-                                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isPresent ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
-                                    {isPresent && <CheckCircle2 size={14} className="text-white" />}
-                                </div>
+                    return (
+                        <>
+                            <div className="flex justify-between items-center mb-4 px-2">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Registered List</span>
+                                <span className="text-xs font-bold bg-[#3E2723] text-[#FDB813] px-3 py-1 rounded-full">
+                                    Present: {attendanceEvent.attendees?.length || 0} / {registeredMembers.length}
+                                </span>
                             </div>
-                        );
-                    })}
-                </div>
+
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                {sortedMembers.length > 0 ? (
+                                    sortedMembers.map(m => {
+                                        const isPresent = attendanceEvent.attendees?.includes(m.memberId);
+                                        return (
+                                            <div key={m.id} 
+                                                 onClick={() => handleToggleAttendance(m.memberId)}
+                                                 className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent hover:bg-amber-50'}`}>
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>
+                                                        {m.name ? m.name.charAt(0) : "?"}
+                                                    </div>
+                                                    <div>
+                                                        <p className={`text-xs font-bold uppercase ${isPresent ? 'text-green-900' : 'text-gray-600'}`}>{m.name}</p>
+                                                        <p className="text-[9px] text-gray-400">{m.memberId}</p>
+                                                    </div>
+                                                </div>
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isPresent ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
+                                                    {isPresent && <CheckCircle2 size={14} className="text-white" />}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="text-center py-10 opacity-50">
+                                        <p className="text-sm font-bold">No registered members found.</p>
+                                        <p className="text-xs">Members must register for the event to appear here.</p>
+                                    </div>
+                                )}
+                            </div>
+                        </>
+                    );
+                })()}
             </div>
         </div>
       )}
