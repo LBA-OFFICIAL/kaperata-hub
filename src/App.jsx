@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand, Image, Link as LinkIcon
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand, Image, Link as LinkIcon, RefreshCcw
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -91,7 +91,8 @@ const SOCIAL_LINKS = {
   facebook: "https://fb.com/lpubaristas.official", 
   instagram: "https://instagram.com/lpubaristas.official", 
   tiktok: "https://tiktok.com/@lpubaristas.official",
-  email: "lpubaristas.official@gmail.com" 
+  email: "lpubaristas.official@gmail.com",
+  pr_email: "lbaofficial.pr@gmail.com"
 };
 const SEED_OFFICER_KEY = "KAPERATA_OFFICER_2024";
 const SEED_HEAD_KEY = "KAPERATA_HEAD_2024";
@@ -235,6 +236,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   const [paymentMethod, setPaymentMethod] = useState(''); 
   const [refNo, setRefNo] = useState('');
   const [cashOfficerKey, setCashOfficerKey] = useState('');
+  const [membershipType, setMembershipType] = useState('new'); // 'new' or 'renewal'
   const [error, setError] = useState(initialError || '');
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(''); 
@@ -340,6 +342,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         paymentStatus: pay, 
                         lastRenewedSem: meta.sem, 
                         lastRenewedSY: meta.sy, 
+                        membershipType, // Store membership type
                         joinedDate: new Date().toISOString() 
                     };
                     
@@ -368,7 +371,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
-                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -397,6 +399,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 
   const activeBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]";
   const inactiveBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900";
+  const feeAmount = pendingProfile?.membershipType === 'renewal' ? "50.00" : "100.00";
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723]">
@@ -406,7 +409,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                <div className="w-16 h-16 bg-amber-50 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6"><LifeBuoy size={32}/></div>
                <h4 className="font-serif text-2xl font-black uppercase">Account Recovery</h4>
                <p className="text-sm font-medium text-amber-950 mt-4">Contact an officer at:</p>
-               <a href={`mailto:${SOCIAL_LINKS.email}`} className="text-[#3E2723] font-black underline block mt-2">{SOCIAL_LINKS.email}</a>
+               <a href={`mailto:${SOCIAL_LINKS.pr_email}`} className="text-[#3E2723] font-black underline block mt-2 text-xs">{SOCIAL_LINKS.pr_email}</a>
                <button onClick={() => setShowForgotModal(false)} className="w-full mt-8 bg-[#3E2723] text-[#FDB813] py-4 rounded-2xl font-black uppercase text-[10px]">Close</button>
             </div>
          </div>
@@ -434,10 +437,17 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                 <input type="text" required placeholder="LAST" className="col-span-2 p-3 border border-amber-200 rounded-xl outline-none text-xs font-bold uppercase" value={lastName} onChange={(e) => setLastName(e.target.value.toUpperCase())} />
               </div>
               <input type="email" required placeholder="LPU Email" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <select required className="w-full p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={program} onChange={(e) => setProgram(e.target.value)}>
-                <option value="">Select Program</option>
-                {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
-              </select>
+              
+              <div className="grid grid-cols-2 gap-2">
+                 <select required className="p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={program} onChange={(e) => setProgram(e.target.value)}>
+                    <option value="">Select Program</option>
+                    {PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}
+                 </select>
+                 <select required className="p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={membershipType} onChange={(e) => setMembershipType(e.target.value)}>
+                    <option value="new">New Member</option>
+                    <option value="renewal">Renewal</option>
+                 </select>
+              </div>
               
               {/* Birthday Fields */}
               <div className="grid grid-cols-2 gap-2">
@@ -455,6 +465,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
           )}
           {authMode === 'payment' && (
             <div className="space-y-4">
+               <p className="text-center font-black text-sm uppercase text-[#3E2723]">Total Fee: ₱{feeAmount}</p>
                <div className="flex gap-2">
                   <button type="button" onClick={() => setPaymentMethod('gcash')} className={paymentMethod === 'gcash' ? activeBtnClass : inactiveBtnClass}>GCash</button>
                   <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
@@ -507,6 +518,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const fileInputRef = useRef(null);
   const currentDailyKey = getDailyCashPasskey();
   const [settingsForm, setSettingsForm] = useState({ ...profile });
+  
+  // Password Change State
+  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
+
   const [savingSettings, setSavingSettings] = useState(false);
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
@@ -724,6 +739,38 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     } finally {
         setSavingSettings(false);
     }
+  };
+
+  const handleChangePassword = async (e) => {
+      e.preventDefault();
+      if (passwordForm.new !== passwordForm.confirm) {
+          alert("New passwords do not match.");
+          return;
+      }
+      if (passwordForm.current !== profile.password) {
+          alert("Incorrect current password.");
+          return;
+      }
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), {
+              password: passwordForm.new
+          });
+          const updatedProfile = { ...profile, password: passwordForm.new };
+          setProfile(updatedProfile);
+          localStorage.setItem('lba_profile', JSON.stringify(updatedProfile));
+          setPasswordForm({ current: '', new: '', confirm: '' });
+          alert("Password changed successfully.");
+      } catch (err) {
+          console.error(err);
+          alert("Failed to change password.");
+      }
+  };
+
+  const handleDeleteSuggestion = async (id) => {
+    if(!confirm("Are you sure you want to delete this suggestion?")) return;
+    try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'suggestions', id));
+    } catch(err) { console.error(err); }
   };
 
   const handlePostSuggestion = async (e) => {
@@ -1102,6 +1149,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       }
   };
 
+  const handleResetPassword = async (memberId, email) => {
+    if (!confirm(`Reset password for this member?`)) return;
+    const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), {
+            password: tempPassword
+        });
+        window.location.href = `mailto:${email}?subject=LBA Password Reset&body=Your temporary password is: ${tempPassword}`;
+        alert("Password reset! Opening email client...");
+    } catch (err) {
+        console.error(err);
+        alert("Failed to reset password.");
+    }
+  };
+
   // Registry Helpers
   const filteredRegistry = useMemo(() => {
     let res = [...members];
@@ -1110,7 +1172,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     return res;
   }, [members, searchQuery, sortConfig]);
 
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredRegistry.length / itemsPerPage);
   const paginatedRegistry = filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const nextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
+  const prevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
+
 
   const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
   const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
@@ -2041,95 +2108,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            </div>
         )}
 
-        {view === 'announcements' && (
-           <div className="space-y-6 animate-fadeIn">
-              <div className="flex items-center justify-between">
-                <h3 className="font-serif text-3xl font-black uppercase">Grind Report</h3>
-                {isOfficer && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Post Notice</button>}
-              </div>
-              {showAnnounceForm && (
-                  <form onSubmit={handlePostAnnouncement} className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6 space-y-3">
-                      <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value.toUpperCase()})} />
-                      <textarea placeholder="Announcement content..." required className="w-full p-3 border rounded-xl text-xs h-24" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})}></textarea>
-                      <div className="flex gap-2">
-                          <button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); setNewAnnouncement({title:'', content:''}); }} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
-                          <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Post Now</button>
-                      </div>
-                  </form>
-              )}
-              {announcements.length === 0 ? <p className="text-center opacity-50">No announcements.</p> : announcements.map(ann => (
-                 <div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-6 opacity-10"><Megaphone size={64}/></div>
-                    <div className="relative z-10">
-                       <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-black text-xl uppercase text-[#3E2723]">{ann.title}</h4>
-                            {isOfficer && (
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleEditAnnouncement(ann)} className="text-blue-500 text-xs underline">Edit</button>
-                                    <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-500 text-xs underline">Delete</button>
-                                </div>
-                            )}
-                       </div>
-                       <p className="text-xs text-gray-600 leading-relaxed mb-4">{ann.content}</p>
-                       <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">{formatDate(ann.date)}</span>
-                    </div>
-                 </div>
-              ))}
-           </div>
-        )}
-
-        {view === 'suggestions' && (
-           <div className="space-y-6 animate-fadeIn">
-              <h3 className="font-serif text-3xl font-black uppercase">Suggestion Box</h3>
-              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
-                 <form onSubmit={handlePostSuggestion} className="space-y-4">
-                     <MessageSquare size={48} className="mx-auto text-amber-300 mb-4" />
-                     <p className="text-sm text-gray-500 font-medium">Drop your thoughts here.</p>
-                     <textarea required value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className="w-full p-4 border border-amber-100 rounded-2xl text-xs bg-gray-50 outline-none focus:border-amber-400" placeholder="Type your suggestion anonymously..."></textarea>
-                     <button type="submit" className="bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">Submit</button>
-                 </form>
-              </div>
-              
-              {/* Suggestion List with 7-day filter & CSV download */}
-              <div className="mt-8">
-                {isOfficer && (
-                    <div className="flex justify-end mb-4">
-                         <button onClick={handleDownloadSuggestions} className="bg-green-100 text-green-700 px-4 py-2 rounded-xl text-[10px] font-bold uppercase hover:bg-green-200 transition-colors flex items-center gap-1">
-                             <FileBarChart size={14}/> Download Summary
-                         </button>
-                    </div>
-                )}
-                
-                <div className="space-y-4">
-                  {(() => {
-                      const sevenDaysAgo = new Date();
-                      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                      
-                      const filteredSuggestions = suggestions.filter(s => {
-                          if (!s.createdAt) return true; // keep if date missing for safety
-                          const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
-                          return date > sevenDaysAgo;
-                      });
-
-                      if (filteredSuggestions.length === 0) {
-                          return <p className="text-center text-xs text-gray-400">No suggestions this week.</p>;
-                      }
-
-                      return filteredSuggestions.map(s => (
-                          <div key={s.id} className="bg-white p-6 rounded-3xl border border-amber-50 shadow-sm">
-                              <p className="text-sm font-medium text-gray-700">"{s.text}"</p>
-                              <div className="flex justify-between items-center mt-3 border-t border-gray-50 pt-2">
-                                  <p className="text-[9px] text-gray-400 uppercase font-bold">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p>
-                                  <p className="text-[10px] text-amber-400 font-black uppercase">- {s.authorName}</p>
-                              </div>
-                          </div>
-                      ));
-                  })()}
-                </div>
-              </div>
-           </div>
-        )}
-
         {view === 'settings' && (
             <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
                 <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
@@ -2198,6 +2176,18 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <button type="submit" disabled={savingSettings} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-xl font-black uppercase hover:bg-black transition-colors text-xs">
                         {savingSettings ? "Saving..." : "Save Changes"}
                     </button>
+                </form>
+
+                <hr className="border-amber-100 my-6"/>
+                
+                <form onSubmit={handleChangePassword} className="space-y-6 max-w-lg">
+                    <h4 className="font-black uppercase text-sm">Change Password</h4>
+                    <div className="space-y-3">
+                         <input type="password" required placeholder="Current Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.current} onChange={e => setPasswordForm({...passwordForm, current: e.target.value})} />
+                         <input type="password" required placeholder="New Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.new} onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} />
+                         <input type="password" required placeholder="Confirm New Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.confirm} onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})} />
+                    </div>
+                    <button type="submit" className="bg-amber-100 text-amber-800 px-8 py-4 rounded-xl font-black uppercase hover:bg-amber-200 transition-colors text-xs">Update Password</button>
                 </form>
             </div>
         )}
@@ -2387,12 +2377,18 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              <td className="text-center">
                                 <div className="flex flex-col gap-1 items-center">
                                     <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}>
+                                      <option value="Member">Member</option>
+                                      <option value="Org Adviser">Org Adviser</option>
+                                      {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                      {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                    </select>
                                 </div>
                              </td>
                              <td className="text-right p-4">
                                  <div className="flex items-center justify-end gap-1">
                                      <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
+                                     {isAdmin && <button onClick={() => handleResetPassword(m.memberId, m.email)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>}
                                      {isAdmin && <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>}
                                  </div>
                              </td>
@@ -2401,6 +2397,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </tbody>
                  </table>
               </div>
+
+              {/* Pagination Controls */}
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-amber-100 mt-4">
+                 <button onClick={prevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Previous</button>
+                 <span className="text-xs font-black uppercase text-gray-500">Page {currentPage} of {totalPages}</span>
+                 <button onClick={nextPage} disabled={currentPage === totalPages} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Next</button>
+              </div>
+
            </div>
         )}
 
@@ -2416,7 +2420,6 @@ const App = () => {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    // Check local storage first
     const storedProfile = localStorage.getItem('lba_profile');
     if (storedProfile) {
         try {
@@ -2442,7 +2445,6 @@ const App = () => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-         // Auto-fetch profile if user is already logged in
          try {
              const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('uid', '==', currentUser.uid));
              const snap = await getDocs(q);
@@ -2450,11 +2452,9 @@ const App = () => {
                  const userData = snap.docs[0].data();
                  setProfile(userData);
                  localStorage.setItem('lba_profile', JSON.stringify(userData));
-             } else if (!storedProfile) {
-                 // If no profile found and no local storage, maybe this is a new anonymous session or cleared data
              }
          } catch (e) {
-             console.warn("Profile fetch error", e); // Use warn instead of error to avoid clutter
+             console.warn("Profile fetch error", e);
              if (e.code === 'permission-denied') {
                  setAuthError("Database Locked: Please go to Firebase Console > Firestore > Rules and change 'allow read, write: if false;' to 'if true;'.");
                  await signOut(auth);
