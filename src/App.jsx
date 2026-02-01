@@ -376,7 +376,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
-                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -1752,7 +1751,6 @@ ${window.location.origin}`;
            </div>
         )}
 
-        {/* ... Include all other views (about, team, committee_hunt, events, announcements, suggestions, settings, reports, members) from previous versions to complete the file ... */}
         {view === 'about' && (
            <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-6">
               <div className="flex items-center justify-between border-b pb-4 border-amber-100">
@@ -2580,9 +2578,17 @@ ${window.location.origin}`;
                              </td>
                              <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
                              <td className="text-center font-black text-[10px] uppercase">
-                                 <span className={`px-2 py-1 rounded-full ${m.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                     {m.membershipType || "New"}
-                                 </span>
+                                 {(() => {
+                                     const isOfficerRole = ['Officer', 'Execomm', 'Committee', 'Org Adviser'].includes(m.positionCategory);
+                                     // Default officers to Renewal if membershipType is missing
+                                     const status = m.membershipType || (isOfficerRole ? 'renewal' : 'new');
+                                     const isNew = status.toLowerCase() === 'new';
+                                     return (
+                                        <span className={`px-2 py-1 rounded-full ${isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                            {status}
+                                        </span>
+                                     );
+                                 })()}
                              </td>
                              <td className="text-center">
                                 <div className="flex flex-col gap-1 items-center">
