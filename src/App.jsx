@@ -515,6 +515,19 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
+  // Last visited state for notifications
+  const [lastVisited, setLastVisited] = useState(() => {
+      try {
+          return JSON.parse(localStorage.getItem('lba_last_visited') || '{}');
+      } catch { return {}; }
+  });
+
+  const updateLastVisited = (page) => {
+     const newVisits = { ...lastVisited, [page]: new Date().toISOString() };
+     setLastVisited(newVisits);
+     localStorage.setItem('lba_last_visited', JSON.stringify(newVisits));
+  };
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [sortConfig, setSortConfig] = useState({ key: 'memberId', direction: 'asc' });
   const [selectedBaristas, setSelectedBaristas] = useState([]);
@@ -652,6 +665,49 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         }
     };
   }, [members]);
+
+  // Notifications Logic
+  const notifications = useMemo(() => {
+      const hasNew = (items, pageKey) => {
+          if (!items || items.length === 0) return false;
+          const lastVisit = lastVisited[pageKey];
+          if (!lastVisit) return true; // Never visited -> show dot
+          // Check if any item created AFTER last visit
+          return items.some(i => {
+              const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0);
+              return d > new Date(lastVisit);
+          });
+      };
+
+      // Committee Hunt Logic
+      let huntNotify = false;
+      if (isOfficer) {
+          // Officers see dot if pending apps exist
+          huntNotify = committeeApps.some(a => a.status === 'pending');
+      } else {
+          // Members see dot if their app status updated recently
+          huntNotify = userApplications.some(a => {
+             const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null;
+             const lastVisit = lastVisited['committee_hunt'];
+             if (!updated) return false;
+             return !lastVisit || updated > new Date(lastVisit);
+          });
+      }
+
+      // Registry Logic (Officers only)
+      let regNotify = false;
+      if (isOfficer) {
+         regNotify = hasNew(members.map(m => ({ createdAt: m.joinedDate })), 'members');
+      }
+
+      return {
+          events: hasNew(events, 'events'),
+          announcements: hasNew(announcements, 'announcements'),
+          suggestions: hasNew(suggestions, 'suggestions'),
+          committee_hunt: huntNotify,
+          members: regNotify
+      };
+  }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer]);
 
   useEffect(() => {
     if (!user) return;
@@ -1020,7 +1076,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               committee: targetCommittee,
               role: committeeForm.role,
               status: 'pending',
-              createdAt: serverTimestamp()
+              createdAt: serverTimestamp(),
+              statusUpdatedAt: serverTimestamp() // Add this so member gets notification
           });
           alert("Application submitted successfully!");
       } catch(err) {
@@ -1036,7 +1093,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       try {
           const batch = writeBatch(db);
           const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id);
-          batch.update(appRef, { status });
+          batch.update(appRef, { 
+              status,
+              statusUpdatedAt: serverTimestamp() // Update timestamp for notification
+          });
 
           if (status === 'accepted') {
               const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId);
@@ -1112,6 +1172,36 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       }
   };
 
+  const handleMigrateToRenewal = async () => {
+      if(!confirm("This will update ALL current members to 'Renewal' status. Proceed?")) return;
+      
+      const batch = writeBatch(db);
+      try {
+          // Get all members with 'new' status or undefined status
+          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+          const snapshot = await getDocs(q);
+          let count = 0;
+          
+          snapshot.forEach(doc => {
+              const data = doc.data();
+              if (data.membershipType !== 'renewal') {
+                  batch.update(doc.ref, { membershipType: 'renewal' });
+                  count++;
+              }
+          });
+          
+          if(count > 0) {
+              await batch.commit();
+              alert(`Migration Complete: ${count} members updated to Renewal status.`);
+          } else {
+              alert("No members needed updating.");
+          }
+      } catch (err) {
+          console.error(err);
+          alert("Migration failed.");
+      }
+  };
+
   // --- NEW FEATURES ---
   const handleExportCSV = () => {
       let dataToExport = [...members];
@@ -1156,14 +1246,39 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       }
   };
 
-  const handleResetPassword = async (memberId, email) => {
-    if (!confirm(`Reset password for this member?`)) return;
+  const handleResetPassword = async (memberId, email, name) => {
+    if (!confirm(`Reset password for ${name}?`)) return;
     const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
+    
+    const subject = "LBA Password Reset Request";
+    const body = `Dear ${name},
+
+We received a request to reset the password associated with your membership account at LPU Baristas' Association.
+To regain access to your account, please use the following credentials. For security purposes, we recommend you copy and paste these details directly to avoid errors.
+
+Member ID: ${memberId}
+Temporary Password: ${tempPassword}
+
+How to Access Your Account:
+Click the link below to access the secure login portal:
+${window.location.origin}
+
+Enter your Member ID and the Temporary Password provided above.
+Once logged in, you will be prompted to create a new, permanent password immediately.
+
+Please Note:
+This temporary password will expire in 1 hour (manual enforcement required).
+If you did not request this password reset, please contact our support team immediately at lbaofficial.pr@gmail.com and do not click the link above.
+
+Thank you,
+The LPU Baristas' Association Support Team
+${window.location.origin}`;
+
     try {
         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), {
             password: tempPassword
         });
-        window.location.href = `mailto:${email}?subject=LBA Password Reset&body=Your temporary password is: ${tempPassword}`;
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
         alert("Password reset! Opening email client...");
     } catch (err) {
         console.error(err);
@@ -1279,16 +1394,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     // Removed Settings from menu
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'team', label: 'Brew Crew', icon: Users2 },
-    { id: 'events', label: "What's Brewing?", icon: Calendar },
-    { id: 'announcements', label: 'Grind Report', icon: Bell },
-    { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare },
-    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase }, // Added new tab
-    ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users }] : []),
+    { id: 'events', label: "What's Brewing?", icon: Calendar, hasNotification: notifications.events },
+    { id: 'announcements', label: 'Grind Report', icon: Bell, hasNotification: notifications.announcements },
+    { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare, hasNotification: notifications.suggestions },
+    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt }, // Added new tab
+    ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members }] : []),
     ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
-  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black";
-  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5";
+  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
+  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative";
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
@@ -1415,8 +1530,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              const active = view === item.id;
              const Icon = item.icon; // Cap variable for JSX
              return (
-                <button key={item.id} onClick={() => { setView(item.id); setMobileMenuOpen(false); }} className={active ? activeMenuClass : inactiveMenuClass}>
-                  <Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>
+                <button key={item.id} onClick={() => { setView(item.id); updateLastVisited(item.id); setMobileMenuOpen(false); }} className={active ? activeMenuClass : inactiveMenuClass}>
+                  <Icon size={18}/>
+                  <span className="uppercase text-[10px] font-black">{item.label}</span>
+                  {item.hasNotification && (
+                      <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-sm"></div>
+                  )}
                 </button>
              );
           })}
@@ -1633,6 +1752,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            </div>
         )}
 
+        {/* ... Include all other views (about, team, committee_hunt, events, announcements, suggestions, settings, reports, members) from previous versions to complete the file ... */}
         {view === 'about' && (
            <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-6">
               <div className="flex items-center justify-between border-b pb-4 border-amber-100">
@@ -2151,8 +2271,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               ))}
            </div>
         )}
-        
-        {/* ... Include all other views (suggestions, settings, reports, members) from previous versions to complete the file ... */}
+
         {view === 'suggestions' && (
            <div className="space-y-6 animate-fadeIn">
               <h3 className="font-serif text-3xl font-black uppercase">Suggestion Box</h3>
@@ -2369,6 +2488,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         </div>
                         <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
                         <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
+                        <button onClick={handleMigrateToRenewal} className="w-full mt-4 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Migrate: Set All to Renewal</button>
                      </div>
                  </div>
                  <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
@@ -2467,18 +2587,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              <td className="text-center">
                                 <div className="flex flex-col gap-1 items-center">
                                     <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}>
-                                      <option value="Member">Member</option>
-                                      <option value="Org Adviser">Org Adviser</option>
-                                      {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
-                                      {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
-                                    </select>
+                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                                 </div>
                              </td>
                              <td className="text-right p-4">
                                  <div className="flex items-center justify-end gap-1">
                                      <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
-                                     {isAdmin && <button onClick={() => handleResetPassword(m.memberId, m.email)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>}
+                                     {isAdmin && <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>}
                                      {isAdmin && <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>}
                                  </div>
                              </td>
