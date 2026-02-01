@@ -285,12 +285,17 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     
                     setStatusMessage('Verifying details...');
                     let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid';
+                    let finalMembershipType = membershipType; // Default to selection
+
                     if (inputKey) {
                         const uk = inputKey.trim().toUpperCase();
                         if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; }
                         else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
                         else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
                         else throw new Error("Invalid key.");
+                        
+                        // Officers/Committees are always Renewal
+                        finalMembershipType = 'renewal';
                     }
 
                     setStatusMessage('Checking registry...');
@@ -342,7 +347,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         paymentStatus: pay, 
                         lastRenewedSem: meta.sem, 
                         lastRenewedSY: meta.sy, 
-                        membershipType, // Store membership type
+                        membershipType: finalMembershipType,
                         joinedDate: new Date().toISOString() 
                     };
                     
@@ -371,6 +376,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
+                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -475,6 +481,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                   {paymentMethod === 'gcash' ? "GCash: +639063751402" : "Provide Daily Cash Key"}
                </div>
                <input type="text" required placeholder={paymentMethod === 'gcash' ? "Reference No." : "Daily Cash Key"} className="w-full p-3 border border-amber-200 rounded-xl outline-none text-xs uppercase" value={paymentMethod === 'gcash' ? refNo : cashOfficerKey} onChange={e => paymentMethod === 'gcash' ? setRefNo(e.target.value) : setCashOfficerKey(e.target.value.toUpperCase())} />
+               <button type="button" onClick={() => setAuthMode('register')} className="w-full text-xs font-bold text-gray-500 hover:text-[#3E2723] underline">Back to Registration</button>
             </div>
           )}
           <button type="submit" disabled={loading} className="w-full bg-[#3E2723] text-[#FDB813] py-5 rounded-2xl hover:bg-black transition-all font-black uppercase flex justify-center items-center gap-2 text-xs">
@@ -484,7 +491,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
         {authMode !== 'payment' && (
           <p className="text-center mt-6 text-[10px] text-amber-800 uppercase font-black">
             {authMode === 'login' ? (
-              <button onClick={() => setAuthMode('register')} className="ml-2 text-[#3E2723] underline decoration-[#FDB813] decoration-4 underline-offset-8">Brew With Us</button>
+              <button onClick={() => setAuthMode('register')} className="ml-2 text-[#3E2723] underline decoration-[#FDB813] decoration-4 underline-offset-8">Not Yet Registered? Brew With Us!</button>
             ) : <button onClick={() => setAuthMode('login')} className="ml-2 text-[#3E2723] underline decoration-[#FDB813] decoration-4 underline-offset-8">Back to Login</button>}
           </p>
         )}
@@ -2108,11 +2115,109 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            </div>
         )}
 
+        {view === 'announcements' && (
+           <div className="space-y-6 animate-fadeIn">
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-3xl font-black uppercase">Grind Report</h3>
+                {isOfficer && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Post Notice</button>}
+              </div>
+              {showAnnounceForm && (
+                  <form onSubmit={handlePostAnnouncement} className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6 space-y-3">
+                      <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value.toUpperCase()})} />
+                      <textarea placeholder="Announcement content..." required className="w-full p-3 border rounded-xl text-xs h-24" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})}></textarea>
+                      <div className="flex gap-2">
+                          <button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); setNewAnnouncement({title:'', content:''}); }} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
+                          <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Post Now</button>
+                      </div>
+                  </form>
+              )}
+              {announcements.length === 0 ? <p className="text-center opacity-50">No announcements.</p> : announcements.map(ann => (
+                 <div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden group">
+                    <div className="absolute top-0 right-0 p-6 opacity-10"><Megaphone size={64}/></div>
+                    <div className="relative z-10">
+                       <div className="flex justify-between items-start mb-2">
+                            <h4 className="font-black text-xl uppercase text-[#3E2723]">{ann.title}</h4>
+                            {isOfficer && (
+                                <div className="flex gap-2">
+                                    <button onClick={() => handleEditAnnouncement(ann)} className="text-blue-500 text-xs underline">Edit</button>
+                                    <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-500 text-xs underline">Delete</button>
+                                </div>
+                            )}
+                       </div>
+                       <p className="text-xs text-gray-600 leading-relaxed mb-4">{ann.content}</p>
+                       <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">{formatDate(ann.date)}</span>
+                    </div>
+                 </div>
+              ))}
+           </div>
+        )}
+        
+        {/* ... Include all other views (suggestions, settings, reports, members) from previous versions to complete the file ... */}
+        {view === 'suggestions' && (
+           <div className="space-y-6 animate-fadeIn">
+              <h3 className="font-serif text-3xl font-black uppercase">Suggestion Box</h3>
+              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
+                 <form onSubmit={handlePostSuggestion} className="space-y-4">
+                     <MessageSquare size={48} className="mx-auto text-amber-300 mb-4" />
+                     <p className="text-sm text-gray-500 font-medium">Drop your thoughts here.</p>
+                     <textarea required value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className="w-full p-4 border border-amber-100 rounded-2xl text-xs bg-gray-50 outline-none focus:border-amber-400" placeholder="Type your suggestion anonymously..."></textarea>
+                     <button type="submit" className="bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">Submit</button>
+                 </form>
+              </div>
+              
+              <div className="mt-8">
+                {isOfficer && (
+                    <div className="flex justify-end mb-4">
+                         <button onClick={handleDownloadSuggestions} className="bg-green-100 text-green-700 px-4 py-2 rounded-xl text-[10px] font-bold uppercase hover:bg-green-200 transition-colors flex items-center gap-1">
+                             <FileBarChart size={14}/> Download Summary
+                         </button>
+                    </div>
+                )}
+                
+                <div className="space-y-4">
+                  {(() => {
+                      const sevenDaysAgo = new Date();
+                      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                      
+                      const filteredSuggestions = suggestions.filter(s => {
+                          if (!s.createdAt) return true; 
+                          const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
+                          return date > sevenDaysAgo;
+                      });
+
+                      if (filteredSuggestions.length === 0) {
+                          return <p className="text-center text-xs text-gray-400">No suggestions this week.</p>;
+                      }
+
+                      return filteredSuggestions.map(s => (
+                          <div key={s.id} className="bg-white p-6 rounded-3xl border border-amber-50 shadow-sm relative group">
+                              <p className="text-sm font-medium text-gray-700">"{s.text}"</p>
+                              <div className="flex justify-between items-center mt-3 border-t border-gray-50 pt-2">
+                                  <p className="text-[9px] text-gray-400 uppercase font-bold">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p>
+                                  <p className="text-[10px] text-amber-400 font-black uppercase">- {s.authorName}</p>
+                              </div>
+                              {/* Delete button only for the sender - logic: authorId matches current user */}
+                              {s.authorId === profile.memberId && (
+                                  <button 
+                                    onClick={() => handleDeleteSuggestion(s.id)}
+                                    className="absolute top-2 right-2 p-2 bg-red-50 text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                                    title="Delete my suggestion"
+                                  >
+                                    <Trash2 size={12}/>
+                                  </button>
+                              )}
+                          </div>
+                      ));
+                  })()}
+                </div>
+              </div>
+           </div>
+        )}
+
         {view === 'settings' && (
             <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
                 <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
-                    <button onClick={() => setView('home')} className="md:hidden mr-2 text-gray-500 hover:bg-gray-100 p-2 rounded-full"><Users size={20}/></button> {/* Using Users icon as a placeholder for back arrow since ChevronLeft is not imported, or just reuse Users temporarily. Actually, I can use ChevronLeft if I import it, which I did.*/}
-                    {/* Better: Use ChevronLeft since it is imported now */}
+                    <button onClick={() => setView('home')} className="md:hidden mr-2 text-gray-500 hover:bg-gray-100 p-2 rounded-full"><Users size={20}/></button>
                     <div className="flex items-center gap-4 w-full">
                          <button onClick={() => setView('home')} className="text-gray-400 hover:text-amber-600 transition-colors">
                              <ChevronLeft size={24} />
@@ -2124,7 +2229,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                 </div>
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
-                    {/* Read-Only Member ID & Role */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-400">Member ID</label>
@@ -2135,8 +2239,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.positionCategory} />
                         </div>
                     </div>
-
-                    {/* Nickname & Avatar */}
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Nickname</label>
@@ -2150,12 +2252,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              </div>
                         </div>
                     </div>
-
                     <div>
                         <label className="block text-xs font-black uppercase mb-2 text-gray-500">Full Name</label>
                         <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.name} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} />
                     </div>
-
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Month</label>
@@ -2198,8 +2298,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <StatIcon icon={TrendingUp} variant="amber" />
                  <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
               </div>
-
-              {/* Membership Stats */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
                       <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
@@ -2218,14 +2316,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                       <p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p>
                   </div>
               </div>
-
               <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
                  <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
                  <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
               </div>
-              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 {/* OPERATIONS & FINANCIALS */}
                  <div className="space-y-6">
                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
                         <div className="flex justify-between items-center mb-6">
@@ -2256,10 +2351,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <FileBarChart size={14}/> Download Report
                         </button>
                      </div>
-
                      <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
                         <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                        {/* Fixed: Use safe access for keys to prevent crashes if undefined */}
                         <div className="space-y-2">
                             <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
                                 <span className="text-[10px] font-black uppercase">Officer Key</span>
@@ -2275,12 +2368,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             </div>
                         </div>
                         <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                        {/* New Sanitize Button */}
                         <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
                      </div>
                  </div>
-                 
-                 {/* Committee Applications Viewer */}
                  <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
                     <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
                     <div className="space-y-2 max-h-60 overflow-y-auto">
@@ -2324,9 +2414,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
               <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
                  <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
-                 {/* Added Bulk Email & Export Buttons */}
                  <div className="flex gap-2 w-full md:w-auto justify-end">
-                    {/* Filter Dropdown */}
                     <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
                         <option value="all">All</option>
                         <option value="active">Active</option>
@@ -2334,10 +2422,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         <option value="officers">Officers</option>
                         <option value="committee">Committee</option>
                     </select>
-
                     <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                     <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
-                    
                     <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                     <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
                  </div>
@@ -2349,6 +2435,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
                             <th className="p-4 w-1/3">Barista</th>
                             <th className="p-4 w-24 text-center">ID</th>
+                            <th className="p-4 w-24 text-center">Status</th>
                             <th className="p-4 w-32 text-center">Designation</th>
                             <th className="p-4 w-24 text-right">Manage</th>
                         </tr>
@@ -2358,13 +2445,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           <tr key={m.id || m.memberId} className="hover:bg-amber-50/50">
                              <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
                              <td className="py-4 px-4">
-                                {/* FIX: Move div inside td properly */}
                                 <div className="flex items-center gap-4">
                                   <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" />
                                   <div className="min-w-0">
                                       <p className="font-black text-xs truncate">{m.name}</p>
                                       <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
-                                      {/* Added Accolades Display in Row */}
                                       <div className="flex flex-wrap gap-1 mt-1">
                                           {m.accolades?.map((acc, i) => (
                                               <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
@@ -2374,6 +2459,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 </div>
                              </td>
                              <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
+                             <td className="text-center font-black text-[10px] uppercase">
+                                 <span className={`px-2 py-1 rounded-full ${m.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
+                                     {m.membershipType || "New"}
+                                 </span>
+                             </td>
                              <td className="text-center">
                                 <div className="flex flex-col gap-1 items-center">
                                     <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
