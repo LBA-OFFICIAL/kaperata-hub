@@ -199,7 +199,6 @@ const getEventDateParts = (startStr, endStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  // Use explicit returns to avoid string interpolation issues in some environments
   if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
   if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
   if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
@@ -208,8 +207,6 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
   return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
 };
 
-// Moved MemberCard outside Dashboard to prevent re-declaration
-// Updated to have fixed width for better centering in flex layout
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64">
        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
@@ -368,7 +365,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
-                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -1764,7 +1760,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                      {volEvents.length > 0 && (
                          <div>
                              <h4 className="font-serif text-xl font-black uppercase text-amber-600 mb-4 flex items-center gap-2"><Hand size={20}/> Volunteer Opportunities</h4>
-                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div className="space-y-4">
                                 {volEvents.map(ev => {
                                    const isExpanded = expandedEventId === ev.id;
                                    
@@ -1774,25 +1770,26 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                         <h4 className="font-black text-lg uppercase text-[#3E2723] mb-1">{ev.name}</h4>
                                         <p className="text-xs text-gray-500 mb-4 whitespace-pre-wrap">{ev.description}</p>
                                         
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                                             {ev.shifts && ev.shifts.map(shift => {
                                                 const signedUp = shift.volunteers.includes(profile.memberId);
                                                 const slotsLeft = shift.capacity - shift.volunteers.length;
                                                 const isFull = slotsLeft <= 0;
                                                 
                                                 return (
-                                                    <div key={shift.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                                        <div>
-                                                            <p className="text-xs font-bold text-gray-700">{shift.date} • {shift.session}</p>
-                                                            <p className="text-[9px] text-gray-500">{isFull && !signedUp ? "FULL" : `${slotsLeft} slots left`}</p>
+                                                    <div key={shift.id} className="flex flex-col justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100 text-center h-full">
+                                                        <div className="mb-2">
+                                                            <p className="text-xs font-bold text-gray-700">{shift.date}</p>
+                                                            <p className="text-[10px] font-bold text-amber-600">{shift.session}</p>
+                                                            <p className="text-[9px] text-gray-500 mt-1">{isFull && !signedUp ? "FULL" : `${slotsLeft} slots left`}</p>
                                                         </div>
                                                         {signedUp ? (
-                                                            <button onClick={() => handleVolunteerSignup(ev, shift.id)} className="px-4 py-2 bg-red-100 text-red-600 rounded-lg text-[9px] font-black uppercase hover:bg-red-200">Leave</button>
+                                                            <button onClick={() => handleVolunteerSignup(ev, shift.id)} className="w-full px-2 py-1.5 bg-red-100 text-red-600 rounded-lg text-[9px] font-black uppercase hover:bg-red-200">Leave</button>
                                                         ) : (
                                                             <button 
                                                                 onClick={() => handleVolunteerSignup(ev, shift.id)} 
                                                                 disabled={isFull}
-                                                                className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase ${isFull ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
+                                                                className={`w-full px-2 py-1.5 rounded-lg text-[9px] font-black uppercase ${isFull ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
                                                             >
                                                                 Volunteer
                                                             </button>
