@@ -508,8 +508,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
   const [expandedEventId, setExpandedEventId] = useState(null); 
-  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
-
+  
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
@@ -530,6 +529,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     shifts: [] 
   });
   const [editingEvent, setEditingEvent] = useState(null); 
+  
+  // Shift mgmt state for form
+  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
+
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
@@ -1620,7 +1623,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                            <div className="flex items-center gap-4">
                                <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
                                   <Briefcase size={20} />
-                               </div>
+                                </div>
                                <div className="text-left">
                                    <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
                                    <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
@@ -1761,17 +1764,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                      {volEvents.length > 0 && (
                          <div>
                              <h4 className="font-serif text-xl font-black uppercase text-amber-600 mb-4 flex items-center gap-2"><Hand size={20}/> Volunteer Opportunities</h4>
-                             <div className="space-y-4">
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {volEvents.map(ev => {
                                    const isExpanded = expandedEventId === ev.id;
                                    
                                    return (
-                                     <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm relative overflow-hidden">
+                                     <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm relative overflow-hidden flex flex-col h-full">
                                         <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl">Volunteer Needed</div>
                                         <h4 className="font-black text-lg uppercase text-[#3E2723] mb-1">{ev.name}</h4>
                                         <p className="text-xs text-gray-500 mb-4">{ev.description}</p>
                                         
-                                        <div className="space-y-2">
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                                             {ev.shifts && ev.shifts.map(shift => {
                                                 const signedUp = shift.volunteers.includes(profile.memberId);
                                                 const slotsLeft = shift.capacity - shift.volunteers.length;
@@ -1801,7 +1804,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                         
                                         {/* Officer View for Volunteers */}
                                         {isOfficer && (
-                                            <div className="mt-4 pt-4 border-t border-dashed border-gray-200">
+                                            <div className="mt-auto pt-4 border-t border-dashed border-gray-200">
                                                 <button onClick={() => setExpandedEventId(isExpanded ? null : ev.id)} className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1">
                                                     {isExpanded ? "Hide Volunteers" : "View Volunteers"} <ChevronDown size={12} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
                                                 </button>
@@ -1892,6 +1895,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     {/* Event Actions */}
                                     <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
                                         <div className="flex gap-2">
+                                            {/* Registration Button for All Users */}
                                             {ev.attendanceRequired && (
                                                 <button 
                                                     onClick={() => handleRegisterEvent(ev)} 
