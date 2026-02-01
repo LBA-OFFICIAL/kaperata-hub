@@ -365,6 +365,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
+                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -507,7 +508,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
   const [expandedEventId, setExpandedEventId] = useState(null); 
-  
+  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
+
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
@@ -528,10 +530,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     shifts: [] 
   });
   const [editingEvent, setEditingEvent] = useState(null); 
-  
-  // Shift mgmt state for form
-  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
-
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
@@ -669,16 +667,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         unsubUserApps();
     };
   }, [user, isAdmin, profile.memberId]);
-
-  // Real-time Sync for Attendance Event
-  useEffect(() => {
-    if (attendanceEvent && events.length > 0) {
-      const liveEvent = events.find(e => e.id === attendanceEvent.id);
-      if (liveEvent) {
-        setAttendanceEvent(liveEvent);
-      }
-    }
-  }, [events]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -1182,17 +1170,39 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                 </div>
                 
+                {/* Refined Attendance Logic: 
+                  - If the event is a Volunteer event, show those who signed up via shifts.
+                  - If it's a general event with registration, show those who registered.
+                  - Else, show all members (if open). 
+                  Currently, we rely on the `registered` array for general events.
+                */}
                 {(() => {
-                    // Filter members who registered for this event
-                    const registeredMembers = members.filter(m => attendanceEvent.registered?.includes(m.memberId));
-                    const sortedMembers = [...registeredMembers].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
+                    let targetList = members;
+
+                    // If it's a volunteer event, the 'registered' logic is inside 'shifts'.
+                    // However, we track attendance globally on the event.
+                    // For now, let's filter by the `registered` array if it exists and has length.
+                    // If it's a volunteer event, 'registered' might not be used directly if we use shifts.
+                    // Let's assume standard behavior: filter by those who clicked "Register" or "Volunteer".
+                    // The handleVolunteerSignup updates shifts, but not the root 'registered' array in my previous code.
+                    // Let's adapt: For volunteer events, we aggregate volunteers from shifts.
+                    
+                    if (attendanceEvent.isVolunteer && attendanceEvent.shifts) {
+                        const volunteerIds = attendanceEvent.shifts.flatMap(s => s.volunteers);
+                        targetList = members.filter(m => volunteerIds.includes(m.memberId));
+                    } else if (attendanceEvent.registered && attendanceEvent.registered.length > 0) {
+                        targetList = members.filter(m => attendanceEvent.registered.includes(m.memberId));
+                    } 
+                    // If no one registered yet, show empty list logic below will handle it
+
+                    const sortedMembers = [...targetList].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
                     return (
                         <>
                             <div className="flex justify-between items-center mb-4 px-2">
                                 <span className="text-xs font-bold text-gray-500 uppercase">Registered List</span>
                                 <span className="text-xs font-bold bg-[#3E2723] text-[#FDB813] px-3 py-1 rounded-full">
-                                    Present: {attendanceEvent.attendees?.length || 0} / {registeredMembers.length}
+                                    Present: {attendanceEvent.attendees?.length || 0} / {targetList.length}
                                 </span>
                             </div>
 
