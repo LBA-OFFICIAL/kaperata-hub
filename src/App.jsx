@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -199,7 +199,6 @@ const getEventDateParts = (startStr, endStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  // Use explicit returns to avoid string interpolation issues in some environments
   if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
   if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
   if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
@@ -208,8 +207,6 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
   return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
 };
 
-// Moved MemberCard outside Dashboard to prevent re-declaration
-// Updated to have fixed width for better centering in flex layout
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64">
        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
@@ -368,7 +365,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const userData = docSnap.data();
                     if (userData.password !== password) throw new Error("Incorrect password.");
 
-                    // IMPORTANT: Update the UID on the existing record to match the current session
                     if (userData.uid !== currentUser.uid) {
                         setStatusMessage('Updating session...');
                         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), {
@@ -515,8 +511,27 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
+  // Updated newEvent state to include volunteer-specific fields
+  const [newEvent, setNewEvent] = useState({ 
+    name: '', 
+    startDate: '', 
+    endDate: '', 
+    startTime: '', 
+    endTime: '', 
+    venue: '', 
+    description: '', 
+    attendanceRequired: false, 
+    evaluationLink: '',
+    isVolunteer: false,
+    openForAll: true,
+    volunteerTarget: { officer: 0, committee: 0, member: 0 },
+    shifts: [] 
+  });
   const [editingEvent, setEditingEvent] = useState(null); 
+  
+  // Shift mgmt state for form
+  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
+
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
@@ -697,17 +712,47 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch (err) { console.error(err); }
   };
 
+  // Form handling for shifts
+  const addShift = () => {
+    if (!tempShift.date || !tempShift.session) return;
+    setNewEvent(prev => ({
+        ...prev,
+        shifts: [...prev.shifts, { ...tempShift, id: crypto.randomUUID(), volunteers: [] }]
+    }));
+    // Reset temp shift but keep date for convenience
+    setTempShift(prev => ({ ...prev, session: 'AM' })); 
+  };
+  
+  const removeShift = (id) => {
+    setNewEvent(prev => ({
+        ...prev,
+        shifts: prev.shifts.filter(s => s.id !== id)
+    }));
+  };
+
   const handleAddEvent = async (e) => {
       e.preventDefault();
       try {
+          // Prepare payload
+          const eventPayload = { 
+              ...newEvent, 
+              name: newEvent.name.toUpperCase(),
+              venue: newEvent.venue.toUpperCase(),
+              createdAt: serverTimestamp(), 
+              attendees: [], 
+              registered: [] 
+          };
+
           if (editingEvent) {
-             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), { ...newEvent });
+             delete eventPayload.createdAt; // Don't overwrite creation time
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), eventPayload);
              setEditingEvent(null);
           } else {
-             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), { ...newEvent, createdAt: serverTimestamp(), attendees: [], registered: [] });
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventPayload);
           }
           setShowEventForm(false);
-          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '' });
+          // Reset form including volunteer fields
+          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [] });
       } catch (err) { console.error(err); }
   };
 
@@ -721,7 +766,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           venue: ev.venue,
           description: ev.description,
           attendanceRequired: ev.attendanceRequired || false,
-          evaluationLink: ev.evaluationLink || ''
+          evaluationLink: ev.evaluationLink || '',
+          isVolunteer: ev.isVolunteer || false,
+          openForAll: ev.openForAll !== undefined ? ev.openForAll : true,
+          volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 },
+          shifts: ev.shifts || []
       });
       setEditingEvent(ev);
       setShowEventForm(true);
@@ -779,6 +828,33 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               await updateDoc(eventRef, { registered: arrayUnion(profile.memberId) });
           }
       } catch (err) { console.error(err); }
+  };
+
+  // Volunteer Shift Signup
+  const handleVolunteerSignup = async (ev, shiftId) => {
+      const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
+      
+      // We need to clone the shifts array, modify the specific shift, and update
+      const updatedShifts = ev.shifts.map(shift => {
+          if (shift.id === shiftId) {
+              const isVolunteered = shift.volunteers.includes(profile.memberId);
+              if (isVolunteered) {
+                  return { ...shift, volunteers: shift.volunteers.filter(id => id !== profile.memberId) };
+              } else {
+                  if (shift.volunteers.length >= shift.capacity) {
+                      alert("This shift is full!");
+                      return shift; // No change
+                  }
+                  return { ...shift, volunteers: [...shift.volunteers, profile.memberId] };
+              }
+          }
+          return shift;
+      });
+
+      // Optimistic UI update could happen here, but Firestore listener handles it mostly
+      try {
+         await updateDoc(eventRef, { shifts: updatedShifts });
+      } catch(err) { console.error("Volunteer signup error", err); }
   };
 
 
