@@ -199,6 +199,7 @@ const getEventDateParts = (startStr, endStr) => {
 // --- Components ---
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
+  // Use explicit returns to avoid string interpolation issues in some environments
   if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
   if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
   if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
@@ -207,6 +208,8 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
   return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
 };
 
+// Moved MemberCard outside Dashboard to prevent re-declaration
+// Updated to have fixed width for better centering in flex layout
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64">
        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover"/>
@@ -508,7 +511,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
   const [expandedEventId, setExpandedEventId] = useState(null); 
-  
+  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
+
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
@@ -529,10 +533,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     shifts: [] 
   });
   const [editingEvent, setEditingEvent] = useState(null); 
-  
-  // Shift mgmt state for form
-  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
-
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
@@ -1772,7 +1772,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                      <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm relative overflow-hidden flex flex-col h-full">
                                         <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl">Volunteer Needed</div>
                                         <h4 className="font-black text-lg uppercase text-[#3E2723] mb-1">{ev.name}</h4>
-                                        <p className="text-xs text-gray-500 mb-4">{ev.description}</p>
+                                        <p className="text-xs text-gray-500 mb-4 whitespace-pre-wrap">{ev.description}</p>
                                         
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                                             {ev.shifts && ev.shifts.map(shift => {
