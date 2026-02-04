@@ -6,7 +6,7 @@ import {
 import { 
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
-  orderBy, writeBatch, arrayUnion, arrayRemove
+  orderBy, writeBatch, arrayUnion, arrayRemove, getDoc
 } from 'firebase/firestore'; 
 import { 
   Users, Calendar, Award, Bell, LogOut, UserCircle, BarChart3, Plus, 
@@ -16,7 +16,10 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand, Image, Link as LinkIcon, RefreshCcw
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, 
+  FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, 
+  CheckSquare, Music, Database, ExternalLink, Hand, Image, Link as LinkIcon, 
+  RefreshCcw, Copyright, Shield
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -29,6 +32,7 @@ if (typeof __firebase_config !== 'undefined') {
     firebaseConfig = {};
   }
 } else {
+  // Default fallback config
   firebaseConfig = {
       apiKey: "AIzaSyByPoN0xDIfomiNHLQh2q4OS0tvhY9a_5w",
       authDomain: "kaperata-hub.firebaseapp.com",
@@ -45,12 +49,11 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // FIX: Sanitize appId to ensure it is a valid Firestore document ID
-const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'lba-portal-v13';
+const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'lba-portal-v14';
 const appId = rawAppId.replace(/[\/.]/g, '_'); 
 
 // --- Global Constants ---
 const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
-// Icon for homescreen shortcut / favicon
 const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMPvN_dIM3fIwY";
 
 const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Auditor", "Business Manager", "P.R.O.", "Overall Committee Head"];
@@ -94,9 +97,6 @@ const SOCIAL_LINKS = {
   email: "lpubaristas.official@gmail.com",
   pr_email: "lbaofficial.pr@gmail.com"
 };
-const SEED_OFFICER_KEY = "KAPERATA_OFFICER_2024";
-const SEED_HEAD_KEY = "KAPERATA_HEAD_2024";
-const SEED_COMM_KEY = "KAPERATA_COMM_2024";
 
 // --- Helper Logic ---
 const getDirectLink = (url) => {
@@ -114,7 +114,6 @@ const ensureAbsoluteUrl = (url) => {
   return 'https://' + url;
 };
 
-// Robust CSV Generator using Blob
 const generateCSV = (headers, rows, filename) => {
     const csvContent = [
         headers.join(','),
@@ -164,7 +163,6 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-// Fixed Missing Helpers
 const getEventDay = (dateStr) => {
     if (!dateStr) return "?";
     const d = new Date(dateStr);
@@ -177,7 +175,6 @@ const getEventMonth = (dateStr) => {
     return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
 };
 
-// Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
     
@@ -200,7 +197,66 @@ const getEventDateParts = (startStr, endStr) => {
     }
 };
 
+// --- NEW HELPER: Days Calculation ---
+const calculateDaysJoined = (joinedDate) => {
+    if (!joinedDate) return 0;
+    const start = new Date(joinedDate);
+    const now = new Date();
+    if (isNaN(start.getTime())) return 0;
+    const diffTime = Math.abs(now - start);
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+};
+
+// --- NEW LOGIC: Expiration Check ---
+const checkExpirationStatus = async (userData, hubSettings) => {
+    const currentMeta = getMemberIdMeta();
+    // User is "outdated" if their last renewed SY/Sem doesn't match current
+    const isOutdated = userData.lastRenewedSY !== currentMeta.sy || userData.lastRenewedSem !== currentMeta.sem;
+    
+    // Check semester deadline
+    if (isOutdated && hubSettings?.semesterStartDate) {
+        const startDate = new Date(hubSettings.semesterStartDate);
+        const deadline = new Date(startDate);
+        deadline.setDate(startDate.getDate() + 30); // 30-Day Grace Period
+        
+        const now = new Date();
+        
+        // Exemption: New members (joined < 30 days ago) even if sem data is weird
+        const daysSinceJoined = calculateDaysJoined(userData.joinedDate);
+        const isNewMember = daysSinceJoined <= 30;
+
+        // If Deadline passed, not a new member, and status is active -> FORCE EXPIRED
+        // Officers usually exempt, but logic applied primarily to 'Member' unless specified
+        if (now > deadline && !isNewMember && userData.status !== 'expired' && !['Officer', 'Execomm'].includes(userData.positionCategory)) {
+            try {
+                await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', userData.memberId), {
+                    status: 'expired'
+                });
+                return { ...userData, status: 'expired' }; // Return updated profile state
+            } catch (err) {
+                console.error("Auto-expire failed:", err);
+            }
+        }
+    }
+    return userData;
+};
+
 // --- Components ---
+
+const Footer = () => (
+    <div className="w-full text-center py-6 mt-10 border-t border-amber-900/10 opacity-60">
+        <p className="text-[10px] font-bold text-[#3E2723] uppercase flex items-center justify-center gap-1">
+            <Copyright size={10}/> {new Date().getFullYear()} LPU Baristas' Association. All Rights Reserved.
+        </p>
+        <div className="flex justify-center gap-4 mt-2 text-[9px] text-gray-500 font-medium">
+            <span className="cursor-pointer hover:text-amber-700">Privacy Policy</span>
+            <span>•</span>
+            <span className="cursor-pointer hover:text-amber-700">Terms of Use</span>
+            <span>•</span>
+            <span className="cursor-pointer hover:text-amber-700">Data Protection</span>
+        </div>
+    </div>
+);
 
 const StatIcon = ({ icon: Icon, variant = 'default' }) => {
   if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
@@ -236,7 +292,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   const [paymentMethod, setPaymentMethod] = useState(''); 
   const [refNo, setRefNo] = useState('');
   const [cashOfficerKey, setCashOfficerKey] = useState('');
-  const [membershipType, setMembershipType] = useState('new'); // 'new' or 'renewal'
+  const [membershipType, setMembershipType] = useState('new'); 
   const [error, setError] = useState(initialError || '');
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(''); 
@@ -285,7 +341,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     
                     setStatusMessage('Verifying details...');
                     let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid';
-                    let finalMembershipType = membershipType; // Default to selection
+                    let finalMembershipType = membershipType; 
 
                     if (inputKey) {
                         const uk = inputKey.trim().toUpperCase();
@@ -293,8 +349,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
                         else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
                         else throw new Error("Invalid key.");
-                        
-                        // Officers/Committees are always Renewal
                         finalMembershipType = 'renewal';
                     }
 
@@ -319,11 +373,8 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                             }
                         }
                     } catch (fetchErr) {
-                        if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
-                            throw fetchErr;
-                        }
-                        const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
-                        currentCount = allDocs.size;
+                         const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+                         currentCount = allDocs.size;
                     }
                     
                     const assignedId = generateLBAId(pc, currentCount);
@@ -392,13 +443,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
         ]);
     } catch (err) { 
         console.error("Auth error:", err);
-        if (err.message.includes("database (default) does not exist")) {
-            setError("Database missing: Please create a Firestore Database in your Firebase Console.");
-        } else if (err.code === 'permission-denied' || err.message.includes("insufficient permission")) {
-            setError("Access Denied: Go to Firebase Console > Firestore > Rules and set to 'allow read, write: if true;' (Test Mode).");
-        } else {
-            setError(err.message); 
-        }
+        setError(err.message); 
     } finally { setLoading(false); setStatusMessage(''); }
   };
 
@@ -454,7 +499,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                  </select>
               </div>
               
-              {/* Birthday Fields */}
               <div className="grid grid-cols-2 gap-2">
                 <select required className="p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)}>
                     <option value="">Birth Month</option>
@@ -473,10 +517,17 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                <p className="text-center font-black text-sm uppercase text-[#3E2723]">Total Fee: ₱{feeAmount}</p>
                <div className="flex gap-2">
                   <button type="button" onClick={() => setPaymentMethod('gcash')} className={paymentMethod === 'gcash' ? activeBtnClass : inactiveBtnClass}>GCash</button>
-                  <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
+                  {/* REQUIREMENT: Hide Cash if Renewal */}
+                  {pendingProfile?.membershipType !== 'renewal' && (
+                    <button type="button" onClick={() => setPaymentMethod('cash')} className={paymentMethod === 'cash' ? activeBtnClass : inactiveBtnClass}>Cash</button>
+                  )}
                </div>
+               
+               {pendingProfile?.membershipType === 'renewal' && (
+                  <p className="text-center text-[9px] text-red-500 font-bold uppercase -mt-2">* Renewal payments must be via GCash</p>
+               )}
+
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
-                  {/* Updated GCash number */}
                   {paymentMethod === 'gcash' ? "GCash: +639063751402" : "Provide Daily Cash Key"}
                </div>
                <input type="text" required placeholder={paymentMethod === 'gcash' ? "Reference No." : "Daily Cash Key"} className="w-full p-3 border border-amber-200 rounded-xl outline-none text-xs uppercase" value={paymentMethod === 'gcash' ? refNo : cashOfficerKey} onChange={e => paymentMethod === 'gcash' ? setRefNo(e.target.value) : setCashOfficerKey(e.target.value.toUpperCase())} />
@@ -495,6 +546,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
           </p>
         )}
       </div>
+      <Footer />
     </div>
   );
 };
@@ -509,17 +561,28 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [suggestions, setSuggestions] = useState([]);
   const [committeeApps, setCommitteeApps] = useState([]); 
   const [userApplications, setUserApplications] = useState([]);
-  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true });
+  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, semesterStartDate: '' });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
-  const [legacyContent, setLegacyContent] = useState({ body: "Loading association history..." });
+  const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", carouselImages: [] });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  // Last visited state for notifications
+  // Last visited state
   const [lastVisited, setLastVisited] = useState(() => {
       try {
           return JSON.parse(localStorage.getItem('lba_last_visited') || '{}');
       } catch { return {}; }
   });
+
+  // REQUIREMENT: 30-Day Renewal Time Limit & Auto-Expiration
+  const [showRenewalModal, setShowRenewalModal] = useState(false);
+  const [renewalRef, setRenewalRef] = useState("");
+  const isExpired = profile.status === 'expired';
+  
+  // REQUIREMENT: Count days since registered
+  const daysSinceJoined = useMemo(() => calculateDaysJoined(profile.joinedDate), [profile.joinedDate]);
+
+  // Admin Start Date Input
+  const [startDateInput, setStartDateInput] = useState("");
 
   const updateLastVisited = (page) => {
      const newVisits = { ...lastVisited, [page]: new Date().toISOString() };
@@ -538,126 +601,95 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const currentDailyKey = getDailyCashPasskey();
   const [settingsForm, setSettingsForm] = useState({ ...profile });
   
-  // Password Change State
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
-
   const [savingSettings, setSavingSettings] = useState(false);
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
   const [expandedEventId, setExpandedEventId] = useState(null); 
   const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
+  
   // Legacy Editing State
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
-  const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [] });
+  // REQUIREMENT: Legacy Story Carousel & Achievements
+  const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], carouselImages: [] });
   const [tempAchievement, setTempAchievement] = useState("");
+  const [tempCarouselImage, setTempCarouselImage] = useState("");
 
-  // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
   const [showEventForm, setShowEventForm] = useState(false);
-  // Updated newEvent state to include volunteer-specific fields
+  
+  // REQUIREMENT: Event Poster URL
   const [newEvent, setNewEvent] = useState({ 
-    name: '', 
-    startDate: '', 
-    endDate: '', 
-    startTime: '', 
-    endTime: '', 
-    venue: '', 
-    description: '', 
-    attendanceRequired: false, 
-    evaluationLink: '',
-    isVolunteer: false,
-    openForAll: true,
-    volunteerTarget: { officer: 0, committee: 0, member: 0 },
-    shifts: [] 
+    name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', 
+    attendanceRequired: false, evaluationLink: '', isVolunteer: false, openForAll: true, 
+    volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], posterUrl: '' 
   });
   const [editingEvent, setEditingEvent] = useState(null); 
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
   const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
-  
-  // Committee Hunt State
   const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' });
   const [submittingApp, setSubmittingApp] = useState(false);
-  
-  // Attendance Check State
   const [attendanceEvent, setAttendanceEvent] = useState(null);
-
-  // New States for Accolades & Bulk Email
-  const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { memberId }
+  const [showAccoladeModal, setShowAccoladeModal] = useState(null);
   const [accoladeText, setAccoladeText] = useState("");
   const [exportFilter, setExportFilter] = useState('all');
+  
+  // REQUIREMENT: Manual input of date member registration
+  const [editingJoinedDate, setEditingJoinedDate] = useState(null); 
 
-  // FIX: Case-insensitive check for officer role
   const isOfficer = useMemo(() => {
      if (!profile?.positionCategory) return false;
      const pc = String(profile.positionCategory).toUpperCase();
      return ['OFFICER', 'EXECOMM', 'COMMITTEE'].includes(pc);
   }, [profile?.positionCategory]);
 
-  // FIX: Stricter check for Terminal access (Officers/Execomm only, no Committee)
   const isAdmin = useMemo(() => {
      if (!profile?.positionCategory) return false;
      const pc = String(profile.positionCategory).toUpperCase();
      return ['OFFICER', 'EXECOMM'].includes(pc);
   }, [profile?.positionCategory]);
 
-  // Birthday Logic
   const isBirthday = useMemo(() => {
     if (!profile.birthMonth || !profile.birthDay) return false;
     const today = new Date();
     return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate();
   }, [profile]);
 
-  // Financial Stats
   const financialStats = useMemo(() => {
     if (!members) return { totalPaid: 0, cashCount: 0, gcashCount: 0, exemptCount: 0 };
-    
     let filtered = members;
     if (financialFilter !== 'all') {
         const [sy, sem] = financialFilter.split('-');
         filtered = members.filter(m => m.lastRenewedSY === sy && m.lastRenewedSem === sem);
     }
-    
-    // Exempt logic: Officers, Execomm, Committee are exempt from cash/revenue reports
     const payingMembers = filtered.filter(m => {
         const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
         return !isExempt && m.paymentStatus === 'paid';
     });
-
-    const cashPayments = payingMembers.filter(m => m.paymentDetails?.method === 'cash').length;
-    const gcashPayments = payingMembers.filter(m => m.paymentDetails?.method === 'gcash').length;
-    
     return { 
         totalPaid: payingMembers.length,
-        cashCount: cashPayments,
-        gcashCount: gcashPayments,
+        cashCount: payingMembers.filter(m => m.paymentDetails?.method === 'cash').length,
+        gcashCount: payingMembers.filter(m => m.paymentDetails?.method === 'gcash').length,
         exemptCount: filtered.length - payingMembers.length
     };
   }, [members, financialFilter]);
 
-  // Unique Semesters for filter
   const semesterOptions = useMemo(() => {
     if(!members) return [];
     const sems = new Set(members.map(m => `${m.lastRenewedSY}-${m.lastRenewedSem}`));
     return Array.from(sems).filter(s => s !== "undefined-undefined").sort().reverse();
   }, [members]);
 
-  // Team Hierarchy Filtering
   const teamStructure = useMemo(() => {
     if (!members) return { tier1: [], tier2: [], tier3: [], committees: { heads: [], members: [] } };
-    
     const sortedMembers = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    
-    // Helper to check title case-insensitively with safety
     const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
     const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
-
     return {
         tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")),
         tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")),
-        tier3: sortedMembers.filter(m => 
-            !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")
-        ),
+        tier3: sortedMembers.filter(m => !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")),
         committees: {
             heads: sortedMembers.filter(m => isCat(m, "Committee") && hasTitle(m, "Head")),
             members: sortedMembers.filter(m => isCat(m, "Committee") && !hasTitle(m, "Head"))
@@ -665,26 +697,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [members]);
 
-  // Notifications Logic
   const notifications = useMemo(() => {
       const hasNew = (items, pageKey) => {
           if (!items || items.length === 0) return false;
           const lastVisit = lastVisited[pageKey];
-          if (!lastVisit) return true; // Never visited -> show dot
-          // Check if any item created AFTER last visit
+          if (!lastVisit) return true; 
           return items.some(i => {
               const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0);
               return d > new Date(lastVisit);
           });
       };
-
-      // Committee Hunt Logic
       let huntNotify = false;
       if (isOfficer) {
-          // Officers see dot if pending apps exist
           huntNotify = committeeApps.some(a => a.status === 'pending');
       } else {
-          // Members see dot if their app status updated recently
           huntNotify = userApplications.some(a => {
              const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null;
              const lastVisit = lastVisited['committee_hunt'];
@@ -692,19 +718,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              return !lastVisit || updated > new Date(lastVisit);
           });
       }
-
-      // Registry Logic (Officers only)
-      let regNotify = false;
-      if (isOfficer) {
-         regNotify = hasNew(members.map(m => ({ createdAt: m.joinedDate })), 'members');
-      }
-
       return {
           events: hasNew(events, 'events'),
           announcements: hasNew(announcements, 'announcements'),
           suggestions: hasNew(suggestions, 'suggestions'),
           committee_hunt: huntNotify,
-          members: regNotify
+          members: isOfficer ? hasNew(members.map(m => ({ createdAt: m.joinedDate })), 'members') : false
       };
   }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer]);
 
@@ -719,7 +738,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         setSuggestions(data);
     }, (e) => console.error("Suggestions sync error:", e));
     
-    // Fetch committee applications for officers
     let unsubApps;
     if (isAdmin) {
         unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => {
@@ -728,13 +746,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         }, (e) => console.error("Apps sync error:", e));
     }
 
-    // Fetch user's own applications
     const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         setUserApplications(data);
     });
 
-    // --- ADDED: Set Icons in Head ---
     const setIcons = () => {
         const head = document.head;
         let linkIcon = document.querySelector("link[rel~='icon']");
@@ -744,7 +760,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             head.appendChild(linkIcon);
         }
         linkIcon.href = APP_ICON_URL;
-
         let linkApple = document.querySelector("link[rel='apple-touch-icon']");
         if (!linkApple) {
             linkApple = document.createElement('link');
@@ -754,16 +769,22 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         linkApple.href = APP_ICON_URL;
     };
     setIcons();
-    // --------------------------------
 
-    const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
+    const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => {
+        if(s.exists()) {
+            const data = s.data();
+            setHubSettings(data);
+            if(data.semesterStartDate) setStartDateInput(data.semesterStartDate);
+        }
+    });
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
     const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => {
          if(s.exists()) {
              setLegacyContent(s.data());
              setLegacyForm({ 
                  ...s.data(), 
-                 achievements: s.data().achievements || [] // Ensure array exists
+                 achievements: s.data().achievements || [],
+                 carouselImages: s.data().carouselImages || [] 
              });
          }
     }, (e) => {});
@@ -775,13 +796,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [user, isAdmin, profile.memberId]);
 
-  // Real-time Sync for Attendance Event
   useEffect(() => {
     if (attendanceEvent && events.length > 0) {
       const liveEvent = events.find(e => e.id === attendanceEvent.id);
-      if (liveEvent) {
-        setAttendanceEvent(liveEvent);
-      }
+      if (liveEvent) setAttendanceEvent(liveEvent);
     }
   }, [events]);
 
@@ -792,7 +810,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) };
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated);
         setProfile(updated);
-        // Update local storage too
         localStorage.setItem('lba_profile', JSON.stringify(updated));
         alert("Profile updated successfully!");
     } catch(err) {
@@ -805,172 +822,103 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const handleChangePassword = async (e) => {
       e.preventDefault();
-      if (passwordForm.new !== passwordForm.confirm) {
-          alert("New passwords do not match.");
-          return;
-      }
-      if (passwordForm.current !== profile.password) {
-          alert("Incorrect current password.");
-          return;
-      }
+      if (passwordForm.new !== passwordForm.confirm) { alert("New passwords do not match."); return; }
+      if (passwordForm.current !== profile.password) { alert("Incorrect current password."); return; }
       try {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), {
-              password: passwordForm.new
-          });
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), { password: passwordForm.new });
           const updatedProfile = { ...profile, password: passwordForm.new };
           setProfile(updatedProfile);
           localStorage.setItem('lba_profile', JSON.stringify(updatedProfile));
           setPasswordForm({ current: '', new: '', confirm: '' });
           alert("Password changed successfully.");
-      } catch (err) {
-          console.error(err);
-          alert("Failed to change password.");
-      }
+      } catch (err) { console.error(err); alert("Failed to change password."); }
   };
 
-  const handleDeleteSuggestion = async (id) => {
-    if(!confirm("Are you sure you want to delete this suggestion?")) return;
+  // --- RENEWAL SUBMIT ---
+  const handleRenewalSubmit = async (e) => {
+    e.preventDefault();
+    if (!renewalRef) return;
     try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'suggestions', id));
-    } catch(err) { console.error(err); }
+        const meta = getMemberIdMeta();
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), {
+            membershipType: 'renewal',
+            paymentStatus: 'paid', 
+            paymentDetails: { method: 'gcash', refNo: renewalRef, date: new Date().toISOString() },
+            lastRenewedSY: meta.sy,
+            lastRenewedSem: meta.sem,
+            status: 'active'
+        });
+        const updated = { ...profile, status: 'active', lastRenewedSY: meta.sy, lastRenewedSem: meta.sem, membershipType: 'renewal' };
+        setProfile(updated);
+        localStorage.setItem('lba_profile', JSON.stringify(updated));
+        setShowRenewalModal(false);
+        alert("Membership Renewed! Welcome back.");
+    } catch (err) { console.error(err); alert("Renewal failed."); }
   };
 
+  // --- ADMIN DATE UPDATE ---
+  const handleUpdateSemDate = async () => {
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+            ...hubSettings,
+            semesterStartDate: startDateInput
+        });
+        alert("Semester Start Date Updated!");
+    } catch(e) { console.error(e); }
+  };
+
+  const handleDeleteSuggestion = async (id) => { if(confirm("Delete suggestion?")) try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'suggestions', id)); } catch(err) { console.error(err); } };
+  
   const handlePostSuggestion = async (e) => {
       e.preventDefault();
       if (!suggestionText.trim()) return;
       try {
-          // Use 'Anonymous' as authorName
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), {
-              text: suggestionText,
-              authorId: profile.memberId,
-              authorName: "Anonymous",
-              createdAt: serverTimestamp()
-          });
-          setSuggestionText("");
-          alert("Suggestion submitted anonymously!");
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), { text: suggestionText, authorId: profile.memberId, authorName: "Anonymous", createdAt: serverTimestamp() });
+          setSuggestionText(""); alert("Suggestion submitted!");
       } catch (err) { console.error(err); }
   };
 
-  // Form handling for shifts
-  const addShift = () => {
-    if (!tempShift.date || !tempShift.session) return;
-    setNewEvent(prev => ({
-        ...prev,
-        shifts: [...prev.shifts, { ...tempShift, id: crypto.randomUUID(), volunteers: [] }]
-    }));
-    // Reset temp shift but keep date for convenience
-    setTempShift(prev => ({ ...prev, session: 'AM' })); 
-  };
+  const addShift = () => { if (!tempShift.date || !tempShift.session) return; setNewEvent(prev => ({ ...prev, shifts: [...prev.shifts, { ...tempShift, id: crypto.randomUUID(), volunteers: [] }] })); setTempShift(prev => ({ ...prev, session: 'AM' })); };
+  const removeShift = (id) => { setNewEvent(prev => ({ ...prev, shifts: prev.shifts.filter(s => s.id !== id) })); };
   
-  const removeShift = (id) => {
-    setNewEvent(prev => ({
-        ...prev,
-        shifts: prev.shifts.filter(s => s.id !== id)
-    }));
-  };
-
-  // Legacy Achievements Handling
-  const handleAddAchievement = () => {
-      if (!tempAchievement.trim()) return;
-      setLegacyForm(prev => ({
-          ...prev,
-          achievements: [...(prev.achievements || []), tempAchievement.trim()]
-      }));
-      setTempAchievement("");
-  };
-
-  const handleRemoveAchievement = (index) => {
-      setLegacyForm(prev => ({
-          ...prev,
-          achievements: prev.achievements.filter((_, i) => i !== index)
-      }));
-  };
-
+  // Legacy Helpers (Modified for Carousel)
+  const handleAddAchievement = () => { if (!tempAchievement.trim()) return; setLegacyForm(prev => ({ ...prev, achievements: [...(prev.achievements || []), tempAchievement.trim()] })); setTempAchievement(""); };
+  const handleRemoveAchievement = (index) => { setLegacyForm(prev => ({ ...prev, achievements: prev.achievements.filter((_, i) => i !== index) })); };
+  const handleAddCarouselImage = () => { if (!tempCarouselImage.trim()) return; setLegacyForm(prev => ({ ...prev, carouselImages: [...(prev.carouselImages || []), tempCarouselImage.trim()] })); setTempCarouselImage(""); };
+  const handleRemoveCarouselImage = (index) => { setLegacyForm(prev => ({ ...prev, carouselImages: prev.carouselImages.filter((_, i) => i !== index) })); };
+  
   const handleAddEvent = async (e) => {
       e.preventDefault();
       try {
-          // Prepare payload
-          const eventPayload = { 
-              ...newEvent, 
-              name: newEvent.name.toUpperCase(),
-              venue: newEvent.venue.toUpperCase(),
-              createdAt: serverTimestamp(), 
-              attendees: [], 
-              registered: [] 
-          };
-
-          if (editingEvent) {
-             delete eventPayload.createdAt; // Don't overwrite creation time
-             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), eventPayload);
-             setEditingEvent(null);
-          } else {
-             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventPayload);
-          }
-          setShowEventForm(false);
-          // Reset form including volunteer fields
-          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [] });
+          const eventPayload = { ...newEvent, name: newEvent.name.toUpperCase(), venue: newEvent.venue.toUpperCase(), createdAt: serverTimestamp(), attendees: [], registered: [] };
+          if (editingEvent) { delete eventPayload.createdAt; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), eventPayload); setEditingEvent(null); } 
+          else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventPayload); }
+          setShowEventForm(false); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], posterUrl: '' });
       } catch (err) { console.error(err); }
   };
 
   const handleEditEvent = (ev) => {
-      setNewEvent({
-          name: ev.name,
-          startDate: ev.startDate,
-          endDate: ev.endDate,
-          startTime: ev.startTime,
-          endTime: ev.endTime,
-          venue: ev.venue,
-          description: ev.description,
-          attendanceRequired: ev.attendanceRequired || false,
-          evaluationLink: ev.evaluationLink || '',
-          isVolunteer: ev.isVolunteer || false,
-          openForAll: ev.openForAll !== undefined ? ev.openForAll : true,
-          volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 },
-          shifts: ev.shifts || []
-      });
-      setEditingEvent(ev);
-      setShowEventForm(true);
+      setNewEvent({ name: ev.name, startDate: ev.startDate, endDate: ev.endDate, startTime: ev.startTime, endTime: ev.endTime, venue: ev.venue, description: ev.description, attendanceRequired: ev.attendanceRequired || false, evaluationLink: ev.evaluationLink || '', isVolunteer: ev.isVolunteer || false, openForAll: ev.openForAll !== undefined ? ev.openForAll : true, volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 }, shifts: ev.shifts || [], posterUrl: ev.posterUrl || '' });
+      setEditingEvent(ev); setShowEventForm(true);
   };
-
-  const handleDeleteEvent = async (id) => {
-      if(!confirm("Delete this event?")) return;
-      try {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id));
-      } catch(err) { console.error(err); }
-  };
+  const handleDeleteEvent = async (id) => { if(confirm("Delete event?")) try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id)); } catch(err) { console.error(err); } };
 
   const handleToggleAttendance = async (memberId) => {
       if (!attendanceEvent || !memberId) return;
-      
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', attendanceEvent.id);
       const isPresent = attendanceEvent.attendees?.includes(memberId);
-      
       try {
-          if (isPresent) {
-              await updateDoc(eventRef, { attendees: arrayRemove(memberId) });
-          } else {
-              await updateDoc(eventRef, { attendees: arrayUnion(memberId) });
-          }
-          // Update local state to reflect change immediately (optimistic UI)
-          setAttendanceEvent(prev => ({
-              ...prev,
-              attendees: isPresent 
-                  ? prev.attendees.filter(id => id !== memberId)
-                  : [...(prev.attendees || []), memberId]
-          }));
-      } catch(err) {
-          console.error("Attendance update failed", err);
-      }
+          if (isPresent) await updateDoc(eventRef, { attendees: arrayRemove(memberId) });
+          else await updateDoc(eventRef, { attendees: arrayUnion(memberId) });
+          setAttendanceEvent(prev => ({ ...prev, attendees: isPresent ? prev.attendees.filter(id => id !== memberId) : [...(prev.attendees || []), memberId] }));
+      } catch(err) { console.error(err); }
   };
 
   const handleDownloadAttendance = () => {
     if (!attendanceEvent) return;
     const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId));
-    
-    // Robust CSV generation using Blob
     const headers = ["Name", "ID", "Position"];
     const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle]);
-    
     generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
   };
   
@@ -978,151 +926,66 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
       const isRegistered = ev.registered?.includes(profile.memberId);
       try {
-          if (isRegistered) {
-              await updateDoc(eventRef, { registered: arrayRemove(profile.memberId) });
-          } else {
-              await updateDoc(eventRef, { registered: arrayUnion(profile.memberId) });
-          }
+          if (isRegistered) await updateDoc(eventRef, { registered: arrayRemove(profile.memberId) });
+          else await updateDoc(eventRef, { registered: arrayUnion(profile.memberId) });
       } catch (err) { console.error(err); }
   };
 
-  // Volunteer Shift Signup
   const handleVolunteerSignup = async (ev, shiftId) => {
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
-      
-      // We need to clone the shifts array, modify the specific shift, and update
       const updatedShifts = ev.shifts.map(shift => {
           if (shift.id === shiftId) {
               const isVolunteered = shift.volunteers.includes(profile.memberId);
-              if (isVolunteered) {
-                  return { ...shift, volunteers: shift.volunteers.filter(id => id !== profile.memberId) };
-              } else {
-                  if (shift.volunteers.length >= shift.capacity) {
-                      alert("This shift is full!");
-                      return shift; // No change
-                  }
+              if (isVolunteered) return { ...shift, volunteers: shift.volunteers.filter(id => id !== profile.memberId) };
+              else {
+                  if (shift.volunteers.length >= shift.capacity) { alert("Shift full!"); return shift; }
                   return { ...shift, volunteers: [...shift.volunteers, profile.memberId] };
               }
           }
           return shift;
       });
-
-      // Optimistic UI update could happen here, but Firestore listener handles it mostly
-      try {
-         await updateDoc(eventRef, { shifts: updatedShifts });
-      } catch(err) { console.error("Volunteer signup error", err); }
+      try { await updateDoc(eventRef, { shifts: updatedShifts }); } catch(err) { console.error(err); }
   };
-
 
   const handlePostAnnouncement = async (e) => {
       e.preventDefault();
       try {
           if (editingAnnouncement) {
-             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', editingAnnouncement.id), {
-                 ...newAnnouncement,
-                 lastEdited: serverTimestamp()
-             });
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', editingAnnouncement.id), { ...newAnnouncement, lastEdited: serverTimestamp() });
              setEditingAnnouncement(null);
           } else {
-             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), { 
-                 ...newAnnouncement, 
-                 date: new Date().toISOString(),
-                 createdAt: serverTimestamp() 
-             });
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), { ...newAnnouncement, date: new Date().toISOString(), createdAt: serverTimestamp() });
           }
-          setShowAnnounceForm(false);
-          setNewAnnouncement({ title: '', content: '' });
+          setShowAnnounceForm(false); setNewAnnouncement({ title: '', content: '' });
       } catch (err) { console.error(err); }
   };
   
-  const handleDeleteAnnouncement = async (id) => {
-      if(!confirm("Delete this announcement?")) return;
-      try {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', id));
-      } catch(err) { console.error(err); }
-  };
-
-  const handleEditAnnouncement = (ann) => {
-      setNewAnnouncement({ title: ann.title, content: ann.content });
-      setEditingAnnouncement(ann);
-      setShowAnnounceForm(true);
-  };
-
-  const handleSaveLegacy = async () => {
-      try {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), legacyForm);
-          setIsEditingLegacy(false);
-      } catch(err) { console.error(err); }
-  };
+  const handleDeleteAnnouncement = async (id) => { if(confirm("Delete announcement?")) try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', id)); } catch(err) { console.error(err); } };
+  const handleEditAnnouncement = (ann) => { setNewAnnouncement({ title: ann.title, content: ann.content }); setEditingAnnouncement(ann); setShowAnnounceForm(true); };
+  const handleSaveLegacy = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), legacyForm); setIsEditingLegacy(false); } catch(err) { console.error(err); } };
 
   const handleApplyCommittee = async (e, targetCommittee) => {
-      e.preventDefault();
-      setSubmittingApp(true);
+      e.preventDefault(); setSubmittingApp(true);
       try {
-          // Check for existing application to prevent duplicates
           const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId));
           const snap = await getDocs(q);
-          if(!snap.empty) {
-              alert("You already have a pending application.");
-              setSubmittingApp(false);
-              return;
-          }
-
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), {
-              memberId: profile.memberId,
-              name: profile.name,
-              email: profile.email,
-              committee: targetCommittee,
-              role: committeeForm.role,
-              status: 'pending',
-              createdAt: serverTimestamp(),
-              statusUpdatedAt: serverTimestamp() // Add this so member gets notification
-          });
-          alert("Application submitted successfully!");
-      } catch(err) {
-          console.error(err);
-          alert("Failed to submit application.");
-      } finally {
-          setSubmittingApp(false);
-      }
+          if(!snap.empty) { alert("You already have a pending application."); setSubmittingApp(false); return; }
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), { memberId: profile.memberId, name: profile.name, email: profile.email, committee: targetCommittee, role: committeeForm.role, status: 'pending', createdAt: serverTimestamp(), statusUpdatedAt: serverTimestamp() });
+          alert("Application submitted!");
+      } catch(err) { console.error(err); alert("Failed."); } finally { setSubmittingApp(false); }
   };
 
-  // --- NEW ACTIONS FOR TERMINAL ---
   const handleUpdateAppStatus = async (app, status) => {
       try {
           const batch = writeBatch(db);
-          const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id);
-          batch.update(appRef, { 
-              status,
-              statusUpdatedAt: serverTimestamp() // Update timestamp for notification
-          });
-
-          if (status === 'accepted') {
-              const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId);
-              batch.update(memberRef, {
-                  accolades: arrayUnion(`${app.committee} - ${app.role}`)
-              });
-          }
-
+          batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id), { status, statusUpdatedAt: serverTimestamp() });
+          if (status === 'accepted') { batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId), { accolades: arrayUnion(`${app.committee} - ${app.role}`) }); }
           await batch.commit();
       } catch (err) { console.error(err); }
   };
 
-  const handleDeleteApp = async (id) => {
-      if (!confirm("Delete this application?")) return;
-      try {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id));
-      } catch (err) { console.error(err); }
-  };
-
-  const handleToggleRegistration = async () => {
-      try {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
-              ...hubSettings,
-              registrationOpen: !hubSettings.registrationOpen
-          });
-      } catch (err) { console.error(err); }
-  };
+  const handleDeleteApp = async (id) => { if (!confirm("Delete app?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id)); } catch (err) { console.error(err); } };
+  const handleToggleRegistration = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, registrationOpen: !hubSettings.registrationOpen }); } catch (err) { console.error(err); } };
 
   const handleDownloadFinancials = () => {
       let filtered = members;
@@ -1130,15 +993,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           const [sy, sem] = financialFilter.split('-');
           filtered = members.filter(m => m.lastRenewedSY === sy && m.lastRenewedSem === sem);
       }
-
-      // Logic: Include everyone, but mark exempt
       const headers = ["Name", "ID", "Category", "Payment Status", "Method", "Ref No"];
       const rows = filtered.map(m => {
           const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
           const status = isExempt ? 'EXEMPT' : (m.paymentStatus === 'paid' ? 'PAID' : 'UNPAID');
           return [m.name, m.memberId, m.positionCategory, status, m.paymentDetails?.method || '', m.paymentDetails?.refNo || ''];
       });
-
       generateCSV(headers, rows, `LBA_Financials_${financialFilter}.csv`);
   };
   
@@ -1148,60 +1008,37 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       try {
           const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc'));
           const snapshot = await getDocs(q);
-          
           let count = 0;
           snapshot.docs.forEach((docSnap) => {
              const data = docSnap.data();
              const category = data.positionCategory || "Member";
              const meta = getMemberIdMeta(); 
-             
              count++;
              const padded = String(count).padStart(4, '0');
              const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
              const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`;
-             
              batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId });
           });
-          
           await batch.commit();
           alert(`Database sanitized! ${count} records updated.`);
-      } catch (err) {
-          console.error("Sanitize error", err);
-          alert("Failed to sanitize: " + err.message);
-      }
+      } catch (err) { console.error("Sanitize error", err); alert("Failed."); }
   };
 
   const handleMigrateToRenewal = async () => {
-      if(!confirm("This will update ALL current members to 'Renewal' status. Proceed?")) return;
-      
+      if(!confirm("Set ALL members to 'Renewal'?")) return;
       const batch = writeBatch(db);
       try {
-          // Get all members with 'new' status or undefined status
           const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
           const snapshot = await getDocs(q);
           let count = 0;
-          
           snapshot.forEach(doc => {
               const data = doc.data();
-              if (data.membershipType !== 'renewal') {
-                  batch.update(doc.ref, { membershipType: 'renewal' });
-                  count++;
-              }
+              if (data.membershipType !== 'renewal') { batch.update(doc.ref, { membershipType: 'renewal' }); count++; }
           });
-          
-          if(count > 0) {
-              await batch.commit();
-              alert(`Migration Complete: ${count} members updated to Renewal status.`);
-          } else {
-              alert("No members needed updating.");
-          }
-      } catch (err) {
-          console.error(err);
-          alert("Migration failed.");
-      }
+          if(count > 0) { await batch.commit(); alert(`Done: ${count} updated.`); } else { alert("None needed."); }
+      } catch (err) { console.error(err); alert("Failed."); }
   };
 
-  // --- NEW FEATURES ---
   const handleExportCSV = () => {
       let dataToExport = [...members];
       if (exportFilter === 'active') dataToExport = dataToExport.filter(m => m.status === 'active');
@@ -1209,22 +1046,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       else if (exportFilter === 'officers') dataToExport = dataToExport.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
       else if (exportFilter === 'committee') dataToExport = dataToExport.filter(m => m.positionCategory === 'Committee');
       
-      const headers = ["Name", "ID", "Email", "Program", "Position", "Status"];
-      const rows = dataToExport.map(e => [e.name, e.memberId, e.email, e.program, e.specificTitle, e.status]);
-
+      const headers = ["Name", "ID", "Email", "Program", "Position", "Status", "JoinedDate"];
+      const rows = dataToExport.map(e => [e.name, e.memberId, e.email, e.program, e.specificTitle, e.status, e.joinedDate]);
       generateCSV(headers, rows, `LBA_Registry_${exportFilter}.csv`);
   };
 
   const handleBulkEmail = () => {
-    const recipients = selectedBaristas.length > 0 
-        ? members.filter(m => selectedBaristas.includes(m.memberId))
-        : filteredRegistry;
-    
-    const emails = recipients
-        .map(m => m.email)
-        .filter(e => e)
-        .join(',');
-        
+    const recipients = selectedBaristas.length > 0 ? members.filter(m => selectedBaristas.includes(m.memberId)) : filteredRegistry;
+    const emails = recipients.map(m => m.email).filter(e => e).join(',');
     if (!emails) return alert("No valid emails found.");
     window.location.href = `mailto:?bcc=${emails}`;
   };
@@ -1232,60 +1061,31 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleGiveAccolade = async () => {
       if (!accoladeText.trim() || !showAccoladeModal) return;
       try {
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', showAccoladeModal.memberId);
-          await updateDoc(memberRef, {
-              accolades: arrayUnion(accoladeText)
-          });
-          setAccoladeText("");
-          setShowAccoladeModal(null);
-          alert("Accolade awarded!");
-      } catch (err) {
-          console.error("Error giving accolade:", err);
-          alert("Failed to award accolade.");
-      }
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', showAccoladeModal.memberId), { accolades: arrayUnion(accoladeText) });
+          setAccoladeText(""); setShowAccoladeModal(null); alert("Accolade awarded!");
+      } catch (err) { console.error(err); }
   };
 
   const handleResetPassword = async (memberId, email, name) => {
     if (!confirm(`Reset password for ${name}?`)) return;
     const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
-    
     const subject = "LBA Password Reset Request";
-    const body = `Dear ${name},
-
-We received a request to reset the password associated with your membership account at LPU Baristas' Association.
-To regain access to your account, please use the following credentials. For security purposes, we recommend you copy and paste these details directly to avoid errors.
-
-Member ID: ${memberId}
-Temporary Password: ${tempPassword}
-
-How to Access Your Account:
-Click the link below to access the secure login portal:
-${window.location.origin}
-
-Enter your Member ID and the Temporary Password provided above.
-Once logged in, you will be prompted to create a new, permanent password immediately.
-
-Please Note:
-This temporary password will expire in 1 hour (manual enforcement required).
-If you did not request this password reset, please contact our support team immediately at lbaofficial.pr@gmail.com and do not click the link above.
-
-Thank you,
-The LPU Baristas' Association Support Team
-${window.location.origin}`;
-
+    const body = `Dear ${name},\n\nMember ID: ${memberId}\nTemporary Password: ${tempPassword}\n\nLogin at: ${window.location.origin}`;
     try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), {
-            password: tempPassword
-        });
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { password: tempPassword });
         window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        alert("Password reset! Opening email client...");
-    } catch (err) {
-        console.error(err);
-        alert("Failed to reset password.");
-    }
+    } catch (err) { console.error(err); }
   };
 
-  // Registry Helpers
+  // --- REQUIREMENT: Update Joined Date (Manual Input) ---
+  const handleUpdateJoinedDate = async (memberId, newDate) => {
+    if(!isAdmin) return;
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { joinedDate: new Date(newDate).toISOString() });
+        setEditingJoinedDate(null);
+    } catch(err) { console.error(err); }
+  };
+
   const filteredRegistry = useMemo(() => {
     let res = [...members];
     if (searchQuery) res = res.filter(m => (m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase())) || (m.memberId && m.memberId.toLowerCase().includes(searchQuery.toLowerCase())));
@@ -1293,21 +1093,18 @@ ${window.location.origin}`;
     return res;
   }, [members, searchQuery, sortConfig]);
 
-  // Pagination Logic
   const totalPages = Math.ceil(filteredRegistry.length / itemsPerPage);
   const paginatedRegistry = filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const nextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
   const prevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
 
-
   const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
   const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
 
   const handleUpdatePosition = async (targetId, cat, specific = "") => {
-    if (!isAdmin) return; // RESTRICTED: Only Admins (Officer/Execomm) can update positions
+    if (!isAdmin) return; 
     const target = members.find(m => m.memberId === targetId);
     if (!target) return;
-    
     let newId = target.memberId;
     const isL = ['Officer', 'Execomm', 'Committee'].includes(cat);
     const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId;
@@ -1317,16 +1114,8 @@ ${window.location.origin}`;
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates });
   };
 
-  const initiateRemoveMember = (mid, name) => {
-    setConfirmDelete({ mid, name });
-  };
-
-  const confirmRemoveMember = async () => {
-    if (!confirmDelete) return;
-    try {
-        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid));
-    } catch(e) { console.error(e); } finally { setConfirmDelete(null); }
-  };
+  const initiateRemoveMember = (mid, name) => { setConfirmDelete({ mid, name }); };
+  const confirmRemoveMember = async () => { if (!confirmDelete) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid)); } catch(e) { console.error(e); } finally { setConfirmDelete(null); } };
   
   const handleBulkImportCSV = async (e) => {
     const file = e.target.files[0];
@@ -1353,24 +1142,12 @@ ${window.location.origin}`;
     reader.readAsText(file);
   };
   
-  const downloadImportTemplate = () => {
-    const headers = ["Name", "Email", "Program", "PositionCategory", "SpecificTitle"];
-    const rows = [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]];
-    generateCSV(headers, rows, "LBA_Import_Template.csv");
-  };
-
   const handleRotateSecurityKeys = async () => {
-    const newKeys = {
-        officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(),
-        headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(),
-        commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase()
-    };
+    const newKeys = { officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(), headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(), commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase() };
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys);
   };
 
-  // Suggestion Download Helper
   const handleDownloadSuggestions = () => {
-    // Filter suggestions locally for the last 7 days
     const filteredSuggestions = suggestions.filter(s => {
         if (!s.createdAt) return true; 
         const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
@@ -1378,25 +1155,19 @@ ${window.location.origin}`;
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
         return date > oneWeekAgo;
     });
-
     const headers = ["Date", "Suggestion"];
-    const rows = filteredSuggestions.map(s => [
-        s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now",
-        s.text
-    ]);
+    const rows = filteredSuggestions.map(s => [s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now", s.text]);
     generateCSV(headers, rows, `LBA_Suggestions_${new Date().toISOString().split('T')[0]}.csv`);
   };
 
-
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: BarChart3 },
-    // Removed Settings from menu
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'team', label: 'Brew Crew', icon: Users2 },
     { id: 'events', label: "What's Brewing?", icon: Calendar, hasNotification: notifications.events },
     { id: 'announcements', label: 'Grind Report', icon: Bell, hasNotification: notifications.announcements },
     { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare, hasNotification: notifications.suggestions },
-    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt }, // Added new tab
+    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt }, 
     ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members }] : []),
     ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
@@ -1406,6 +1177,37 @@ ${window.location.origin}`;
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row text-[#3E2723] font-sans relative">
+      {/* --- RENEWAL MODAL (GCASH ONLY) --- */}
+      {showRenewalModal && (
+         <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+            <div className="bg-white rounded-[40px] max-w-sm w-full p-8 shadow-2xl border-t-[12px] border-[#FDB813]">
+               <h4 className="font-serif text-2xl font-black uppercase text-center mb-2">Renew Membership</h4>
+               <p className="text-center text-xs text-gray-500 mb-6">30-Day Renewal Period Active.<br/>Renew now to restore full access.</p>
+               
+               <div className="bg-blue-50 p-4 rounded-xl mb-4 border border-blue-100">
+                  <p className="text-[10px] font-black uppercase text-blue-800 mb-1">GCash Only</p>
+                  <p className="text-xl font-black text-[#3E2723]">₱50.00</p>
+                  <p className="text-[10px] text-gray-500 mt-2">Send to: <span className="font-bold text-[#3E2723]">0906 375 1402</span></p>
+               </div>
+
+               <form onSubmit={handleRenewalSubmit} className="space-y-4">
+                   <input 
+                      type="text" 
+                      required 
+                      placeholder="GCash Reference No." 
+                      className="w-full p-4 border border-amber-200 rounded-2xl font-bold uppercase text-xs outline-none focus:border-[#3E2723]" 
+                      value={renewalRef} 
+                      onChange={(e) => setRenewalRef(e.target.value)} 
+                   />
+                   <div className="flex gap-2">
+                       <button type="button" onClick={() => setShowRenewalModal(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-500">Close</button>
+                       <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-[#FDB813] font-black uppercase text-xs">Submit</button>
+                   </div>
+               </form>
+            </div>
+         </div>
+      )}
+
       {/* Confirmation Modal */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
@@ -1437,7 +1239,6 @@ ${window.location.origin}`;
                 </div>
                 
                 {(() => {
-                    // Filter members who registered for this event
                     let targetList = members;
                     if (attendanceEvent.isVolunteer && attendanceEvent.shifts) {
                         const volunteerIds = attendanceEvent.shifts.flatMap(s => s.volunteers);
@@ -1445,7 +1246,6 @@ ${window.location.origin}`;
                     } else if (attendanceEvent.registered && attendanceEvent.registered.length > 0) {
                         targetList = members.filter(m => attendanceEvent.registered.includes(m.memberId));
                     }
-                    
                     const sortedMembers = [...targetList].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
                     return (
@@ -1456,35 +1256,22 @@ ${window.location.origin}`;
                                     Present: {attendanceEvent.attendees?.length || 0} / {targetList.length}
                                 </span>
                             </div>
-
                             <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                                 {sortedMembers.length > 0 ? (
                                     sortedMembers.map(m => {
                                         const isPresent = attendanceEvent.attendees?.includes(m.memberId);
                                         return (
-                                            <div key={m.id} 
-                                                 onClick={() => handleToggleAttendance(m.memberId)}
-                                                 className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent hover:bg-amber-50'}`}>
+                                            <div key={m.id} onClick={() => handleToggleAttendance(m.memberId)} className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent hover:bg-amber-50'}`}>
                                                 <div className="flex items-center gap-3">
-                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>
-                                                        {m.name ? m.name.charAt(0) : "?"}
-                                                    </div>
-                                                    <div>
-                                                        <p className={`text-xs font-bold uppercase ${isPresent ? 'text-green-900' : 'text-gray-600'}`}>{m.name}</p>
-                                                        <p className="text-[9px] text-gray-400">{m.memberId}</p>
-                                                    </div>
+                                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>{m.name ? m.name.charAt(0) : "?"}</div>
+                                                    <div><p className={`text-xs font-bold uppercase ${isPresent ? 'text-green-900' : 'text-gray-600'}`}>{m.name}</p><p className="text-[9px] text-gray-400">{m.memberId}</p></div>
                                                 </div>
-                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isPresent ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>
-                                                    {isPresent && <CheckCircle2 size={14} className="text-white" />}
-                                                </div>
+                                                <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 ${isPresent ? 'bg-green-500 border-green-500' : 'border-gray-300'}`}>{isPresent && <CheckCircle2 size={14} className="text-white" />}</div>
                                             </div>
                                         );
                                     })
                                 ) : (
-                                    <div className="text-center py-10 opacity-50">
-                                        <p className="text-sm font-bold">No registered members found.</p>
-                                        <p className="text-xs">Members must register for the event to appear here.</p>
-                                    </div>
+                                    <div className="text-center py-10 opacity-50"><p className="text-sm font-bold">No registered members found.</p><p className="text-xs">Members must register for the event to appear here.</p></div>
                                 )}
                             </div>
                         </>
@@ -1509,125 +1296,49 @@ ${window.location.origin}`;
         </div>
       )}
 
-      <aside className={`
-          bg-[#3E2723] text-amber-50 flex-col 
-          md:w-64 md:flex 
-          ${mobileMenuOpen ? 'fixed inset-0 z-50 w-64 shadow-2xl flex' : 'hidden'}
-      `}>
-        <div className="p-8 border-b border-amber-900/30 text-center">
-           <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA" className="w-20 h-20 object-contain mx-auto mb-4" />
-           <h1 className="font-serif font-black text-[10px] uppercase">LPU Baristas' Association</h1>
-        </div>
-        
-        {/* Mobile Close Button */}
-        <div className="md:hidden p-4 flex justify-end absolute top-2 right-2">
-            <button onClick={() => setMobileMenuOpen(false)}><X size={24} /></button>
-        </div>
-
+      <aside className={`bg-[#3E2723] text-amber-50 flex-col md:w-64 md:flex ${mobileMenuOpen ? 'fixed inset-0 z-50 w-64 shadow-2xl flex' : 'hidden'}`}>
+        <div className="p-8 border-b border-amber-900/30 text-center"><img src={getDirectLink(ORG_LOGO_URL)} alt="LBA" className="w-20 h-20 object-contain mx-auto mb-4" /><h1 className="font-serif font-black text-[10px] uppercase">LPU Baristas' Association</h1></div>
+        <div className="md:hidden p-4 flex justify-end absolute top-2 right-2"><button onClick={() => setMobileMenuOpen(false)}><X size={24} /></button></div>
         <nav className="p-4 space-y-2 flex-1 overflow-y-auto">
           {menuItems.map(item => {
              const active = view === item.id;
-             const Icon = item.icon; // Cap variable for JSX
-             return (
-                <button key={item.id} onClick={() => { setView(item.id); updateLastVisited(item.id); setMobileMenuOpen(false); }} className={active ? activeMenuClass : inactiveMenuClass}>
-                  <Icon size={18}/>
-                  <span className="uppercase text-[10px] font-black">{item.label}</span>
-                  {item.hasNotification && (
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-sm"></div>
-                  )}
-                </button>
-             );
+             const Icon = item.icon; 
+             return (<button key={item.id} onClick={() => { setView(item.id); updateLastVisited(item.id); setMobileMenuOpen(false); }} className={active ? activeMenuClass : inactiveMenuClass}><Icon size={18}/><span className="uppercase text-[10px] font-black">{item.label}</span>{item.hasNotification && (<div className="absolute right-4 top-1/2 -translate-y-1/2 w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-sm"></div>)}</button>);
           })}
         </nav>
-        
-        {/* Social Media Links */}
         <div className="p-6 border-t border-amber-900/30 space-y-4">
-            <div className="flex justify-center gap-4">
-                <a href={SOCIAL_LINKS.facebook} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Facebook size={18} /></a>
-                <a href={SOCIAL_LINKS.instagram} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Instagram size={18} /></a>
-                <a href={SOCIAL_LINKS.tiktok} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Music size={18} /></a>
-                <a href={`mailto:${SOCIAL_LINKS.email}`} className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Mail size={18} /></a>
-            </div>
-            <button onClick={() => { 
-                localStorage.removeItem('lba_profile'); 
-                logout(); 
-            }} className="w-full flex items-center justify-center gap-2 text-red-400 font-black text-[10px] uppercase hover:text-red-300"><LogOut size={16} /> Exit Hub</button>
+            <div className="flex justify-center gap-4"><a href={SOCIAL_LINKS.facebook} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Facebook size={18} /></a><a href={SOCIAL_LINKS.instagram} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Instagram size={18} /></a><a href={SOCIAL_LINKS.tiktok} target="_blank" rel="noreferrer" className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Music size={18} /></a><a href={`mailto:${SOCIAL_LINKS.email}`} className="text-amber-200/60 hover:text-[#FDB813] transition-colors"><Mail size={18} /></a></div>
+            <button onClick={() => { localStorage.removeItem('lba_profile'); logout(); }} className="w-full flex items-center justify-center gap-2 text-red-400 font-black text-[10px] uppercase hover:text-red-300"><LogOut size={16} /> Exit Hub</button>
         </div>
       </aside>
       
-      {/* Overlay for mobile menu */}
       {mobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)}></div>}
 
       <main className="flex-1 p-4 md:p-10 overflow-y-auto">
         <header className="flex justify-between items-center mb-10">
-          <div className="flex items-center gap-4">
-              {/* Mobile Menu Toggle */}
-              <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-[#3E2723]"><Menu size={24}/></button>
-              <h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2>
-          </div>
-          
-          {/* Made profile clickable for settings */}
-          <div 
-            onClick={() => setView('settings')}
-            className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors"
-            title="Edit Profile"
-          >
+          <div className="flex items-center gap-4"><button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-[#3E2723]"><Menu size={24}/></button><h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2></div>
+          <div onClick={() => setView('settings')} className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors" title="Edit Profile">
             <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover" />
             <div className="hidden sm:block"><p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || profile.name.split(' ')[0]}</p><p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p></div>
           </div>
         </header>
 
+         {isExpired && (
+             <div className="bg-red-500 text-white p-6 rounded-[32px] shadow-lg mb-8 flex flex-col md:flex-row items-center justify-between gap-4 animate-bounce-in">
+                 <div className="flex items-center gap-4"><div className="bg-white/20 p-3 rounded-full"><AlertTriangle size={24}/></div><div><h3 className="font-black uppercase text-lg">Membership Expired</h3><p className="text-xs text-white/90">Your renewal window has passed. You are in View-Only mode.</p></div></div>
+                 <button onClick={() => setShowRenewalModal(true)} className="bg-white text-red-600 px-6 py-3 rounded-xl font-black uppercase text-xs shadow-md hover:bg-gray-100 transition-colors">Renew Now (GCash)</button>
+             </div>
+         )}
+
         {view === 'home' && (
            <div className="space-y-10 animate-fadeIn">
-              {/* Birthday Banner */}
-              {isBirthday && (
-                  <div className="bg-gradient-to-r from-pink-500 to-rose-500 p-8 rounded-[40px] shadow-xl mb-8 flex items-center gap-6 relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-8 opacity-10"><Cake size={120} /></div>
-                      <div className="bg-white/20 p-4 rounded-full text-white"><Cake size={40} /></div>
-                      <div className="text-white z-10">
-                          <h3 className="font-serif text-3xl font-black uppercase">Happy Birthday!</h3>
-                          <p className="font-medium text-white/90">Wishing you the happiest of days, {profile.nickname || profile.name.split(' ')[0]}! 🎂</p>
-                      </div>
-                  </div>
-              )}
+              {isBirthday && (<div className="bg-gradient-to-r from-pink-500 to-rose-500 p-8 rounded-[40px] shadow-xl mb-8 flex items-center gap-6 relative overflow-hidden"><div className="absolute top-0 right-0 p-8 opacity-10"><Cake size={120} /></div><div className="bg-white/20 p-4 rounded-full text-white"><Cake size={40} /></div><div className="text-white z-10"><h3 className="font-serif text-3xl font-black uppercase">Happy Birthday!</h3><p className="font-medium text-white/90">Wishing you the happiest of days, {profile.nickname || profile.name.split(' ')[0]}! 🎂</p></div></div>)}
+              {userApplications.length > 0 && (<div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm mb-8"><h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Briefcase size={16} className="text-amber-500"/> Your Applications</h4><div className="space-y-3">{userApplications.map(app => (<div key={app.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-xl"><div><p className="font-bold text-xs uppercase text-[#3E2723]">{app.committee}</p><p className="text-[10px] text-gray-500">{app.role}</p></div><div className="text-right"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${app.status === 'accepted' ? 'bg-green-100 text-green-700' : app.status === 'denied' ? 'bg-red-100 text-red-700' : app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{app.status === 'for_interview' ? 'For Interview - Check Email' : (app.status || 'Submitted - For Review')}</span><p className="text-[8px] text-gray-400 mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p></div></div>))}</div></div>)}
 
-              {/* Applicant Dashboard: Status Card */}
-              {userApplications.length > 0 && (
-                  <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm mb-8">
-                      <h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
-                          <Briefcase size={16} className="text-amber-500"/> Your Applications
-                      </h4>
-                      <div className="space-y-3">
-                          {userApplications.map(app => (
-                              <div key={app.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-xl">
-                                  <div>
-                                      <p className="font-bold text-xs uppercase text-[#3E2723]">{app.committee}</p>
-                                      <p className="text-[10px] text-gray-500">{app.role}</p>
-                                  </div>
-                                  <div className="text-right">
-                                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
-                                          app.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                          app.status === 'denied' ? 'bg-red-100 text-red-700' :
-                                          app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' :
-                                          'bg-yellow-100 text-yellow-700'
-                                      }`}>
-                                          {app.status === 'for_interview' ? 'For Interview - Check Email' : (app.status || 'Submitted - For Review')}
-                                      </span>
-                                      <p className="text-[8px] text-gray-400 mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              )}
-
-              {/* Profile Card & Notices Grid */}
               <div className="bg-[#3E2723] rounded-[48px] p-8 text-white relative overflow-hidden shadow-2xl border-4 border-[#FDB813] mb-8">
-                  {/* ... (Existing Profile Header) ... */}
                   <div className="flex flex-col md:flex-row gap-6 items-start md:items-center mb-6">
                       <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-24 h-24 rounded-full object-cover border-4 border-white/20" />
                       <div>
-                          {/* Updated Layout: Full Name, Nickname, Title */}
                           <h3 className="font-serif text-2xl sm:text-3xl font-black uppercase leading-tight">{profile.name}</h3>
                           <p className="text-white/90 font-bold text-lg uppercase tracking-wide">"{profile.nickname || 'Barista'}"</p>
                           <p className="text-[#FDB813] font-black text-sm uppercase mt-1">{profile.specificTitle || 'Member'}</p>
@@ -1637,115 +1348,19 @@ ${window.location.origin}`;
                      <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
                      <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
                      <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
-                     <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
+                     {/* Digital ID Display: Days Since Member */}
+                     <div className="bg-blue-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Member Since: {formatDate(profile.joinedDate)} ({daysSinceJoined} Days)</div>
                   </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                 {/* Left Column: Notices & Upcoming Events */}
                  <div className="lg:col-span-2 space-y-6">
-                    {/* Latest Notices */}
-                    <div>
-                        <h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2">
-                          <Bell size={20} className="text-amber-600"/> Latest Notices
-                        </h3>
-                        <div className="space-y-4">
-                           {announcements.length === 0 ? <p className="text-xs text-gray-500">No new notices.</p> : announcements.slice(0, 2).map(ann => (
-                             <div key={ann.id} className="bg-white p-6 rounded-3xl border border-amber-100 shadow-sm">
-                                <div className="flex justify-between items-start mb-2">
-                                  <h4 className="font-black text-sm uppercase text-[#3E2723]">{ann.title}</h4>
-                                  <span className="text-[8px] font-bold text-gray-400 uppercase">{formatDate(ann.date)}</span>
-                                </div>
-                                <p className="text-xs text-gray-600 line-clamp-2">{ann.content}</p>
-                             </div>
-                           ))}
-                        </div>
-                    </div>
-
-                    {/* Upcoming Events */}
-                    <div>
-                        <h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2">
-                          <Calendar size={20} className="text-amber-600"/> Upcoming Events
-                        </h3>
-                        <div className="space-y-4">
-                           {events.length === 0 ? <p className="text-xs text-gray-500">No upcoming events.</p> : events.slice(0, 3).map(ev => {
-                               const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
-                               return (
-                                 <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
-                                    <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
-                                       <span className="text-xs font-black">{day}</span>
-                                       <span className="text-[8px] uppercase">{month}</span>
-                                    </div>
-                                    <div className="min-w-0">
-                                       <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
-                                       <p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p>
-                                    </div>
-                                 </div>
-                               );
-                           })}
-                        </div>
-                    </div>
+                    <div><h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Bell size={20} className="text-amber-600"/> Latest Notices</h3><div className="space-y-4">{announcements.length === 0 ? <p className="text-xs text-gray-500">No new notices.</p> : announcements.slice(0, 2).map(ann => (<div key={ann.id} className="bg-white p-6 rounded-3xl border border-amber-100 shadow-sm"><div className="flex justify-between items-start mb-2"><h4 className="font-black text-sm uppercase text-[#3E2723]">{ann.title}</h4><span className="text-[8px] font-bold text-gray-400 uppercase">{formatDate(ann.date)}</span></div><p className="text-xs text-gray-600 line-clamp-2">{ann.content}</p></div>))}</div></div>
+                    <div><h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Calendar size={20} className="text-amber-600"/> Upcoming Events</h3><div className="space-y-4">{events.length === 0 ? <p className="text-xs text-gray-500">No upcoming events.</p> : events.slice(0, 3).map(ev => { const { day, month } = getEventDateParts(ev.startDate, ev.endDate); return (<div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4"><div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0"><span className="text-xs font-black">{day}</span><span className="text-[8px] uppercase">{month}</span></div><div className="min-w-0"><h4 className="font-black text-xs uppercase truncate">{ev.name}</h4><p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p></div></div>); })}</div></div>
                  </div>
-
-                 {/* Right Column: Achievements & History */}
                  <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-[32px] border border-amber-100 h-full">
-                       <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
-                         <Trophy size={16} className="text-amber-500"/> Trophy Case
-                       </h3>
-                       <div className="grid grid-cols-3 gap-3">
-                          {/* Dynamic Badges */}
-                          <div className="flex flex-col items-center gap-1">
-                             <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">☕</div>
-                             <span className="text-[8px] font-black uppercase text-amber-900/60 text-center">Member</span>
-                          </div>
-                          
-                          {isOfficer && (
-                              <div className="flex flex-col items-center gap-1">
-                                  <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>
-                                  <span className="text-[8px] font-black uppercase text-indigo-900/60 text-center">Officer</span>
-                              </div>
-                          )}
-                          
-                          {/* Safe check for memberId before calculation */}
-                          {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && (
-                              <div className="flex flex-col items-center gap-1">
-                                  <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>
-                                  <span className="text-[8px] font-black uppercase text-yellow-900/60 text-center">Veteran</span>
-                              </div>
-                          )}
-                          
-                          {/* Added Custom Accolades */}
-                          {profile.accolades?.map((acc, i) => (
-                             <div key={i} className="flex flex-col items-center gap-1">
-                                <div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex items-center justify-center text-2xl cursor-help">🏆</div>
-                                <span className="text-[8px] font-black uppercase text-purple-900/60 text-center leading-tight line-clamp-2">{acc}</span>
-                             </div>
-                          ))}
-                       </div>
-                    </div>
-                    
-                    <div className="bg-white p-6 rounded-[32px] border border-amber-100">
-                       <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
-                         <Clock size={16} className="text-blue-500"/> Activity Log
-                       </h3>
-                       <ul className="space-y-3">
-                          <li className="flex items-center gap-3">
-                             <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                             <div>
-                               <p className="text-[10px] font-bold">Logged In</p>
-                               <p className="text-[8px] text-gray-400">Just now</p>
-                             </div>
-                          </li>
-                          <li className="flex items-center gap-3 opacity-50">
-                             <div className="w-2 h-2 rounded-full bg-gray-300"></div>
-                             <div>
-                               <p className="text-[10px] font-bold">Joined Association</p>
-                               <p className="text-[8px] text-gray-400">{formatDate(profile.joinedDate)}</p>
-                             </div>
-                          </li>
-                       </ul>
-                    </div>
+                    <div className="bg-white p-6 rounded-[32px] border border-amber-100 h-full"><h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Trophy size={16} className="text-amber-500"/> Trophy Case</h3><div className="grid grid-cols-3 gap-3"><div className="flex flex-col items-center gap-1"><div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">☕</div><span className="text-[8px] font-black uppercase text-amber-900/60 text-center">Member</span></div>{isOfficer && (<div className="flex flex-col items-center gap-1"><div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div><span className="text-[8px] font-black uppercase text-indigo-900/60 text-center">Officer</span></div>)}{daysSinceJoined > 365 && (<div className="flex flex-col items-center gap-1"><div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div><span className="text-[8px] font-black uppercase text-yellow-900/60 text-center">1+ Year</span></div>)}{profile.accolades?.map((acc, i) => (<div key={i} className="flex flex-col items-center gap-1"><div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex items-center justify-center text-2xl cursor-help">🏆</div><span className="text-[8px] font-black uppercase text-purple-900/60 text-center leading-tight line-clamp-2">{acc}</span></div>))}</div></div>
+                    <div className="bg-white p-6 rounded-[32px] border border-amber-100"><h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Clock size={16} className="text-blue-500"/> Activity Log</h3><ul className="space-y-3"><li className="flex items-center gap-3"><div className="w-2 h-2 rounded-full bg-green-500"></div><div><p className="text-[10px] font-bold">Logged In</p><p className="text-[8px] text-gray-400">Just now</p></div></li><li className="flex items-center gap-3 opacity-50"><div className="w-2 h-2 rounded-full bg-gray-300"></div><div><p className="text-[10px] font-bold">Joined Association</p><p className="text-[8px] text-gray-400">{formatDate(profile.joinedDate)}</p></div></li></ul></div>
                  </div>
               </div>
            </div>
@@ -1753,67 +1368,23 @@ ${window.location.origin}`;
 
         {view === 'about' && (
            <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-6">
-              <div className="flex items-center justify-between border-b pb-4 border-amber-100">
-                 <div className="flex items-center gap-4">
-                    <StatIcon icon={History} variant="amber" />
-                    <h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3>
-                 </div>
-                 {isOfficer && <button onClick={() => setIsEditingLegacy(!isEditingLegacy)} className="text-amber-500 text-xs font-bold uppercase underline">Edit</button>}
-              </div>
+              <div className="flex items-center justify-between border-b pb-4 border-amber-100"><div className="flex items-center gap-4"><StatIcon icon={History} variant="amber" /><h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3></div>{isOfficer && <button onClick={() => setIsEditingLegacy(!isEditingLegacy)} className="text-amber-500 text-xs font-bold uppercase underline">Edit</button>}</div>
               {isEditingLegacy ? (
                   <div className="space-y-4">
-                      <input type="text" placeholder="Image URL" className="w-full p-3 border rounded-xl text-xs" value={legacyForm.imageUrl} onChange={e => setLegacyForm({...legacyForm, imageUrl: e.target.value})} />
-                      <p className="text-[10px] text-gray-400">Preferred Image Size: 16:9 (Landscape)</p>
-                      
-                      <div className="flex gap-2">
-                        <input type="text" placeholder="Gallery Folder URL (Optional)" className="flex-1 p-3 border rounded-xl text-xs" value={legacyForm.galleryUrl || ""} onChange={e => setLegacyForm({...legacyForm, galleryUrl: e.target.value})} />
-                        {legacyForm.galleryUrl && <a href={ensureAbsoluteUrl(legacyForm.galleryUrl)} target="_blank" className="p-3 bg-gray-100 rounded-xl text-gray-500 hover:text-amber-600"><LinkIcon size={16}/></a>}
-                      </div>
-
+                      <input type="text" placeholder="Cover Image URL" className="w-full p-3 border rounded-xl text-xs" value={legacyForm.imageUrl} onChange={e => setLegacyForm({...legacyForm, imageUrl: e.target.value})} />
+                      <div className="flex gap-2"><input type="text" placeholder="Gallery Folder URL (Optional)" className="flex-1 p-3 border rounded-xl text-xs" value={legacyForm.galleryUrl || ""} onChange={e => setLegacyForm({...legacyForm, galleryUrl: e.target.value})} /></div>
                       <textarea className="w-full p-3 border rounded-xl text-xs h-64" value={legacyForm.body} onChange={e => setLegacyForm({...legacyForm, body: e.target.value})}></textarea>
-                      
-                      <div className="border-t border-amber-100 pt-4">
-                          <p className="text-[10px] font-bold text-gray-500 uppercase mb-2">Milestones & Achievements</p>
-                          <div className="flex gap-2 mb-2">
-                              <input type="text" placeholder="Add an event or recognition..." className="flex-1 p-3 border rounded-xl text-xs" value={tempAchievement} onChange={e => setTempAchievement(e.target.value)} />
-                              <button onClick={handleAddAchievement} className="bg-amber-500 text-white p-3 rounded-xl"><Plus size={16}/></button>
-                          </div>
-                          <ul className="space-y-2">
-                              {legacyForm.achievements?.map((ach, i) => (
-                                  <li key={i} className="flex justify-between items-center text-xs bg-gray-50 p-2 rounded-lg">
-                                      <span>• {ach}</span>
-                                      <button onClick={() => handleRemoveAchievement(i)} className="text-red-400"><X size={12}/></button>
-                                  </li>
-                              ))}
-                          </ul>
-                      </div>
-
+                      <div className="border-t border-amber-100 pt-4"><p className="text-[10px] font-bold text-gray-500 uppercase mb-2">Photo Carousel (Add Image URLs)</p><div className="flex gap-2 mb-2"><input type="text" placeholder="Paste Image URL..." className="flex-1 p-3 border rounded-xl text-xs" value={tempCarouselImage} onChange={e => setTempCarouselImage(e.target.value)} /><button onClick={handleAddCarouselImage} className="bg-blue-500 text-white p-3 rounded-xl"><Plus size={16}/></button></div><ul className="space-y-2">{legacyForm.carouselImages?.map((url, i) => (<li key={i} className="flex justify-between items-center text-xs bg-gray-50 p-2 rounded-lg"><span className="truncate w-3/4">{url}</span><button onClick={() => handleRemoveCarouselImage(i)} className="text-red-400"><X size={12}/></button></li>))}</ul></div>
+                      <div className="border-t border-amber-100 pt-4"><p className="text-[10px] font-bold text-gray-500 uppercase mb-2">Past Participations & Achievements</p><div className="flex gap-2 mb-2"><input type="text" placeholder="Add an event or recognition..." className="flex-1 p-3 border rounded-xl text-xs" value={tempAchievement} onChange={e => setTempAchievement(e.target.value)} /><button onClick={handleAddAchievement} className="bg-amber-500 text-white p-3 rounded-xl"><Plus size={16}/></button></div><ul className="space-y-2">{legacyForm.achievements?.map((ach, i) => (<li key={i} className="flex justify-between items-center text-xs bg-gray-50 p-2 rounded-lg"><span>• {ach}</span><button onClick={() => handleRemoveAchievement(i)} className="text-red-400"><X size={12}/></button></li>))}</ul></div>
                       <button onClick={handleSaveLegacy} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl text-xs font-bold uppercase w-full">Save Story</button>
                   </div>
               ) : (
                   <>
                     {legacyContent?.imageUrl && <img src={getDirectLink(legacyContent.imageUrl)} className="w-full h-64 object-cover rounded-3xl mb-4" />}
                     <p className="text-sm leading-relaxed text-gray-600 whitespace-pre-wrap mb-6">{legacyContent?.body || "History not yet written."}</p>
-                    
-                    {legacyContent?.galleryUrl && (
-                        <a href={ensureAbsoluteUrl(legacyContent.galleryUrl)} target="_blank" className="flex items-center justify-center gap-2 w-full p-4 bg-amber-50 text-amber-800 rounded-2xl font-bold uppercase text-xs hover:bg-amber-100 transition-colors mb-8">
-                            <Image size={16}/> View Photo Gallery
-                        </a>
-                    )}
-
-                    {legacyContent?.achievements?.length > 0 && (
-                        <div>
-                            <h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Award size={16} className="text-amber-500"/> Milestones & Achievements</h4>
-                            <ul className="space-y-3">
-                                {legacyContent.achievements.map((ach, i) => (
-                                    <li key={i} className="flex items-start gap-3 text-xs text-gray-600">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0"></div>
-                                        <span>{ach}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
+                    {legacyContent?.carouselImages?.length > 0 && (<div className="mb-8"><div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">{legacyContent.carouselImages.map((url, i) => (<img key={i} src={url} className="h-40 w-auto rounded-2xl shadow-sm object-cover flex-shrink-0 border border-gray-100" />))}</div></div>)}
+                    {legacyContent?.galleryUrl && (<a href={ensureAbsoluteUrl(legacyContent.galleryUrl)} target="_blank" className="flex items-center justify-center gap-2 w-full p-4 bg-amber-50 text-amber-800 rounded-2xl font-bold uppercase text-xs hover:bg-amber-100 transition-colors mb-8"><Image size={16}/> View Photo Gallery Folder</a>)}
+                    {legacyContent?.achievements?.length > 0 && (<div><h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Award size={16} className="text-amber-500"/> Past Participations & Achievements</h4><ul className="space-y-3">{legacyContent.achievements.map((ach, i) => (<li key={i} className="flex items-start gap-3 text-xs text-gray-600"><div className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0"></div><span>{ach}</span></li>))}</ul></div>)}
                   </>
               )}
            </div>
@@ -1821,60 +1392,12 @@ ${window.location.origin}`;
 
         {view === 'team' && (
            <div className="space-y-6">
-              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
-                 <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
-                 <p className="text-amber-500 font-bold text-xs uppercase tracking-widest">Officers & Committee</p>
-              </div>
-              
-              {/* Hierarchy Display */}
+              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center"><h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3><p className="text-amber-500 font-bold text-xs uppercase tracking-widest">Officers & Committee</p></div>
               <div className="space-y-8">
-                  {/* Tier 1: Pres & VP */}
-                  {teamStructure.tier1.length > 0 && (
-                      <div className="flex flex-wrap justify-center gap-6 max-w-2xl mx-auto">
-                          {teamStructure.tier1.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
-                      </div>
-                  )}
-                  
-                  {/* Tier 2: Secretaries */}
-                  {teamStructure.tier2.length > 0 && (
-                      <div className="flex flex-wrap justify-center gap-6 max-w-2xl mx-auto">
-                          {teamStructure.tier2.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
-                      </div>
-                  )}
-                  
-                  {/* Tier 3: Other Officers */}
-                  {teamStructure.tier3.length > 0 && (
-                      <div className="flex flex-wrap justify-center gap-6">
-                          {teamStructure.tier3.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
-                      </div>
-                  )}
-                  
-                  {/* Committees Section */}
-                  {(teamStructure.committees.heads.length > 0 || teamStructure.committees.members.length > 0) && (
-                      <div className="pt-8 border-t border-amber-200">
-                          <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] text-center mb-6">Committees</h4>
-                          
-                          {/* Heads Row */}
-                          {teamStructure.committees.heads.length > 0 && (
-                              <div className="mb-6">
-                                  <p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Heads</p>
-                                  <div className="flex flex-wrap justify-center gap-4">
-                                      {teamStructure.committees.heads.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
-                                  </div>
-                              </div>
-                          )}
-                          
-                          {/* Members Row */}
-                          {teamStructure.committees.members.length > 0 && (
-                              <div>
-                                  <p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Members</p>
-                                  <div className="flex flex-wrap justify-center gap-4">
-                                      {teamStructure.committees.members.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}
-                                  </div>
-                              </div>
-                          )}
-                      </div>
-                  )}
+                  {teamStructure.tier1.length > 0 && (<div className="flex flex-wrap justify-center gap-6 max-w-2xl mx-auto">{teamStructure.tier1.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}</div>)}
+                  {teamStructure.tier2.length > 0 && (<div className="flex flex-wrap justify-center gap-6 max-w-2xl mx-auto">{teamStructure.tier2.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}</div>)}
+                  {teamStructure.tier3.length > 0 && (<div className="flex flex-wrap justify-center gap-6">{teamStructure.tier3.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}</div>)}
+                  {(teamStructure.committees.heads.length > 0 || teamStructure.committees.members.length > 0) && (<div className="pt-8 border-t border-amber-200"><h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] text-center mb-6">Committees</h4>{teamStructure.committees.heads.length > 0 && (<div className="mb-6"><p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Heads</p><div className="flex flex-wrap justify-center gap-4">{teamStructure.committees.heads.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}</div></div>)}{teamStructure.committees.members.length > 0 && (<div><p className="text-center text-amber-600 font-bold uppercase text-xs mb-4 tracking-widest">Members</p><div className="flex flex-wrap justify-center gap-4">{teamStructure.committees.members.map(m => <MemberCard key={m.id || m.memberId} m={m} />)}</div></div>)}</div>)}
               </div>
            </div>
         )}
@@ -1882,261 +1405,65 @@ ${window.location.origin}`;
         {view === 'committee_hunt' && (
            <div className="space-y-6 animate-fadeIn">
               <h3 className="font-serif text-3xl font-black uppercase text-center mb-8">Join the Team</h3>
-              
-              {/* Applicant Dashboard: Status Card */}
-              {userApplications.length > 0 && (
-                  <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm mb-8">
-                      <h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
-                          <Briefcase size={16} className="text-amber-500"/> Your Applications
-                      </h4>
-                      <div className="space-y-3">
-                          {userApplications.map(app => (
-                              <div key={app.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-xl">
-                                  <div>
-                                      <p className="font-bold text-xs uppercase text-[#3E2723]">{app.committee}</p>
-                                      <p className="text-[10px] text-gray-500">{app.role}</p>
-                                  </div>
-                                  <div className="text-right">
-                                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${
-                                          app.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                          app.status === 'denied' ? 'bg-red-100 text-red-700' :
-                                          app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' :
-                                          'bg-yellow-100 text-yellow-700'
-                                      }`}>
-                                          {app.status === 'for_interview' ? 'For Interview - Check Email' : (app.status || 'Submitted - For Review')}
-                                      </span>
-                                      <p className="text-[8px] text-gray-400 mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
-                                  </div>
-                              </div>
-                          ))}
-                      </div>
-                  </div>
+              {/* Expired members cannot see application forms */}
+              {isExpired ? (
+                  <div className="bg-gray-100 p-8 rounded-3xl text-center"><Lock className="mx-auto text-gray-400 mb-2"/><p className="text-xs text-gray-500 font-bold uppercase">Membership Expired. Please renew to apply for committees.</p></div>
+              ) : (
+                  <>
+                    {userApplications.length > 0 && (<div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm mb-8"><h4 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Briefcase size={16} className="text-amber-500"/> Your Applications</h4><div className="space-y-3">{userApplications.map(app => (<div key={app.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-xl"><div><p className="font-bold text-xs uppercase text-[#3E2723]">{app.committee}</p><p className="text-[10px] text-gray-500">{app.role}</p></div><div className="text-right"><span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase ${app.status === 'accepted' ? 'bg-green-100 text-green-700' : app.status === 'denied' ? 'bg-red-100 text-red-700' : app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{app.status === 'for_interview' ? 'For Interview - Check Email' : (app.status || 'Submitted - For Review')}</span><p className="text-[8px] text-gray-400 mt-1">{formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p></div></div>))}</div></div>)}
+                    <div className="space-y-4">{COMMITTEES_INFO.map((comm) => (<div key={comm.id} className="bg-white rounded-[32px] border border-amber-100 overflow-hidden shadow-sm transition-all"><button onClick={() => setExpandedCommittee(expandedCommittee === comm.id ? null : comm.id)} className="w-full p-6 flex items-center justify-between bg-white hover:bg-amber-50 transition-colors"><div className="flex items-center gap-4"><div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700"><Briefcase size={20} /></div><div className="text-left"><h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4><p className="text-[10px] text-gray-500 font-medium">Click to view details</p></div></div>{expandedCommittee === comm.id ? <ChevronUp className="text-amber-400"/> : <ChevronDown className="text-amber-400"/>}</button>{expandedCommittee === comm.id && (<div className="p-6 pt-0 border-t border-amber-50"><div className="w-full h-48 bg-gray-200 rounded-2xl mb-6 overflow-hidden relative group"><img src={comm.image} className="w-full h-full object-cover" /><div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div></div><div className="mb-6"><h5 className="font-bold text-sm uppercase text-amber-600 mb-2">About</h5><p className="text-xs text-gray-600 leading-relaxed">{comm.description}</p></div><div className="mb-8"><h5 className="font-bold text-sm uppercase text-amber-600 mb-2">Roles & Responsibilities</h5><ul className="space-y-2">{comm.roles.map((role, idx) => (<li key={idx} className="flex items-start gap-2 text-xs text-gray-600"><CheckSquare size={14} className="text-green-500 shrink-0 mt-0.5"/><span>{role}</span></li>))}</ul></div><div className="bg-amber-50 p-6 rounded-2xl"><h5 className="font-bold text-sm uppercase text-[#3E2723] mb-4">Apply for {comm.title}</h5><div className="flex gap-2"><select className="flex-1 p-3 border border-amber-200 rounded-xl text-xs bg-white outline-none" value={committeeForm.role} onChange={e => setCommitteeForm({...committeeForm, role: e.target.value})}><option value="Committee Member">Committee Member</option><option value="Committee Head">Committee Head</option></select><button onClick={(e) => handleApplyCommittee(e, comm.id)} disabled={submittingApp} className="bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">{submittingApp ? "Sending..." : "Submit"}</button></div></div></div>)}</div>))}</div>
+                  </>
               )}
-
-              <div className="space-y-4">
-                 {COMMITTEES_INFO.map((comm) => (
-                    <div key={comm.id} className="bg-white rounded-[32px] border border-amber-100 overflow-hidden shadow-sm transition-all">
-                       <button 
-                           onClick={() => setExpandedCommittee(expandedCommittee === comm.id ? null : comm.id)}
-                           className="w-full p-6 flex items-center justify-between bg-white hover:bg-amber-50 transition-colors"
-                       >
-                           <div className="flex items-center gap-4">
-                               <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
-                                  <Briefcase size={20} />
-                               </div>
-                               <div className="text-left">
-                                   <h4 className="font-black text-lg uppercase text-[#3E2723]">{comm.title}</h4>
-                                   <p className="text-[10px] text-gray-500 font-medium">Click to view details</p>
-                               </div>
-                           </div>
-                           {expandedCommittee === comm.id ? <ChevronUp className="text-amber-400"/> : <ChevronDown className="text-amber-400"/>}
-                       </button>
-                       
-                       {expandedCommittee === comm.id && (
-                           <div className="p-6 pt-0 border-t border-amber-50">
-                               <div className="w-full h-48 bg-gray-200 rounded-2xl mb-6 overflow-hidden relative group">
-                                   <img src={comm.image} className="w-full h-full object-cover" />
-                                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
-                               </div>
-                               
-                               <div className="mb-6">
-                                   <h5 className="font-bold text-sm uppercase text-amber-600 mb-2">About</h5>
-                                   <p className="text-xs text-gray-600 leading-relaxed">{comm.description}</p>
-                               </div>
-
-                               <div className="mb-8">
-                                   <h5 className="font-bold text-sm uppercase text-amber-600 mb-2">Roles & Responsibilities</h5>
-                                   <ul className="space-y-2">
-                                       {comm.roles.map((role, idx) => (
-                                           <li key={idx} className="flex items-start gap-2 text-xs text-gray-600">
-                                               <CheckSquare size={14} className="text-green-500 shrink-0 mt-0.5"/>
-                                               <span>{role}</span>
-                                           </li>
-                                       ))}
-                                   </ul>
-                               </div>
-
-                               <div className="bg-amber-50 p-6 rounded-2xl">
-                                   <h5 className="font-bold text-sm uppercase text-[#3E2723] mb-4">Apply for {comm.title}</h5>
-                                   <div className="flex gap-2">
-                                       <select 
-                                           className="flex-1 p-3 border border-amber-200 rounded-xl text-xs bg-white outline-none"
-                                           value={committeeForm.role}
-                                           onChange={e => setCommitteeForm({...committeeForm, role: e.target.value})}
-                                       >
-                                           <option value="Committee Member">Committee Member</option>
-                                           <option value="Committee Head">Committee Head</option>
-                                       </select>
-                                       <button 
-                                           onClick={(e) => handleApplyCommittee(e, comm.id)}
-                                           disabled={submittingApp}
-                                           className="bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors"
-                                       >
-                                           {submittingApp ? "Sending..." : "Submit"}
-                                       </button>
-                                   </div>
-                               </div>
-                           </div>
-                       )}
-                    </div>
-                 ))}
-              </div>
            </div>
         )}
 
         {view === 'events' && (
            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                 <h3 className="font-serif text-3xl font-black uppercase">Events</h3>
-                 {isOfficer && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Create Event</button>}
-              </div>
+              <div className="flex items-center justify-between"><h3 className="font-serif text-3xl font-black uppercase">Events</h3>{isOfficer && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Create Event</button>}</div>
               {showEventForm && (
                   <form onSubmit={handleAddEvent} className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6 space-y-3">
                       <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value.toUpperCase()})} />
+                      <input type="text" placeholder="Poster Image URL (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.posterUrl} onChange={e => setNewEvent({...newEvent, posterUrl: e.target.value})} />
                       <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs h-20" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})}></textarea>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">Start</label>
-                            <input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} />
-                            <input type="time" required className="p-2 border rounded-xl text-xs w-full mt-1" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} />
-                        </div>
-                        <div>
-                            <label className="text-[10px] font-bold text-gray-500 uppercase">End</label>
-                            <input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} />
-                            <input type="time" required className="p-2 border rounded-xl text-xs w-full mt-1" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} />
-                        </div>
-                      </div>
-                      <div className="mb-3">
-                        <div className="flex items-center gap-2 mb-2">
-                            <input type="checkbox" id="volunteerToggle" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
-                            <label htmlFor="volunteerToggle" className="text-xs font-bold text-[#3E2723]">Volunteer Event</label>
-                        </div>
-                        {newEvent.isVolunteer && (
-                            <div className="bg-amber-50 p-4 rounded-xl space-y-3 border border-amber-100">
-                                <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="openAll" checked={newEvent.openForAll} onChange={e => setNewEvent({...newEvent, openForAll: e.target.checked})} />
-                                    <label htmlFor="openAll" className="text-[10px] font-bold text-gray-600">Open for All (No Role Restrictions)</label>
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-bold text-gray-500 mb-1 uppercase">Manage Shifts</p>
-                                    <div className="flex gap-2 mb-2">
-                                        <input type="date" className="p-2 rounded-lg text-xs border w-1/3" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
-                                        <select className="p-2 rounded-lg text-xs border w-1/3" value={tempShift.session} onChange={e => setTempShift({...tempShift, session: e.target.value})}>
-                                            <option value="AM">AM</option>
-                                            <option value="PM">PM</option>
-                                            <option value="Whole Day">Whole Day</option>
-                                        </select>
-                                        <input type="number" className="p-2 rounded-lg text-xs border w-20" placeholder="Slots" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} />
-                                        <button type="button" onClick={addShift} className="bg-[#3E2723] text-white p-2 rounded-lg text-xs"><Plus size={16}/></button>
-                                    </div>
-                                    <div className="space-y-1 max-h-24 overflow-y-auto">
-                                        {newEvent.shifts.map(s => (
-                                            <div key={s.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100">
-                                                <span className="text-[10px]">{s.date} • {s.session} • {s.capacity} Slots</span>
-                                                <button type="button" onClick={() => removeShift(s.id)} className="text-red-400"><X size={12}/></button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                      </div>
+                      <div className="grid grid-cols-2 gap-2"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Start</label><input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" required className="p-2 border rounded-xl text-xs w-full mt-1" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">End</label><input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} /><input type="time" required className="p-2 border rounded-xl text-xs w-full mt-1" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} /></div></div>
+                      <div className="mb-3"><div className="flex items-center gap-2 mb-2"><input type="checkbox" id="volunteerToggle" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} /><label htmlFor="volunteerToggle" className="text-xs font-bold text-[#3E2723]">Volunteer Event</label></div>{newEvent.isVolunteer && (<div className="bg-amber-50 p-4 rounded-xl space-y-3 border border-amber-100"><div className="flex items-center gap-2"><input type="checkbox" id="openAll" checked={newEvent.openForAll} onChange={e => setNewEvent({...newEvent, openForAll: e.target.checked})} /><label htmlFor="openAll" className="text-[10px] font-bold text-gray-600">Open for All (No Role Restrictions)</label></div><div><p className="text-[10px] font-bold text-gray-500 mb-1 uppercase">Manage Shifts</p><div className="flex gap-2 mb-2"><input type="date" className="p-2 rounded-lg text-xs border w-1/3" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><select className="p-2 rounded-lg text-xs border w-1/3" value={tempShift.session} onChange={e => setTempShift({...tempShift, session: e.target.value})}><option value="AM">AM</option><option value="PM">PM</option><option value="Whole Day">Whole Day</option></select><input type="number" className="p-2 rounded-lg text-xs border w-20" placeholder="Slots" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button type="button" onClick={addShift} className="bg-[#3E2723] text-white p-2 rounded-lg text-xs"><Plus size={16}/></button></div><div className="space-y-1 max-h-24 overflow-y-auto">{newEvent.shifts.map(s => (<div key={s.id} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100"><span className="text-[10px]">{s.date} • {s.session} • {s.capacity} Slots</span><button type="button" onClick={() => removeShift(s.id)} className="text-red-400"><X size={12}/></button></div>))}</div></div></div>)}</div>
                       <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value.toUpperCase()})} />
                       <input type="text" placeholder="Evaluation Link (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} />
-                      <div className="flex items-center gap-2 p-2">
-                          <input type="checkbox" id="req" checked={newEvent.attendanceRequired} onChange={e => setNewEvent({...newEvent, attendanceRequired: e.target.checked})} />
-                          <label htmlFor="req" className="text-xs font-bold text-gray-600">Attendance Required</label>
-                      </div>
-                      <div className="flex gap-2">
-                          <button type="button" onClick={() => setShowEventForm(false)} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
-                          <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Save Event</button>
-                      </div>
+                      <div className="flex items-center gap-2 p-2"><input type="checkbox" id="req" checked={newEvent.attendanceRequired} onChange={e => setNewEvent({...newEvent, attendanceRequired: e.target.checked})} /><label htmlFor="req" className="text-xs font-bold text-gray-600">Attendance Required</label></div>
+                      <div className="flex gap-2"><button type="button" onClick={() => setShowEventForm(false)} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Save Event</button></div>
                   </form>
               )}
-              
-              {/* Separate Volunteer Events from General Events */}
               {(() => {
                 const volEvents = events.filter(e => e.isVolunteer);
                 const generalEvents = events.filter(e => !e.isVolunteer);
-                
                 return (
                  <div className="space-y-8">
                      {volEvents.length > 0 && (
-                         <div>
-                             <h4 className="font-serif text-xl font-black uppercase text-amber-600 mb-4 flex items-center gap-2"><Hand size={20}/> Volunteer Opportunities</h4>
-                             <div className="space-y-4"> {/* Changed to space-y-4 for vertical list */}
-                                {volEvents.map(ev => {
+                         <div><h4 className="font-serif text-xl font-black uppercase text-amber-600 mb-4 flex items-center gap-2"><Hand size={20}/> Volunteer Opportunities</h4><div className="space-y-4">{volEvents.map(ev => {
                                    const isExpanded = expandedEventId === ev.id;
-                                   
                                    return (
                                      <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm relative overflow-hidden flex flex-col h-full w-full">
                                         <div className="absolute top-0 right-0 bg-amber-100 text-amber-800 text-[9px] font-black uppercase px-3 py-1 rounded-bl-xl">Volunteer Needed</div>
                                         <h4 className="font-black text-lg uppercase text-[#3E2723] mb-1">{ev.name}</h4>
                                         <p className="text-xs text-gray-500 mb-4 whitespace-pre-wrap">{ev.description}</p>
-                                        
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4"> {/* Grid for shifts */}
-                                            {ev.shifts && ev.shifts.map(shift => {
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">{ev.shifts && ev.shifts.map(shift => {
                                                 const signedUp = shift.volunteers.includes(profile.memberId);
                                                 const slotsLeft = shift.capacity - shift.volunteers.length;
                                                 const isFull = slotsLeft <= 0;
-                                                
                                                 return (
                                                     <div key={shift.id} className="flex flex-col justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100 text-center h-full">
-                                                        <div className="mb-2">
-                                                            <p className="text-xs font-bold text-gray-700">{shift.date}</p>
-                                                            <p className="text-[10px] font-bold text-amber-600">{shift.session}</p>
-                                                            <p className="text-[9px] text-gray-500 mt-1">{isFull && !signedUp ? "FULL" : `${slotsLeft} slots left`}</p>
-                                                        </div>
-                                                        {signedUp ? (
-                                                            <button onClick={() => handleVolunteerSignup(ev, shift.id)} className="w-full px-2 py-1.5 bg-red-100 text-red-600 rounded-lg text-[9px] font-black uppercase hover:bg-red-200">Leave</button>
-                                                        ) : (
-                                                            <button 
-                                                                onClick={() => handleVolunteerSignup(ev, shift.id)} 
-                                                                disabled={isFull}
-                                                                className={`w-full px-2 py-1.5 rounded-lg text-[9px] font-black uppercase ${isFull ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
-                                                            >
-                                                                Volunteer
-                                                            </button>
-                                                        )}
+                                                        <div className="mb-2"><p className="text-xs font-bold text-gray-700">{shift.date}</p><p className="text-[10px] font-bold text-amber-600">{shift.session}</p><p className="text-[9px] text-gray-500 mt-1">{isFull && !signedUp ? "FULL" : `${slotsLeft} slots left`}</p></div>
+                                                        {isExpired ? (<button disabled className="w-full px-2 py-1.5 bg-gray-100 text-gray-400 rounded-lg text-[9px] font-black uppercase cursor-not-allowed">Renew to Join</button>) :
+                                                            (signedUp ? (<button onClick={() => handleVolunteerSignup(ev, shift.id)} className="w-full px-2 py-1.5 bg-red-100 text-red-600 rounded-lg text-[9px] font-black uppercase hover:bg-red-200">Leave</button>) : (<button onClick={() => handleVolunteerSignup(ev, shift.id)} disabled={isFull} className={`w-full px-2 py-1.5 rounded-lg text-[9px] font-black uppercase ${isFull ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}>Volunteer</button>))
+                                                        }
                                                     </div>
                                                 )
-                                            })}
-                                        </div>
-                                        
-                                        {/* Officer View for Volunteers */}
-                                        {isOfficer && (
-                                            <div className="mt-auto pt-4 border-t border-dashed border-gray-200">
-                                                <button onClick={() => setExpandedEventId(isExpanded ? null : ev.id)} className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1">
-                                                    {isExpanded ? "Hide Volunteers" : "View Volunteers"} <ChevronDown size={12} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}/>
-                                                </button>
-                                                {isExpanded && (
-                                                    <div className="mt-2 space-y-2">
-                                                        {ev.shifts.map(shift => (
-                                                            <div key={shift.id} className="text-[10px]">
-                                                                <span className="font-bold text-gray-600">{shift.date} ({shift.session}):</span>
-                                                                <span className="text-gray-500 ml-1">
-                                                                    {shift.volunteers.length > 0 ? 
-                                                                        members.filter(m => shift.volunteers.includes(m.memberId)).map(m => m.name).join(", ") 
-                                                                        : "None"}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                                <div className="flex gap-2 mt-2">
-                                                    <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit Event</button>
-                                                    <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete Event</button>
-                                                </div>
-                                            </div>
-                                        )}
+                                            })}</div>
+                                        {isOfficer && (<div className="mt-auto pt-4 border-t border-dashed border-gray-200"><button onClick={() => setExpandedEventId(isExpanded ? null : ev.id)} className="text-[10px] font-bold text-blue-500 uppercase flex items-center gap-1">{isExpanded ? "Hide Volunteers" : "View Volunteers"} <ChevronDown size={12} className={`transform transition-transform ${isExpanded ? 'rotate-180' : ''}`}/></button>{isExpanded && (<div className="mt-2 space-y-2">{ev.shifts.map(shift => (<div key={shift.id} className="text-[10px]"><span className="font-bold text-gray-600">{shift.date} ({shift.session}):</span><span className="text-gray-500 ml-1">{shift.volunteers.length > 0 ? members.filter(m => shift.volunteers.includes(m.memberId)).map(m => m.name).join(", ") : "None"}</span></div>))}</div>)}<div className="flex gap-2 mt-2"><button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit Event</button><button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete Event</button></div></div>)}
                                      </div>
                                    )
-                                })}
-                             </div>
-                         </div>
+                                })}</div></div>
                      )}
-
-                     {/* General Events List */}
                      <div>
                         {volEvents.length > 0 && <h4 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4">Upcoming Events</h4>}
                         <div className="space-y-4">
@@ -2145,82 +1472,23 @@ ${window.location.origin}`;
                                 const isRegistered = ev.registered?.includes(profile.memberId);
                                 const isExpanded = expandedEventId === ev.id;
                                 const registeredCount = ev.registered?.length || 0;
-                                
                                 return (
-                                <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col gap-4">
-                                    <div className="flex justify-between items-start">
-                                        <div className="flex items-center gap-4">
-                                            <div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight">
-                                                <span className="text-xl font-bold">{day}</span>
-                                                <span className="text-[10px] uppercase font-bold">{month}</span>
-                                            </div>
-                                            <div>
-                                                <h4 className="font-black text-lg uppercase">{ev.name}</h4>
-                                                <p className="text-xs opacity-60 font-bold">{ev.venue}</p>
-                                                <p className="text-[10px] opacity-50">{ev.startTime} - {ev.endTime}</p>
-                                            </div>
-                                        </div>
-                                        {ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Attendance Req.</span>}
-                                    </div>
-                                    <p className="text-xs text-gray-600 whitespace-pre-wrap">{ev.description}</p>
-                                    
-                                    {/* Registration Toggle Section */}
-                                    <div className="border-t border-gray-100 pt-2">
-                                        <button 
-                                            onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
-                                            className="w-full flex justify-between items-center text-xs font-bold text-gray-500 hover:text-amber-600"
-                                        >
-                                            <span>Registered: {registeredCount}</span>
-                                            {isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
-                                        </button>
-                                        
-                                        {isExpanded && (
-                                            <div className="mt-2 p-3 bg-gray-50 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">
-                                                {registeredCount > 0 ? (
-                                                    <ul className="space-y-1">
-                                                        {members
-                                                            .filter(m => ev.registered?.includes(m.memberId))
-                                                            .sort((a,b) => (a.name || "").localeCompare(b.name || ""))
-                                                            .map(m => (
-                                                                <li key={m.memberId} className="text-[10px] text-gray-600 truncate">• {m.name}</li>
-                                                            ))
-                                                        }
-                                                    </ul>
-                                                ) : (
-                                                    <p className="text-[10px] text-gray-400 italic">No one registered yet.</p>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    {/* Event Actions */}
-                                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
-                                        <div className="flex gap-2">
-                                            {/* Registration Button for All Users */}
-                                            {ev.attendanceRequired && (
-                                                <button 
-                                                    onClick={() => handleRegisterEvent(ev)} 
-                                                    className={`py-2 px-4 rounded-xl text-[10px] font-bold uppercase transition-colors ${isRegistered ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}
-                                                >
-                                                    {isRegistered ? "Unregister" : "Register"}
-                                                </button>
-                                            )}
-
-                                            {ev.evaluationLink && (
-                                                <a href={ensureAbsoluteUrl(ev.evaluationLink)} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors flex items-center gap-1">
-                                                    <ExternalLink size={12}/> Post-Event Evaluation
-                                                </a>
-                                            )}
-                                        </div>
-                                        {isOfficer && (
+                                <div key={ev.id} className="bg-white rounded-[32px] border border-amber-100 flex flex-col overflow-hidden">
+                                    {ev.posterUrl && <img src={ev.posterUrl} className="w-full h-48 object-cover" />}
+                                    <div className="p-6 flex flex-col gap-4">
+                                        <div className="flex justify-between items-start"><div className="flex items-center gap-4"><div className="bg-[#3E2723] text-[#FDB813] w-16 h-16 rounded-2xl flex flex-col items-center justify-center font-black leading-tight"><span className="text-xl font-bold">{day}</span><span className="text-[10px] uppercase font-bold">{month}</span></div><div><h4 className="font-black text-lg uppercase">{ev.name}</h4><p className="text-xs opacity-60 font-bold">{ev.venue}</p><p className="text-[10px] opacity-50">{ev.startTime} - {ev.endTime}</p></div></div>{ev.attendanceRequired && <span className="bg-red-100 text-red-600 px-2 py-1 rounded-full text-[8px] font-black uppercase">Attendance Req.</span>}</div>
+                                        <p className="text-xs text-gray-600 whitespace-pre-wrap">{ev.description}</p>
+                                        <div className="border-t border-gray-100 pt-2"><button onClick={() => setExpandedEventId(isExpanded ? null : ev.id)} className="w-full flex justify-between items-center text-xs font-bold text-gray-500 hover:text-amber-600"><span>Registered: {registeredCount}</span>{isExpanded ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}</button>{isExpanded && (<div className="mt-2 p-3 bg-gray-50 rounded-xl max-h-32 overflow-y-auto custom-scrollbar">{registeredCount > 0 ? (<ul className="space-y-1">{members.filter(m => ev.registered?.includes(m.memberId)).sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => (<li key={m.memberId} className="text-[10px] text-gray-600 truncate">• {m.name}</li>))}</ul>) : (<p className="text-[10px] text-gray-400 italic">No one registered yet.</p>)}</div>)}</div>
+                                        <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100 items-center justify-between">
                                             <div className="flex gap-2">
                                                 {ev.attendanceRequired && (
-                                                    <button onClick={() => setAttendanceEvent(ev)} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200 transition-colors">Attendance Check</button>
+                                                    isExpired ? <button disabled className="py-2 px-4 rounded-xl text-[10px] font-bold uppercase bg-gray-100 text-gray-400 cursor-not-allowed">Renew to Register</button> :
+                                                    <button onClick={() => handleRegisterEvent(ev)} className={`py-2 px-4 rounded-xl text-[10px] font-bold uppercase transition-colors ${isRegistered ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'}`}>{isRegistered ? "Unregister" : "Register"}</button>
                                                 )}
-                                                <button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit</button>
-                                                <button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete</button>
+                                                {ev.evaluationLink && (<a href={ensureAbsoluteUrl(ev.evaluationLink)} target="_blank" rel="noreferrer" className="bg-green-100 text-green-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase inline-block hover:bg-green-200 transition-colors flex items-center gap-1"><ExternalLink size={12}/> Post-Event Evaluation</a>)}
                                             </div>
-                                        )}
+                                            {isOfficer && (<div className="flex gap-2">{ev.attendanceRequired && (<button onClick={() => setAttendanceEvent(ev)} className="bg-blue-100 text-blue-700 py-2 px-4 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200 transition-colors">Attendance Check</button>)}<button onClick={() => handleEditEvent(ev)} className="text-blue-500 text-xs underline">Edit</button><button onClick={() => handleDeleteEvent(ev.id)} className="text-red-500 text-xs underline">Delete</button></div>)}
+                                        </div>
                                     </div>
                                 </div>
                                 );
@@ -2235,96 +1503,36 @@ ${window.location.origin}`;
 
         {view === 'announcements' && (
            <div className="space-y-6 animate-fadeIn">
-              <div className="flex items-center justify-between">
-                <h3 className="font-serif text-3xl font-black uppercase">Grind Report</h3>
-                {isOfficer && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Post Notice</button>}
-              </div>
+              <div className="flex items-center justify-between"><h3 className="font-serif text-3xl font-black uppercase">Grind Report</h3>{isOfficer && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-[#FDB813] px-5 py-3 rounded-xl font-black uppercase text-[10px]">Post Notice</button>}</div>
               {showAnnounceForm && (
                   <form onSubmit={handlePostAnnouncement} className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6 space-y-3">
                       <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value.toUpperCase()})} />
                       <textarea placeholder="Announcement content..." required className="w-full p-3 border rounded-xl text-xs h-24" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})}></textarea>
-                      <div className="flex gap-2">
-                          <button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); setNewAnnouncement({title:'', content:''}); }} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button>
-                          <button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Post Now</button>
-                      </div>
+                      <div className="flex gap-2"><button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); setNewAnnouncement({title:'', content:''}); }} className="flex-1 p-3 bg-gray-100 rounded-xl text-xs font-bold text-gray-500">Cancel</button><button type="submit" className="flex-1 p-3 bg-[#3E2723] text-white rounded-xl text-xs font-bold">Post Now</button></div>
                   </form>
               )}
-              {announcements.length === 0 ? <p className="text-center opacity-50">No announcements.</p> : announcements.map(ann => (
-                 <div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden group">
-                    <div className="absolute top-0 right-0 p-6 opacity-10"><Megaphone size={64}/></div>
-                    <div className="relative z-10">
-                       <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-black text-xl uppercase text-[#3E2723]">{ann.title}</h4>
-                            {isOfficer && (
-                                <div className="flex gap-2">
-                                    <button onClick={() => handleEditAnnouncement(ann)} className="text-blue-500 text-xs underline">Edit</button>
-                                    <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-500 text-xs underline">Delete</button>
-                                </div>
-                            )}
-                       </div>
-                       <p className="text-xs text-gray-600 leading-relaxed mb-4">{ann.content}</p>
-                       <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">{formatDate(ann.date)}</span>
-                    </div>
-                 </div>
-              ))}
+              {announcements.length === 0 ? <p className="text-center opacity-50">No announcements.</p> : announcements.map(ann => (<div key={ann.id} className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm relative overflow-hidden group"><div className="absolute top-0 right-0 p-6 opacity-10"><Megaphone size={64}/></div><div className="relative z-10"><div className="flex justify-between items-start mb-2"><h4 className="font-black text-xl uppercase text-[#3E2723]">{ann.title}</h4>{isOfficer && (<div className="flex gap-2"><button onClick={() => handleEditAnnouncement(ann)} className="text-blue-500 text-xs underline">Edit</button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-red-500 text-xs underline">Delete</button></div>)}</div><p className="text-xs text-gray-600 leading-relaxed mb-4">{ann.content}</p><span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">{formatDate(ann.date)}</span></div></div>))}
            </div>
         )}
 
         {view === 'suggestions' && (
            <div className="space-y-6 animate-fadeIn">
               <h3 className="font-serif text-3xl font-black uppercase">Suggestion Box</h3>
-              <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
-                 <form onSubmit={handlePostSuggestion} className="space-y-4">
-                     <MessageSquare size={48} className="mx-auto text-amber-300 mb-4" />
-                     <p className="text-sm text-gray-500 font-medium">Drop your thoughts here.</p>
-                     <textarea required value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className="w-full p-4 border border-amber-100 rounded-2xl text-xs bg-gray-50 outline-none focus:border-amber-400" placeholder="Type your suggestion anonymously..."></textarea>
-                     <button type="submit" className="bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">Submit</button>
-                 </form>
-              </div>
-              
+              {isExpired ? (
+                  <div className="bg-white p-6 rounded-[40px] border border-amber-100 text-center"><p className="text-sm font-medium text-gray-400">Please renew your membership to drop suggestions.</p></div>
+              ) : (
+                  <div className="bg-white p-8 rounded-[40px] border border-amber-100 text-center">
+                     <form onSubmit={handlePostSuggestion} className="space-y-4"><MessageSquare size={48} className="mx-auto text-amber-300 mb-4" /><p className="text-sm text-gray-500 font-medium">Drop your thoughts here.</p><textarea required value={suggestionText} onChange={e => setSuggestionText(e.target.value)} className="w-full p-4 border border-amber-100 rounded-2xl text-xs bg-gray-50 outline-none focus:border-amber-400" placeholder="Type your suggestion anonymously..."></textarea><button type="submit" className="bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-xl font-black uppercase text-xs hover:bg-black transition-colors">Submit</button></form>
+                  </div>
+              )}
               <div className="mt-8">
-                {isOfficer && (
-                    <div className="flex justify-end mb-4">
-                         <button onClick={handleDownloadSuggestions} className="bg-green-100 text-green-700 px-4 py-2 rounded-xl text-[10px] font-bold uppercase hover:bg-green-200 transition-colors flex items-center gap-1">
-                             <FileBarChart size={14}/> Download Summary
-                         </button>
-                    </div>
-                )}
-                
+                {isOfficer && (<div className="flex justify-end mb-4"><button onClick={handleDownloadSuggestions} className="bg-green-100 text-green-700 px-4 py-2 rounded-xl text-[10px] font-bold uppercase hover:bg-green-200 transition-colors flex items-center gap-1"><FileBarChart size={14}/> Download Summary</button></div>)}
                 <div className="space-y-4">
                   {(() => {
-                      const sevenDaysAgo = new Date();
-                      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-                      
-                      const filteredSuggestions = suggestions.filter(s => {
-                          if (!s.createdAt) return true; 
-                          const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
-                          return date > sevenDaysAgo;
-                      });
-
-                      if (filteredSuggestions.length === 0) {
-                          return <p className="text-center text-xs text-gray-400">No suggestions this week.</p>;
-                      }
-
-                      return filteredSuggestions.map(s => (
-                          <div key={s.id} className="bg-white p-6 rounded-3xl border border-amber-50 shadow-sm relative group">
-                              <p className="text-sm font-medium text-gray-700">"{s.text}"</p>
-                              <div className="flex justify-between items-center mt-3 border-t border-gray-50 pt-2">
-                                  <p className="text-[9px] text-gray-400 uppercase font-bold">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p>
-                                  <p className="text-[10px] text-amber-400 font-black uppercase">- {s.authorName}</p>
-                              </div>
-                              {/* Delete button only for the sender - logic: authorId matches current user */}
-                              {s.authorId === profile.memberId && (
-                                  <button 
-                                    onClick={() => handleDeleteSuggestion(s.id)}
-                                    className="absolute top-2 right-2 p-2 bg-red-50 text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
-                                    title="Delete my suggestion"
-                                  >
-                                    <Trash2 size={12}/>
-                                  </button>
-                              )}
-                          </div>
-                      ));
+                      const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+                      const filteredSuggestions = suggestions.filter(s => { if (!s.createdAt) return true; const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt); return date > sevenDaysAgo; });
+                      if (filteredSuggestions.length === 0) return <p className="text-center text-xs text-gray-400">No suggestions this week.</p>;
+                      return filteredSuggestions.map(s => (<div key={s.id} className="bg-white p-6 rounded-3xl border border-amber-50 shadow-sm relative group"><p className="text-sm font-medium text-gray-700">"{s.text}"</p><div className="flex justify-between items-center mt-3 border-t border-gray-50 pt-2"><p className="text-[9px] text-gray-400 uppercase font-bold">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p><p className="text-[10px] text-amber-400 font-black uppercase">- {s.authorName}</p></div>{s.authorId === profile.memberId && (<button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-2 right-2 p-2 bg-red-50 text-red-400 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100" title="Delete my suggestion"><Trash2 size={12}/></button>)}</div>));
                   })()}
                 </div>
               </div>
@@ -2333,293 +1541,66 @@ ${window.location.origin}`;
 
         {view === 'settings' && (
             <div className="bg-white p-10 rounded-[48px] border border-amber-100 shadow-xl space-y-8 animate-fadeIn">
-                <div className="flex items-center gap-4 border-b pb-4 border-amber-100">
-                    <button onClick={() => setView('home')} className="md:hidden mr-2 text-gray-500 hover:bg-gray-100 p-2 rounded-full"><Users size={20}/></button>
-                    <div className="flex items-center gap-4 w-full">
-                         <button onClick={() => setView('home')} className="text-gray-400 hover:text-amber-600 transition-colors">
-                             <ChevronLeft size={24} />
-                         </button>
-                         <div>
-                            <h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3>
-                            <button onClick={() => setView('home')} className="text-[10px] font-bold text-gray-400 uppercase hover:text-amber-600 underline decoration-2 underline-offset-4">Back to Dashboard</button>
-                         </div>
-                    </div>
-                </div>
+                <div className="flex items-center gap-4 border-b pb-4 border-amber-100"><button onClick={() => setView('home')} className="md:hidden mr-2 text-gray-500 hover:bg-gray-100 p-2 rounded-full"><Users size={20}/></button><div className="flex items-center gap-4 w-full"><button onClick={() => setView('home')} className="text-gray-400 hover:text-amber-600 transition-colors"><ChevronLeft size={24} /></button><div><h3 className="font-serif text-3xl font-black uppercase">Profile Settings</h3><button onClick={() => setView('home')} className="text-[10px] font-bold text-gray-400 uppercase hover:text-amber-600 underline decoration-2 underline-offset-4">Back to Dashboard</button></div></div></div>
                 <form onSubmit={handleUpdateProfile} className="space-y-6 max-w-lg">
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-black uppercase mb-2 text-gray-400">Member ID</label>
-                            <input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.memberId} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-black uppercase mb-2 text-gray-400">Role / Position</label>
-                            <input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.positionCategory} />
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Nickname</label>
-                            <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" placeholder="Call sign..." value={settingsForm.nickname || ""} onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})} />
-                        </div>
-                        <div>
-                             <label className="block text-xs font-black uppercase mb-2 text-gray-500">Photo URL</label>
-                             <div className="relative">
-                                <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs pl-10 truncate" placeholder="https://..." value={settingsForm.photoUrl || ""} onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})} />
-                                <Camera className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                             </div>
-                        </div>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-black uppercase mb-2 text-gray-500">Full Name</label>
-                        <input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.name} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Month</label>
-                            <select className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.birthMonth || ""} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}>
-                                <option value="">Select</option>
-                                {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Day</label>
-                            <input type="number" min="1" max="31" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={settingsForm.birthDay || ""} onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})} />
-                        </div>
-                    </div>
-                    <div>
-                         <label className="block text-xs font-black uppercase mb-2 text-gray-500">Email Address</label>
-                         <input type="email" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={settingsForm.email} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} />
-                    </div>
-                    <button type="submit" disabled={savingSettings} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-xl font-black uppercase hover:bg-black transition-colors text-xs">
-                        {savingSettings ? "Saving..." : "Save Changes"}
-                    </button>
+                    <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-black uppercase mb-2 text-gray-400">Member ID</label><input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.memberId} /></div><div><label className="block text-xs font-black uppercase mb-2 text-gray-400">Role / Position</label><input type="text" disabled className="w-full p-4 bg-gray-100 rounded-xl font-mono font-bold uppercase text-xs text-gray-500 cursor-not-allowed" value={profile.positionCategory} /></div></div>
+                    <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-black uppercase mb-2 text-gray-500">Nickname</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" placeholder="Call sign..." value={settingsForm.nickname || ""} onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})} /></div><div><label className="block text-xs font-black uppercase mb-2 text-gray-500">Photo URL</label><div className="relative"><input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs pl-10 truncate" placeholder="https://..." value={settingsForm.photoUrl || ""} onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})} /><Camera className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} /></div></div></div>
+                    <div><label className="block text-xs font-black uppercase mb-2 text-gray-500">Full Name</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.name} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} /></div>
+                    <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Month</label><select className="w-full p-4 bg-gray-50 rounded-xl font-bold uppercase text-xs" value={settingsForm.birthMonth || ""} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}><option value="">Select</option>{MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select></div><div><label className="block text-xs font-black uppercase mb-2 text-gray-500">Birth Day</label><input type="number" min="1" max="31" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={settingsForm.birthDay || ""} onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})} /></div></div>
+                    <div><label className="block text-xs font-black uppercase mb-2 text-gray-500">Email Address</label><input type="email" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={settingsForm.email} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} /></div>
+                    <button type="submit" disabled={savingSettings} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-xl font-black uppercase hover:bg-black transition-colors text-xs">{savingSettings ? "Saving..." : "Save Changes"}</button>
                 </form>
-
                 <hr className="border-amber-100 my-6"/>
-                
-                <form onSubmit={handleChangePassword} className="space-y-6 max-w-lg">
-                    <h4 className="font-black uppercase text-sm">Change Password</h4>
-                    <div className="space-y-3">
-                         <input type="password" required placeholder="Current Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.current} onChange={e => setPasswordForm({...passwordForm, current: e.target.value})} />
-                         <input type="password" required placeholder="New Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.new} onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} />
-                         <input type="password" required placeholder="Confirm New Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.confirm} onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})} />
-                    </div>
-                    <button type="submit" className="bg-amber-100 text-amber-800 px-8 py-4 rounded-xl font-black uppercase hover:bg-amber-200 transition-colors text-xs">Update Password</button>
-                </form>
+                <form onSubmit={handleChangePassword} className="space-y-6 max-w-lg"><h4 className="font-black uppercase text-sm">Change Password</h4><div className="space-y-3"><input type="password" required placeholder="Current Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.current} onChange={e => setPasswordForm({...passwordForm, current: e.target.value})} /><input type="password" required placeholder="New Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.new} onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} /><input type="password" required placeholder="Confirm New Password" className="w-full p-4 bg-gray-50 rounded-xl font-bold text-xs" value={passwordForm.confirm} onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})} /></div><button type="submit" className="bg-amber-100 text-amber-800 px-8 py-4 rounded-xl font-black uppercase hover:bg-amber-200 transition-colors text-xs">Update Password</button></form>
             </div>
         )}
         
         {view === 'reports' && isAdmin && (
            <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-              <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
-                 <StatIcon icon={TrendingUp} variant="amber" />
-                 <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
-                      <p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
-                      <p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
-                      <p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p>
-                  </div>
-                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                      <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
-                      <p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p>
-                  </div>
-              </div>
-              <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
-                 <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
-                 <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
-              </div>
+              <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6"><StatIcon icon={TrendingUp} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div></div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Total</p><p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p></div><div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p><p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p></div><div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p><p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p></div><div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p><p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p></div></div>
+              <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between"><div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div><div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div></div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <div className="space-y-6">
-                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                        <div className="flex justify-between items-center mb-6">
-                             <h4 className="font-black uppercase text-sm">Registration Status</h4>
-                             <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>
-                                 {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
-                             </button>
-                        </div>
-                        <hr className="border-amber-100 my-4"/>
-                        <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
-                        <div className="flex gap-2 mb-4">
-                            <select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}>
-                                <option value="all">All Semesters</option>
-                                {semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                            </select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 mb-4">
-                            <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                <p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p>
-                                <p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p>
-                            </div>
-                            <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                <p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p>
-                                <p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p>
-                            </div>
-                        </div>
-                        <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
-                            <FileBarChart size={14}/> Download Report
-                        </button>
-                     </div>
-                     <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
-                        <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                        <div className="space-y-2">
-                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                <span className="text-[10px] font-black uppercase">Officer Key</span>
-                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
-                            </div>
-                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                <span className="text-[10px] font-black uppercase">Head Key</span>
-                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
-                            </div>
-                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                <span className="text-[10px] font-black uppercase">Comm Key</span>
-                                <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
-                            </div>
-                        </div>
-                        <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                        <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
-                        <button onClick={handleMigrateToRenewal} className="w-full mt-4 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Migrate: Set All to Renewal</button>
-                     </div>
+                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm"><div className="flex justify-between items-center mb-6"><h4 className="font-black uppercase text-sm">Registration Status</h4><button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>{hubSettings.registrationOpen ? "OPEN" : "CLOSED"}</button></div><hr className="border-amber-100 my-4"/><h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4><div className="flex gap-2 mb-4"><select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}><option value="all">All Semesters</option>{semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}</select></div><div className="grid grid-cols-2 gap-2 mb-4"><div className="p-3 bg-gray-50 rounded-xl text-center"><p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p><p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p></div><div className="p-3 bg-gray-50 rounded-xl text-center"><p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p><p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p></div></div><button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2"><FileBarChart size={14}/> Download Report</button></div>
+                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm"><h4 className="font-black uppercase text-sm mb-4">Renewal Configuration</h4><div className="flex gap-2 items-end"><div className="flex-1"><label className="text-[10px] font-bold text-gray-400 uppercase">Semester Start Date</label><input type="date" className="w-full p-3 bg-gray-50 rounded-xl text-xs font-bold border border-gray-200" value={startDateInput} onChange={(e) => setStartDateInput(e.target.value)} /></div><button onClick={handleUpdateSemDate} className="bg-[#3E2723] text-[#FDB813] p-3 rounded-xl font-black uppercase text-xs mb-[1px]">Set Date</button></div><p className="text-[10px] text-gray-500 mt-2">* Members who haven't renewed 30 days after this date will be marked <strong>EXPIRED</strong>.</p></div>
+                     <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white"><h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4><div className="space-y-2"><div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Officer Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span></div><div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Head Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span></div><div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Comm Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span></div></div><button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button><button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button><button onClick={handleMigrateToRenewal} className="w-full mt-4 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Migrate: Set All to Renewal</button></div>
                  </div>
-                 <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
-                    <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                        {committeeApps && committeeApps.filter(app => !['accepted','denied'].includes(app.status)).length > 0 ? (
-                            committeeApps.filter(app => !['accepted','denied'].includes(app.status)).map(app => (
-                                <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <div>
-                                            <p className="font-black text-sm text-[#3E2723]">{app.name}</p>
-                                            <p className="text-[10px] font-mono text-gray-500">{app.memberId}</p>
-                                        </div>
-                                        <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${
-                                            app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 
-                                            'bg-yellow-100 text-yellow-700'
-                                        }`}>
-                                            {app.status === 'for_interview' ? 'Interview' : 'Pending'}
-                                        </span>
-                                    </div>
-                                    <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
-                                    <div className="flex gap-2 pt-3 border-t border-amber-200/50">
-                                        <button onClick={() => handleUpdateAppStatus(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">Interview</button>
-                                        <button onClick={() => handleUpdateAppStatus(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
-                                        <button onClick={() => handleUpdateAppStatus(app, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
-                                        <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
-                                        <a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a>
-                                    </div>
-                                    <p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
-                                </div>
-                            ))
-                        ) : (
-                            <p className="text-xs text-gray-500 italic">No pending applications.</p>
-                        )}
-                    </div>
-                 </div>
+                 <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl"><h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4><div className="space-y-2 max-h-60 overflow-y-auto">{committeeApps && committeeApps.filter(app => !['accepted','denied'].includes(app.status)).length > 0 ? (committeeApps.filter(app => !['accepted','denied'].includes(app.status)).map(app => (<div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100"><div className="flex justify-between items-start mb-2"><div><p className="font-black text-sm text-[#3E2723]">{app.name}</p><p className="text-[10px] font-mono text-gray-500">{app.memberId}</p></div><span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{app.status === 'for_interview' ? 'Interview' : 'Pending'}</span></div><p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p><div className="flex gap-2 pt-3 border-t border-amber-200/50"><button onClick={() => handleUpdateAppStatus(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">Interview</button><button onClick={() => handleUpdateAppStatus(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button><button onClick={() => handleUpdateAppStatus(app, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button><button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button><a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a></div><p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p></div>))) : (<p className="text-xs text-gray-500 italic">No pending applications.</p>)}</div></div>
               </div>
            </div>
         )}
 
-        {/* MEMBERS VIEW (Registry) */}
         {view === 'members' && isOfficer && (
            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
               <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
                  <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
-                 <div className="flex gap-2 w-full md:w-auto justify-end">
-                    <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
-                        <option value="all">All</option>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="officers">Officers</option>
-                        <option value="committee">Committee</option>
-                    </select>
-                    <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
-                    <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
-                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
-                    <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
-                 </div>
+                 <div className="flex gap-2 w-full md:w-auto justify-end"><select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="officers">Officers</option><option value="committee">Committee</option></select><button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button><button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button><input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} /><button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button></div>
               </div>
               <div className="bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-x-auto">
-                 <table className="w-full text-left uppercase table-fixed min-w-[600px]">
-                    <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
-                        <tr className="text-[10px]">
-                            <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
-                            <th className="p-4 w-1/3">Barista</th>
-                            <th className="p-4 w-24 text-center">ID</th>
-                            <th className="p-4 w-24 text-center">Status</th>
-                            <th className="p-4 w-32 text-center">Designation</th>
-                            <th className="p-4 w-24 text-right">Manage</th>
-                        </tr>
-                    </thead>
+                 <table className="w-full text-left uppercase table-fixed min-w-[700px]">
+                    <thead className="bg-[#3E2723] text-white font-serif tracking-widest"><tr className="text-[10px]"><th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th><th className="p-4 w-1/3">Barista</th><th className="p-4 w-24 text-center">ID</th><th className="p-4 w-24 text-center">Status</th><th className="p-4 w-24 text-center">Joined</th><th className="p-4 w-32 text-center">Designation</th><th className="p-4 w-24 text-right">Manage</th></tr></thead>
                     <tbody className="text-[#3E2723] divide-y divide-amber-50">
                        {paginatedRegistry.map(m => (
                           <tr key={m.id || m.memberId} className="hover:bg-amber-50/50">
                              <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                             <td className="py-4 px-4">
-                                <div className="flex items-center gap-4">
-                                  <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" />
-                                  <div className="min-w-0">
-                                      <p className="font-black text-xs truncate">{m.name}</p>
-                                      <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
-                                      <div className="flex flex-wrap gap-1 mt-1">
-                                          {m.accolades?.map((acc, i) => (
-                                              <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
-                                          ))}
-                                      </div>
-                                  </div>
-                                </div>
-                             </td>
+                             <td className="py-4 px-4"><div className="flex items-center gap-4"><img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" /><div className="min-w-0"><p className="font-black text-xs truncate">{m.name}</p><p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p><div className="flex flex-wrap gap-1 mt-1">{m.accolades?.map((acc, i) => (<span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>))}</div></div></div></td>
                              <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
-                             <td className="text-center font-black text-[10px] uppercase">
-                                 {(() => {
-                                     const isOfficerRole = ['Officer', 'Execomm', 'Committee', 'Org Adviser'].includes(m.positionCategory);
-                                     // Default officers to Renewal if membershipType is missing
-                                     const status = m.membershipType || (isOfficerRole ? 'renewal' : 'new');
-                                     const isNew = status.toLowerCase() === 'new';
-                                     return (
-                                        <span className={`px-2 py-1 rounded-full ${isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
-                                            {status}
-                                        </span>
-                                     );
-                                 })()}
-                             </td>
-                             <td className="text-center">
-                                <div className="flex flex-col gap-1 items-center">
-                                    <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                    <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
-                                </div>
-                             </td>
-                             <td className="text-right p-4">
-                                 <div className="flex items-center justify-end gap-1">
-                                     <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
-                                     {isAdmin && <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>}
-                                     {isAdmin && <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>}
-                                 </div>
-                             </td>
+                             <td className="text-center font-black text-[10px] uppercase">{(() => { const isOfficerRole = ['Officer', 'Execomm', 'Committee', 'Org Adviser'].includes(m.positionCategory); const status = m.membershipType || (isOfficerRole ? 'renewal' : 'new'); const isNew = status.toLowerCase() === 'new'; const isExpired = m.status === 'expired'; return (<span className={`px-2 py-1 rounded-full ${isExpired ? 'bg-red-100 text-red-700' : isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>{isExpired ? 'EXPIRED' : status}</span>); })()}</td>
+                             {/* Manual Date Input */}
+                             <td className="text-center"><div onClick={() => setEditingJoinedDate(m.memberId)} className="cursor-pointer">{editingJoinedDate === m.memberId ? (<input type="date" className="text-[8px] w-20 border rounded" autoFocus onBlur={(e) => handleUpdateJoinedDate(m.memberId, e.target.value)} defaultValue={m.joinedDate ? m.joinedDate.split('T')[0] : ''} />) : (<p className="text-[9px] font-bold">{formatDate(m.joinedDate)}</p>)}</div></td>
+                             <td className="text-center"><div className="flex flex-col gap-1 items-center"><select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select><select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-24 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select></div></td>
+                             <td className="text-right p-4"><div className="flex items-center justify-end gap-1"><button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>{isAdmin && <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>}{isAdmin && <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>}</div></td>
                           </tr>
                        ))}
                     </tbody>
                  </table>
               </div>
-
-              {/* Pagination Controls */}
-              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-amber-100 mt-4">
-                 <button onClick={prevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Previous</button>
-                 <span className="text-xs font-black uppercase text-gray-500">Page {currentPage} of {totalPages}</span>
-                 <button onClick={nextPage} disabled={currentPage === totalPages} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Next</button>
-              </div>
-
+              <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-amber-100 mt-4"><button onClick={prevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Previous</button><span className="text-xs font-black uppercase text-gray-500">Page {currentPage} of {totalPages}</span><button onClick={nextPage} disabled={currentPage === totalPages} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Next</button></div>
            </div>
         )}
-
       </main>
+      <Footer />
     </div>
   );
 };
@@ -2632,25 +1613,8 @@ const App = () => {
 
   useEffect(() => {
     const storedProfile = localStorage.getItem('lba_profile');
-    if (storedProfile) {
-        try {
-            setProfile(JSON.parse(storedProfile));
-            setLoading(false);
-        } catch (e) {
-            console.error("Storage parse error", e);
-            localStorage.removeItem('lba_profile');
-        }
-    }
-
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-           await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-           await signInAnonymously(auth);
-        }
-      } catch (err) {}
-    };
+    if (storedProfile) { try { setProfile(JSON.parse(storedProfile)); setLoading(false); } catch (e) { console.error("Storage parse error", e); localStorage.removeItem('lba_profile'); } }
+    const initAuth = async () => { try { if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) { await signInWithCustomToken(auth, __initial_auth_token); } else { await signInAnonymously(auth); } } catch (err) {} };
     initAuth();
     
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -2660,19 +1624,17 @@ const App = () => {
              const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('uid', '==', currentUser.uid));
              const snap = await getDocs(q);
              if (!snap.empty) {
-                 const userData = snap.docs[0].data();
+                 let userData = snap.docs[0].data();
+                 const opsSnap = await getDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'));
+                 const opsData = opsSnap.exists() ? opsSnap.data() : {};
+                 if (userData.status === 'active') { userData = await checkExpirationStatus(userData, opsData); }
                  setProfile(userData);
                  localStorage.setItem('lba_profile', JSON.stringify(userData));
              }
          } catch (e) {
              console.warn("Profile fetch error", e);
-             if (e.code === 'permission-denied') {
-                 setAuthError("Database Locked: Please go to Firebase Console > Firestore > Rules and change 'allow read, write: if false;' to 'if true;'.");
-                 await signOut(auth);
-                 localStorage.removeItem('lba_profile');
-             } else {
-                 setAuthError("Connection Error: " + e.message);
-             }
+             if (e.code === 'permission-denied') { setAuthError("Database Locked: Please go to Firebase Console > Firestore > Rules and change 'allow read, write: if false;' to 'if true;'."); await signOut(auth); localStorage.removeItem('lba_profile'); } 
+             else { setAuthError("Connection Error: " + e.message); }
          }
       }
       setLoading(false);
