@@ -361,26 +361,29 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     setStatusMessage('Checking registry...');
                     let currentCount = 0;
                     try {
-                        // Simplified query to prevent permission/index errors
-                        const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
-                        const snapshot = await getDocs(registryRef);
-                        currentCount = snapshot.size;
+                        const q = query(
+                            collection(db, 'artifacts', appId, 'public', 'data', 'registry'),
+                            orderBy('joinedDate', 'desc'),
+                            limit(1)
+                        );
+                        const snapshot = await getDocs(q);
                         
                         if (!snapshot.empty) {
-                            // Manual max ID calculation to ensure correct sequencing without complex query
-                            const ids = snapshot.docs.map(doc => {
-                                const data = doc.data();
-                                if (!data.memberId) return 0;
-                                const match = data.memberId.match(/-(\d)(\d{4,})C?$/);
-                                return match ? parseInt(match[2], 10) : 0;
-                            });
-                            const maxId = Math.max(...ids);
-                            if (maxId > currentCount) currentCount = maxId;
+                            const lastMember = snapshot.docs[0].data();
+                            const match = lastMember.memberId.match(/-(\d)(\d{4,})C?$/);
+                            if (match) {
+                                currentCount = parseInt(match[2], 10);
+                            } else {
+                                const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+                                currentCount = allDocs.size;
+                            }
                         }
                     } catch (fetchErr) {
-                         console.warn("Registry counting error:", fetchErr);
-                         // Fallback logic if permissions fail completely
-                         currentCount = Math.floor(Date.now() / 1000) % 10000; 
+                        if (fetchErr.code === 'permission-denied' || fetchErr.message.includes("insufficient permission")) {
+                            throw fetchErr;
+                        }
+                        const allDocs = await getDocs(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+                        currentCount = allDocs.size;
                     }
                     
                     const assignedId = generateLBAId(pc, currentCount);
