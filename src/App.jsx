@@ -9,14 +9,18 @@ import {
   orderBy, writeBatch, arrayUnion, arrayRemove, runTransaction
 } from 'firebase/firestore'; 
 import { 
-  Users, Calendar, Award, Bell, LogOut, BarChart3, Plus, 
-  ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, Users2, 
-  Download, Lock, ShieldAlert, BadgeCheck, MapPin, Edit3, Send, 
-  Megaphone, Ticket, ToggleLeft, ToggleRight, MessageSquare, 
+  Users, Calendar, Award, Bell, LogOut, LayoutDashboard, Plus, 
+  ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, UserCircle, 
+  Download, Lock, ShieldAlert, BadgeCheck, MapPin, Pencil, Send, 
+  Megaphone, Ticket, MessageSquare, 
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand, Image as ImageIcon, Link as LinkIcon, RefreshCcw, GraduationCap, PenTool, BookOpen, AlertOctagon, Power
+  History, FileText, Cake, Camera, User, Trophy, Clock, 
+  Briefcase, ClipboardCheck, ChevronDown, ChevronUp, 
+  CheckSquare, Music, Database, ExternalLink, Hand, Image as ImageIcon, 
+  Link as LinkIcon, RefreshCcw, GraduationCap, PenTool, BookOpen, 
+  AlertOctagon, Power
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -1334,7 +1338,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       if (!confirm("Delete this application?")) return;
       try {
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id));
-      } catch (err) { console.error(err); }
+      } catch(err) { console.error(err); }
   };
 
   const handleToggleRegistration = async () => {
@@ -1486,7 +1490,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              });
           }
           await batch.commit();
-          alert("Recovery successful! Please check registry.");
+          alert("Recovery successful! David (20007C), Geremiah (20019C), and Cassandra (20020C) have been restored.");
       } catch (err) {
           console.error(err);
           alert("Recovery failed: " + err.message);
@@ -1682,11 +1686,11 @@ ${window.location.origin}`;
 
 
   const menuItems = [
-    { id: 'home', label: 'Dashboard', icon: BarChart3 },
+    { id: 'home', label: 'Dashboard', icon: LayoutDashboard },
     // Removed Settings from menu
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'masterclass', label: 'Masterclass', icon: GraduationCap },
-    { id: 'team', label: 'Brew Crew', icon: Users2 },
+    { id: 'team', label: 'Brew Crew', icon: Users },
     { id: 'events', label: "What's Brewing?", icon: Calendar, hasNotification: notifications.events },
     { id: 'announcements', label: 'Grind Report', icon: Bell, hasNotification: notifications.announcements },
     { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare, hasNotification: notifications.suggestions },
@@ -2378,7 +2382,7 @@ ${window.location.origin}`;
                                                   className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" 
                                                   title="Edit Member Details"
                                               >
-                                                  <Edit3 size={14}/>
+                                                  <Pencil size={14}/>
                                               </button>
                                               <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
                                               <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
@@ -2408,3 +2412,5 @@ ${window.location.origin}`;
     </div>
   );
 };
+
+export default App;
