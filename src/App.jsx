@@ -16,7 +16,7 @@ import {
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand, Image, Link as LinkIcon, RefreshCcw, GraduationCap, Grip, Move, ZoomIn, ZoomOut
+  History, BrainCircuit, FileText, Cake, Camera, User, Trophy, Clock, FileBarChart, Briefcase, ClipboardCheck, ChevronDown, ChevronUp, CheckSquare, Music, Database, ExternalLink, Hand, Image, Link as LinkIcon, RefreshCcw, GraduationCap, Grip, Move, ZoomIn, ZoomOut, PenTool
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -64,7 +64,7 @@ const MONTHS = [
   { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }
 ];
 
-const MASTERCLASS_MODULES = [
+const DEFAULT_MASTERCLASS_MODULES = [
     { id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" },
     { id: 2, title: "Equipment Familiarization", short: "Equipment" },
     { id: 3, title: "Manual Brewing", short: "Brewing" },
@@ -512,10 +512,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
   // Masterclass State
-  const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] } });
+  const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleTitles: {} });
   const [showCertificate, setShowCertificate] = useState(false);
   const [adminMcModule, setAdminMcModule] = useState(1);
   const [adminMcInput, setAdminMcInput] = useState('');
+  const [editingMcTitles, setEditingMcTitles] = useState(false);
+  const [tempMcTitles, setTempMcTitles] = useState({});
 
   // Anniversary State
   const [isAnniversary, setIsAnniversary] = useState(false);
@@ -791,7 +793,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             setMasterclassData(s.data());
         } else {
             // Init if not exists
-            const initData = { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] } };
+            const initData = { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleTitles: {} };
             setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), initData);
         }
     });
@@ -1125,6 +1127,18 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       try {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), masterclassData);
           alert("Template Saved");
+      } catch(e) { console.error(e); }
+  };
+
+  const handleSaveMcTitles = async () => {
+      try {
+          const newData = {
+              ...masterclassData,
+              moduleTitles: { ...masterclassData.moduleTitles, ...tempMcTitles }
+          };
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData);
+          setEditingMcTitles(false);
+          alert("Titles Updated");
       } catch(e) { console.error(e); }
   };
 
@@ -1830,13 +1844,13 @@ ${window.location.origin}`;
                           {(() => {
                               const myBadges = [];
                               let completedCount = 0;
-                              MASTERCLASS_MODULES.forEach(mod => {
+                              DEFAULT_MASTERCLASS_MODULES.forEach(mod => {
                                   if (masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId)) {
                                       completedCount++;
                                       const icons = ["🌱", "⚙️", "💧", "☕", "🍹"];
                                       myBadges.push(
                                           <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
-                                              <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex items-center justify-center text-xl cursor-help border border-green-100">{icons[mod.id-1]}</div>
+                                              <div title={`Completed: ${masterclassData.moduleTitles?.[mod.id] || mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex items-center justify-center text-xl cursor-help border border-green-100">{icons[mod.id-1]}</div>
                                               <span className="text-[8px] font-black uppercase text-green-800 text-center leading-tight">{mod.short}</span>
                                           </div>
                                       );
@@ -1896,7 +1910,8 @@ ${window.location.origin}`;
                     <StatIcon icon={History} variant="amber" />
                     <h3 className="font-serif text-3xl font-black uppercase">Legacy Story</h3>
                  </div>
-                 {isOfficer && <button onClick={() => setIsEditingLegacy(!isEditingLegacy)} className="text-amber-500 text-xs font-bold uppercase underline">Edit</button>}
+                 {/* Only Admins (Officers/Execomm) can edit legacy story now */}
+                 {isAdmin && <button onClick={() => setIsEditingLegacy(!isEditingLegacy)} className="text-amber-500 text-xs font-bold uppercase underline">Edit</button>}
               </div>
               {isEditingLegacy ? (
                   <div className="space-y-4">
@@ -2022,7 +2037,7 @@ ${window.location.origin}`;
                         {/* Member Progress */}
                         {(() => {
                             let completed = 0;
-                            MASTERCLASS_MODULES.forEach(m => {
+                            DEFAULT_MASTERCLASS_MODULES.forEach(m => {
                                 if (masterclassData.moduleAttendees?.[m.id]?.includes(profile.memberId)) completed++;
                             });
                             const progress = (completed / 5) * 100;
@@ -2055,8 +2070,10 @@ ${window.location.origin}`;
                     {/* Modules List */}
                     <div className="lg:col-span-2 space-y-4">
                         <h4 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-2">Curriculum</h4>
-                        {MASTERCLASS_MODULES.map((mod) => {
+                        {DEFAULT_MASTERCLASS_MODULES.map((mod) => {
                             const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
+                            const dynamicTitle = masterclassData.moduleTitles?.[mod.id] || mod.title;
+                            
                             return (
                                 <div key={mod.id} className={`p-6 rounded-3xl border flex items-center justify-between transition-all ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-amber-100'}`}>
                                     <div className="flex items-center gap-4">
@@ -2064,7 +2081,7 @@ ${window.location.origin}`;
                                             {mod.id}
                                         </div>
                                         <div>
-                                            <h5 className={`font-black text-sm uppercase ${isCompleted ? 'text-green-900' : 'text-gray-700'}`}>{mod.title}</h5>
+                                            <h5 className={`font-black text-sm uppercase ${isCompleted ? 'text-green-900' : 'text-gray-700'}`}>{dynamicTitle}</h5>
                                             <p className="text-[10px] text-gray-500 uppercase font-bold tracking-wider">{isCompleted ? "Completed" : "Pending"}</p>
                                         </div>
                                     </div>
@@ -2074,7 +2091,7 @@ ${window.location.origin}`;
                         })}
                     </div>
 
-                    {/* Admin Tools */}
+                    {/* Admin Tools - Strict Access for Admins Only */}
                     {isAdmin && (
                         <div className="space-y-6">
                             <div className="bg-white p-6 rounded-[32px] border border-amber-200 shadow-sm">
@@ -2095,6 +2112,32 @@ ${window.location.origin}`;
                                         </div>
                                     </div>
 
+                                    {/* Edit Module Titles Section */}
+                                    <div className="pt-4 border-t border-gray-100">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-[10px] font-bold uppercase text-gray-500">Edit Curriculum</label>
+                                            <button onClick={() => { setEditingMcTitles(!editingMcTitles); setTempMcTitles(masterclassData.moduleTitles || {}); }} className="text-blue-500 p-1 hover:bg-blue-50 rounded"><PenTool size={14}/></button>
+                                        </div>
+                                        
+                                        {editingMcTitles && (
+                                            <div className="space-y-2 mb-4 bg-gray-50 p-3 rounded-xl">
+                                                {DEFAULT_MASTERCLASS_MODULES.map(mod => (
+                                                    <div key={mod.id} className="flex gap-2 items-center">
+                                                        <span className="text-[10px] font-bold w-6 text-gray-400">#{mod.id}</span>
+                                                        <input 
+                                                            type="text" 
+                                                            className="flex-1 p-1 border rounded text-xs" 
+                                                            placeholder={mod.title}
+                                                            value={tempMcTitles[mod.id] !== undefined ? tempMcTitles[mod.id] : (masterclassData.moduleTitles?.[mod.id] || mod.title)}
+                                                            onChange={e => setTempMcTitles({...tempMcTitles, [mod.id]: e.target.value})}
+                                                        />
+                                                    </div>
+                                                ))}
+                                                <button onClick={handleSaveMcTitles} className="w-full py-1 bg-green-500 text-white rounded text-[10px] font-bold uppercase mt-2">Save Titles</button>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     <div className="pt-4 border-t border-gray-100">
                                         <label className="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Manual Attendee Import</label>
                                         <select 
@@ -2102,7 +2145,11 @@ ${window.location.origin}`;
                                             value={adminMcModule}
                                             onChange={e => setAdminMcModule(e.target.value)}
                                         >
-                                            {MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Mod {m.id}: {m.short}</option>)}
+                                            {DEFAULT_MASTERCLASS_MODULES.map(m => (
+                                                <option key={m.id} value={m.id}>
+                                                    Mod {m.id}: {masterclassData.moduleTitles?.[m.id] || m.short}
+                                                </option>
+                                            ))}
                                         </select>
                                         <textarea 
                                             className="w-full p-2 border rounded-lg text-xs h-24 mb-2 bg-gray-50"
