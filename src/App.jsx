@@ -1456,6 +1456,43 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch(e) { console.error(e); }
   };
 
+  // Special Recovery Function for specific incident
+  const handleRecoverLostData = async () => {
+      if(!confirm("This will restore David, Geremiah, and Cassandra with specific IDs. Continue?")) return;
+      const batch = writeBatch(db);
+      
+      const recoveredMembers = [
+          { name: "DAVID MATTHEW ADRIAS", newId: "LBA2526-20007C" },
+          { name: "GEREMIAH HERNANI", newId: "LBA2526-20019C" },
+          { name: "CASSANDRA CASIPIT", newId: "LBA2526-20020C" }
+      ];
+
+      try {
+          for (const m of recoveredMembers) {
+             const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', m.newId);
+             batch.set(docRef, {
+                 name: m.name,
+                 memberId: m.newId,
+                 email: "update_email@lpu.edu.ph", // Placeholder
+                 program: "UPDATE_PROGRAM", // Placeholder
+                 positionCategory: "Committee", // Inferring from 'C' suffix
+                 specificTitle: "Committee Member", 
+                 role: "member", // Default to member role access
+                 status: "active",
+                 paymentStatus: "exempt",
+                 joinedDate: new Date().toISOString(),
+                 password: "LBA" + m.newId.slice(-5),
+                 uid: "recovered_" + Date.now() + Math.random() // Temp UID until they claim/login
+             });
+          }
+          await batch.commit();
+          alert("Recovery successful! Please check registry.");
+      } catch (err) {
+          console.error(err);
+          alert("Recovery failed: " + err.message);
+      }
+  };
+
   // --- NEW FEATURES ---
   const handleExportCSV = () => {
       let dataToExport = [...members];
@@ -2205,6 +2242,7 @@ ${window.location.origin}`;
                         <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
                         <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
                         <button onClick={handleMigrateToRenewal} className="w-full mt-4 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Migrate: Set All to Renewal</button>
+                        <button onClick={handleRecoverLostData} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Recover Lost Members (Collision Fix)</button>
                      </div>
                  </div>
                  {/* ... Committee Apps ... */}
