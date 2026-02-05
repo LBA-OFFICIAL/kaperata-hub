@@ -9,18 +9,18 @@ import {
   orderBy, writeBatch, arrayUnion, arrayRemove, runTransaction
 } from 'firebase/firestore'; 
 import { 
-  Users, Calendar, Award, Bell, LogOut, LayoutDashboard, Plus, 
-  ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, UserCircle, 
-  Download, Lock, ShieldAlert, BadgeCheck, MapPin, Pencil, Send, 
+  Users, Calendar, Award, Bell, LogOut, Home, Plus, 
+  ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, 
+  Download, Lock, ShieldAlert, BadgeCheck, MapPin, Pen, Send, 
   Megaphone, Ticket, MessageSquare, 
   TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
   Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
   LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, FileText, Cake, Camera, User, Trophy, Clock, 
+  History, Cake, Camera, User, Trophy, Clock, 
   Briefcase, ClipboardCheck, ChevronDown, ChevronUp, 
   CheckSquare, Music, Database, ExternalLink, Hand, Image as ImageIcon, 
   Link as LinkIcon, RefreshCcw, GraduationCap, PenTool, BookOpen, 
-  AlertOctagon, Power
+  AlertOctagon, Power, FileText
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -1686,7 +1686,7 @@ ${window.location.origin}`;
 
 
   const menuItems = [
-    { id: 'home', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'home', label: 'Dashboard', icon: Home },
     // Removed Settings from menu
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'masterclass', label: 'Masterclass', icon: GraduationCap },
@@ -2382,7 +2382,7 @@ ${window.location.origin}`;
                                                   className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" 
                                                   title="Edit Member Details"
                                               >
-                                                  <Pencil size={14}/>
+                                                  <Pen size={14}/>
                                               </button>
                                               <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
                                               <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
