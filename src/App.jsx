@@ -1805,7 +1805,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleGiveAccolade = async () => {
       if (!accoladeText.trim() || !showAccoladeModal) return;
       try {
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', showAccoladeModal.memberId);
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', showAccoladeModal.id);
           await updateDoc(memberRef, {
               accolades: arrayUnion(accoladeText)
           });
@@ -2154,6 +2154,21 @@ ${window.location.origin}`;
         </div>
       )}
 
+      {/* Accolade Modal */}
+      {showAccoladeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
+                <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trophy size={32} /></div>
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
+                <input type="text" placeholder="Achievement Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} />
+                <div className="flex gap-3">
+                    <button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                    <button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs hover:bg-yellow-600">Award</button>
+                </div>
+            </div>
+        </div>
+      )}
+
       <aside className={`
           bg-[#3E2723] text-amber-50 flex-col 
           md:w-64 md:flex 
@@ -2225,130 +2240,6 @@ ${window.location.origin}`;
 
             {view === 'home' && (
             <div className="space-y-10 animate-fadeIn">
-                {/* Expired Membership Banner */}
-                {profile.status === 'expired' && (
-                    <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-r-xl mb-6 shadow-md">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <h3 className="text-xl font-black uppercase text-red-700 flex items-center gap-2">
-                                    <AlertCircle size={24}/> Membership Expired
-                                </h3>
-                                <p className="text-sm text-red-800 mt-2 font-medium">
-                                    Your membership access is currently limited. Please settle your full membership fee to reactivate your account and restore full access to all features.
-                                </p>
-                            </div>
-                            <div className="text-right">
-                                <span className="bg-red-200 text-red-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">Status: Expired</span>
-                            </div>
-                        </div>
-                        
-                        <div className="mt-6 bg-white p-6 rounded-2xl border border-red-100">
-                            <h4 className="text-sm font-black uppercase text-gray-700 mb-4">Renewal Payment</h4>
-                            <p className="text-xs text-gray-500 mb-4">Please send the full membership fee via GCash to the number below, then enter your Reference Number to verify.</p>
-                            
-                            <div className="flex flex-col md:flex-row gap-6 items-center">
-                                <div className="bg-blue-50 p-4 rounded-xl text-center w-full md:w-auto">
-                                    <p className="text-[10px] font-black uppercase text-blue-800">GCash Only</p>
-                                    <p className="text-lg font-black text-blue-900">+639063751402</p>
-                                </div>
-                                
-                                <form onSubmit={e => {
-                                    // Expired members must pay full via GCash
-                                    setRenewalMethod('gcash');
-                                    handleRenewalPayment(e);
-                                }} className="flex-1 w-full flex gap-3">
-                                    <input 
-                                        type="text" 
-                                        required 
-                                        placeholder="Enter Reference No." 
-                                        className="flex-1 p-3 border border-gray-300 rounded-xl text-xs uppercase focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
-                                        value={renewalRef}
-                                        onChange={(e) => setRenewalRef(e.target.value)}
-                                    />
-                                    <button 
-                                        type="submit" 
-                                        className="bg-red-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-red-700 transition-colors shadow-lg"
-                                    >
-                                        Reactivate
-                                    </button>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* 15-Day Renewal Period Banner (For Active Members) */}
-                {!isExpired && hubSettings.renewalMode && !isExemptFromRenewal && (
-                    <div className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-r-xl mb-6 shadow-md animate-slideIn">
-                         <div className="flex items-start justify-between">
-                            <div>
-                                <h3 className="text-xl font-black uppercase text-orange-700 flex items-center gap-2">
-                                    <RefreshCcw size={24}/> Renewal Period Open
-                                </h3>
-                                <p className="text-sm text-orange-800 mt-2 font-medium">
-                                    Please renew your membership within the 15-day period to avoid expiration.
-                                </p>
-                            </div>
-                            <div className="text-right">
-                                <span className="bg-orange-200 text-orange-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">Action Required</span>
-                            </div>
-                        </div>
-
-                        <div className="mt-6 bg-white p-6 rounded-2xl border border-orange-100">
-                             <h4 className="text-sm font-black uppercase text-gray-700 mb-4">Renew Membership</h4>
-                             
-                             <div className="flex flex-col gap-4">
-                                 {/* Method Selection */}
-                                 {hubSettings.allowedPayment === 'both' && (
-                                     <div className="flex gap-2">
-                                         <button type="button" onClick={() => setRenewalMethod('gcash')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${renewalMethod === 'gcash' ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-white border-gray-200 text-gray-500'}`}>GCash</button>
-                                         <button type="button" onClick={() => setRenewalMethod('cash')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${renewalMethod === 'cash' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-gray-200 text-gray-500'}`}>Cash</button>
-                                     </div>
-                                 )}
-
-                                 <form onSubmit={handleRenewalPayment} className="flex flex-col gap-3">
-                                     {renewalMethod === 'gcash' ? (
-                                         <div className="space-y-3">
-                                             <div className="text-xs bg-blue-50 p-3 rounded-lg text-blue-900">
-                                                 <strong>Send to:</strong> 09063751402 (GCash)
-                                             </div>
-                                             <input 
-                                                type="text" 
-                                                required 
-                                                placeholder="Enter GCash Reference No." 
-                                                className="w-full p-3 border border-gray-300 rounded-xl text-xs uppercase outline-none focus:border-orange-500"
-                                                value={renewalRef}
-                                                onChange={(e) => setRenewalRef(e.target.value)}
-                                             />
-                                         </div>
-                                     ) : (
-                                         <div className="space-y-3">
-                                             <div className="text-xs bg-green-50 p-3 rounded-lg text-green-900">
-                                                 Pay to an officer to get the Daily Cash Key.
-                                             </div>
-                                             <input 
-                                                type="text" 
-                                                required 
-                                                placeholder="Enter Daily Cash Key" 
-                                                className="w-full p-3 border border-gray-300 rounded-xl text-xs uppercase outline-none focus:border-orange-500"
-                                                value={renewalCashKey}
-                                                onChange={(e) => setRenewalCashKey(e.target.value.toUpperCase())}
-                                             />
-                                         </div>
-                                     )}
-                                     
-                                     <button 
-                                        type="submit" 
-                                        className="w-full bg-orange-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-orange-700 transition-colors shadow-lg"
-                                     >
-                                         Confirm Renewal
-                                     </button>
-                                 </form>
-                             </div>
-                        </div>
-                    </div>
-                )}
-
                 {/* Birthday & Anniversary Banners */}
                 <div className="space-y-4">
                     {isBirthday && (
@@ -2440,7 +2331,7 @@ ${window.location.origin}`;
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
-                        <div className={`${profile.status === 'active' ? 'bg-green-500' : 'bg-gray-500'} text-white px-5 py-2 rounded-full font-black text-[9px] uppercase`}>{profile.status === 'active' ? 'Active' : 'Expired'}</div>
+                        <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
                         <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
                         <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
                     </div>
@@ -3010,7 +2901,7 @@ ${window.location.origin}`;
                                             <div className="flex flex-wrap items-start justify-between gap-2">
                                                 <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
                                                 <div className="flex flex-wrap gap-1 justify-end">
-                                                    {ev.isVolunteer && (
+                                                    {ev.shifts && ev.shifts.length > 0 && (
                                                         <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase whitespace-nowrap ${isMultiShift ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
                                                             {isMultiShift ? 'Multi-Session' : 'Whole Day'}
                                                         </span>
