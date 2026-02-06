@@ -20,7 +20,7 @@ import {
   Briefcase, ClipboardCheck, ChevronDown, ChevronUp, 
   CheckSquare, Music, Database, ExternalLink, Hand, Image as ImageIcon, 
   Link as LinkIcon, RefreshCcw, GraduationCap, PenTool, BookOpen, 
-  AlertOctagon, Power, FileText, FileBarChart, MoreVertical
+  AlertOctagon, Power, FileText, FileBarChart, MoreVertical, CreditCard
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -640,7 +640,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [suggestions, setSuggestions] = useState([]);
   const [committeeApps, setCommitteeApps] = useState([]); 
   const [userApplications, setUserApplications] = useState([]);
-  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false });
+  const [hubSettings, setHubSettings] = useState({ 
+      registrationOpen: true, 
+      renewalOpen: true, 
+      maintenanceMode: false,
+      renewalMode: false, 
+      allowedPayment: 'gcash_only' // 'gcash_only' or 'both'
+  });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -666,6 +672,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Renewal/Payment State
   const [renewalRef, setRenewalRef] = useState('');
+  const [renewalMethod, setRenewalMethod] = useState('gcash');
+  const [renewalCashKey, setRenewalCashKey] = useState('');
 
   // Last visited state for notifications
   const [lastVisited, setLastVisited] = useState(() => {
@@ -763,6 +771,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const pc = String(profile.positionCategory).toUpperCase();
       return ['OFFICER', 'EXECOMM'].includes(pc);
   }, [profile?.positionCategory]);
+
+  // Check if member is expired
+  const isExpired = useMemo(() => {
+      return profile.status === 'expired';
+  }, [profile.status]);
+
+  // Check if member is exempt from renewal (Officers, Committees, etc)
+  const isExemptFromRenewal = useMemo(() => {
+     const pc = String(profile.positionCategory).toUpperCase();
+     return ['OFFICER', 'EXECOMM', 'COMMITTEE', 'ORG ADVISER'].includes(pc);
+  }, [profile.positionCategory]);
 
   // Birthday Logic
   const isBirthday = useMemo(() => {
@@ -1065,6 +1084,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const handlePostSuggestion = async (e) => {
       e.preventDefault();
+      // EXPIRED CHECK
+      if (isExpired) return alert("Your membership is expired. Please renew to post suggestions.");
+      
       if (!suggestionText.trim()) return;
       try {
           // Use 'Anonymous' as authorName
@@ -1241,6 +1263,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
   
   const handleRegisterEvent = async (ev) => {
+      // EXPIRED CHECK
+      if (isExpired) return alert("Your membership is expired. Please renew to join events.");
+
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
       const isRegistered = ev.registered?.includes(profile.memberId);
       try {
@@ -1254,6 +1279,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Volunteer Shift Signup
   const handleVolunteerSignup = async (ev, shiftId) => {
+      // EXPIRED CHECK
+      if (isExpired) return alert("Your membership is expired. Please renew to volunteer.");
+
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
       
       // We need to clone the shifts array, modify the specific shift, and update
@@ -1341,11 +1369,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Masterclass Admin Functions
   const handleBulkAddMasterclass = async () => {
-      // Use selectedMcMembers array
       if (selectedMcMembers.length === 0) return alert("No members selected!");
       
       const currentAttendees = masterclassData.moduleAttendees?.[adminMcModule] || [];
-      // Combine and unique
       const updatedAttendees = [...new Set([...currentAttendees, ...selectedMcMembers])];
       
       const newData = {
@@ -1385,6 +1411,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const handleApplyCommittee = async (e, targetCommittee) => {
       e.preventDefault();
+      // EXPIRED CHECK
+      if (isExpired) return alert("Your membership is expired. Please renew to apply.");
+
       setSubmittingApp(true);
       try {
           // Check for existing application to prevent duplicates
@@ -1495,6 +1524,25 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch (err) { console.error(err); }
   };
 
+  const handleToggleRenewalMode = async () => {
+    try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+            ...hubSettings,
+            renewalMode: !hubSettings.renewalMode
+        });
+    } catch (err) { console.error(err); }
+  };
+
+  const handleToggleAllowedPayment = async () => {
+      const newMode = hubSettings.allowedPayment === 'gcash_only' ? 'both' : 'gcash_only';
+      try {
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+              ...hubSettings,
+              allowedPayment: newMode
+          });
+      } catch (err) { console.error(err); }
+  };
+
   const handleDownloadFinancials = () => {
       let filtered = members;
       if (financialFilter !== 'all') {
@@ -1590,8 +1638,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   // Handle Renewal Payment for Expired Members
   const handleRenewalPayment = async (e) => {
       e.preventDefault();
-      if (!renewalRef) return;
+      if (renewalMethod === 'gcash' && !renewalRef) return;
+      if (renewalMethod === 'cash' && !renewalCashKey) return;
       
+      if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) {
+          return alert("Invalid Cash Key.");
+      }
+
       try {
           const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId);
           const meta = getMemberIdMeta();
@@ -1603,13 +1656,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               lastRenewedSem: meta.sem,
               membershipType: 'renewal',
               paymentDetails: {
-                  method: 'gcash',
-                  refNo: renewalRef,
+                  method: renewalMethod,
+                  refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH',
                   date: new Date().toISOString()
               }
           });
           
           setRenewalRef('');
+          setRenewalCashKey('');
           alert("Membership renewed successfully! Welcome back.");
       } catch (err) {
           console.error("Renewal failed:", err);
@@ -2100,21 +2154,6 @@ ${window.location.origin}`;
         </div>
       )}
 
-      {/* Accolade Modal */}
-      {showAccoladeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
-                <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trophy size={32} /></div>
-                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
-                <input type="text" placeholder="Achievement Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} />
-                <div className="flex gap-3">
-                    <button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
-                    <button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs hover:bg-yellow-600">Award</button>
-                </div>
-            </div>
-        </div>
-      )}
-
       <aside className={`
           bg-[#3E2723] text-amber-50 flex-col 
           md:w-64 md:flex 
@@ -2209,11 +2248,15 @@ ${window.location.origin}`;
                             
                             <div className="flex flex-col md:flex-row gap-6 items-center">
                                 <div className="bg-blue-50 p-4 rounded-xl text-center w-full md:w-auto">
-                                    <p className="text-[10px] font-black uppercase text-blue-800">GCash</p>
+                                    <p className="text-[10px] font-black uppercase text-blue-800">GCash Only</p>
                                     <p className="text-lg font-black text-blue-900">+639063751402</p>
                                 </div>
                                 
-                                <form onSubmit={handleRenewalPayment} className="flex-1 w-full flex gap-3">
+                                <form onSubmit={e => {
+                                    // Expired members must pay full via GCash
+                                    setRenewalMethod('gcash');
+                                    handleRenewalPayment(e);
+                                }} className="flex-1 w-full flex gap-3">
                                     <input 
                                         type="text" 
                                         required 
@@ -2226,10 +2269,82 @@ ${window.location.origin}`;
                                         type="submit" 
                                         className="bg-red-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-red-700 transition-colors shadow-lg"
                                     >
-                                        Renew Now
+                                        Reactivate
                                     </button>
                                 </form>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* 15-Day Renewal Period Banner (For Active Members) */}
+                {!isExpired && hubSettings.renewalMode && !isExemptFromRenewal && (
+                    <div className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-r-xl mb-6 shadow-md animate-slideIn">
+                         <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-xl font-black uppercase text-orange-700 flex items-center gap-2">
+                                    <RefreshCcw size={24}/> Renewal Period Open
+                                </h3>
+                                <p className="text-sm text-orange-800 mt-2 font-medium">
+                                    Please renew your membership within the 15-day period to avoid expiration.
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <span className="bg-orange-200 text-orange-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">Action Required</span>
+                            </div>
+                        </div>
+
+                        <div className="mt-6 bg-white p-6 rounded-2xl border border-orange-100">
+                             <h4 className="text-sm font-black uppercase text-gray-700 mb-4">Renew Membership</h4>
+                             
+                             <div className="flex flex-col gap-4">
+                                 {/* Method Selection */}
+                                 {hubSettings.allowedPayment === 'both' && (
+                                     <div className="flex gap-2">
+                                         <button type="button" onClick={() => setRenewalMethod('gcash')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${renewalMethod === 'gcash' ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-white border-gray-200 text-gray-500'}`}>GCash</button>
+                                         <button type="button" onClick={() => setRenewalMethod('cash')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${renewalMethod === 'cash' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-gray-200 text-gray-500'}`}>Cash</button>
+                                     </div>
+                                 )}
+
+                                 <form onSubmit={handleRenewalPayment} className="flex flex-col gap-3">
+                                     {renewalMethod === 'gcash' ? (
+                                         <div className="space-y-3">
+                                             <div className="text-xs bg-blue-50 p-3 rounded-lg text-blue-900">
+                                                 <strong>Send to:</strong> 09063751402 (GCash)
+                                             </div>
+                                             <input 
+                                                type="text" 
+                                                required 
+                                                placeholder="Enter GCash Reference No." 
+                                                className="w-full p-3 border border-gray-300 rounded-xl text-xs uppercase outline-none focus:border-orange-500"
+                                                value={renewalRef}
+                                                onChange={(e) => setRenewalRef(e.target.value)}
+                                             />
+                                         </div>
+                                     ) : (
+                                         <div className="space-y-3">
+                                             <div className="text-xs bg-green-50 p-3 rounded-lg text-green-900">
+                                                 Pay to an officer to get the Daily Cash Key.
+                                             </div>
+                                             <input 
+                                                type="text" 
+                                                required 
+                                                placeholder="Enter Daily Cash Key" 
+                                                className="w-full p-3 border border-gray-300 rounded-xl text-xs uppercase outline-none focus:border-orange-500"
+                                                value={renewalCashKey}
+                                                onChange={(e) => setRenewalCashKey(e.target.value.toUpperCase())}
+                                             />
+                                         </div>
+                                     )}
+                                     
+                                     <button 
+                                        type="submit" 
+                                        className="w-full bg-orange-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-orange-700 transition-colors shadow-lg"
+                                     >
+                                         Confirm Renewal
+                                     </button>
+                                 </form>
+                             </div>
                         </div>
                     </div>
                 )}
@@ -2895,7 +3010,7 @@ ${window.location.origin}`;
                                             <div className="flex flex-wrap items-start justify-between gap-2">
                                                 <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
                                                 <div className="flex flex-wrap gap-1 justify-end">
-                                                    {ev.shifts && ev.shifts.length > 0 && (
+                                                    {ev.isVolunteer && (
                                                         <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase whitespace-nowrap ${isMultiShift ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
                                                             {isMultiShift ? 'Multi-Session' : 'Whole Day'}
                                                         </span>
@@ -3141,6 +3256,22 @@ ${window.location.origin}`;
                                     </button>
                                 </div>
                             </div>
+                            
+                            <hr className="border-amber-100 my-4"/>
+                            
+                            {/* --- RENEWAL CONTROLS --- */}
+                            <div className="flex justify-between items-center mb-6">
+                                <h4 className="font-black uppercase text-sm">Renewal Season</h4>
+                                <div className="flex gap-2">
+                                    <button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2">
+                                        <CreditCard size={12}/> {hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}
+                                    </button>
+                                    <button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.renewalMode ? 'bg-green-500' : 'bg-gray-400'}`}>
+                                        {hubSettings.renewalMode ? "ON" : "OFF"}
+                                    </button>
+                                </div>
+                            </div>
+
                             <hr className="border-amber-100 my-4"/>
                             <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
                             {/* ... Financial Reports UI ... */}
