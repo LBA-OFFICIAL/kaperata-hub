@@ -690,11 +690,19 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   // Password Change State
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
 
+  // Temp Shift State for Event Creation
+  const [tempShift, setTempShift] = useState({ 
+    date: '', 
+    type: 'WHOLE_DAY', // 'WHOLE DAY' or 'SHIFT'
+    name: '', // e.g. 'AM', 'PM', '10:00-12:00'
+    capacity: 5 
+  });
+
   const [savingSettings, setSavingSettings] = useState(false);
   const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
   const [expandedEventId, setExpandedEventId] = useState(null); 
-  const [tempShift, setTempShift] = useState({ date: '', session: 'AM', capacity: 5 });
+  
   // Legacy Editing State
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
   const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
@@ -718,7 +726,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     openForAll: true,
     volunteerTarget: { officer: 0, committee: 0, member: 0 },
     shifts: [],
-    masterclassModuleId: ''
+    masterclassModuleIds: [], 
+    scheduleType: 'WHOLE_DAY' 
   });
   const [editingEvent, setEditingEvent] = useState(null); 
   const [showAnnounceForm, setShowAnnounceForm] = useState(false);
@@ -1052,13 +1061,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Form handling for shifts
   const addShift = () => {
-    if (!tempShift.date || !tempShift.session) return;
+    if (!tempShift.date) return;
+    const sessionName = tempShift.type === 'WHOLE_DAY' ? 'Whole Day' : (tempShift.name || 'Shift');
+    
     setNewEvent(prev => ({
         ...prev,
-        shifts: [...prev.shifts, { ...tempShift, id: crypto.randomUUID(), volunteers: [] }]
+        shifts: [...prev.shifts, { 
+            id: crypto.randomUUID(), 
+            date: tempShift.date,
+            session: sessionName,
+            capacity: tempShift.capacity,
+            volunteers: [] 
+        }]
     }));
-    // Reset temp shift but keep date for convenience
-    setTempShift(prev => ({ ...prev, session: 'AM' })); 
+    // Keep date for convenience, reset name
+    setTempShift(prev => ({ ...prev, name: '' })); 
   };
   
   const removeShift = (id) => {
@@ -1122,7 +1139,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           }
           setShowEventForm(false);
           // Reset form including volunteer fields
-          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleId: '' });
+          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' });
       } catch (err) { console.error(err); }
   };
 
@@ -1141,7 +1158,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           openForAll: ev.openForAll !== undefined ? ev.openForAll : true,
           volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 },
           shifts: ev.shifts || [],
-          masterclassModuleId: ev.masterclassModuleId || ''
+          masterclassModuleIds: ev.masterclassModuleIds || (ev.masterclassModuleId ? [ev.masterclassModuleId] : []),
+          scheduleType: ev.scheduleType || 'WHOLE_DAY'
       });
       setEditingEvent(ev);
       setShowEventForm(true);
@@ -1169,13 +1187,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           }
 
           // 2. Sync with Masterclass Tracker if applicable
-          if (attendanceEvent.masterclassModuleId) {
+          if (attendanceEvent.masterclassModuleIds && attendanceEvent.masterclassModuleIds.length > 0) {
              const trackerRef = doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker');
-             // Access the nested field dynamically
-             const fieldPath = `moduleAttendees.${attendanceEvent.masterclassModuleId}`;
-             await updateDoc(trackerRef, {
-                 [fieldPath]: isPresent ? arrayRemove(memberId) : arrayUnion(memberId)
+             const updates = {};
+             attendanceEvent.masterclassModuleIds.forEach(modId => {
+                 const fieldPath = `moduleAttendees.${modId}`;
+                 updates[fieldPath] = isPresent ? arrayRemove(memberId) : arrayUnion(memberId);
              });
+             await updateDoc(trackerRef, updates);
           }
 
           // Update local state to reflect change immediately (optimistic UI)
@@ -1280,6 +1299,24 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), legacyForm);
           setIsEditingLegacy(false);
       } catch(err) { console.error(err); }
+  };
+
+  // Registry Manual Edit Function
+  const handleUpdateMemberDetails = async (e) => {
+      e.preventDefault();
+      if (!editingMember) return;
+      
+      try {
+          // Use .id which is the actual document key, rather than .memberId which is a field
+          const docId = editingMember.id || editingMember.memberId;
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
+          await updateDoc(memberRef, { joinedDate: new Date(editMemberForm.joinedDate).toISOString() });
+          setEditingMember(null);
+          alert("Member details updated.");
+      } catch(err) {
+          console.error(err);
+          alert("Failed to update member: " + err.message);
+      }
   };
 
   // Masterclass Admin Functions
@@ -1510,22 +1547,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch (err) {
           console.error(err);
           alert("Migration failed.");
-      }
-  };
-  
-  // Registry Manual Edit Function
-  const handleUpdateMemberDetails = async (e) => {
-      e.preventDefault();
-      if (!editingMember) return;
-      
-      try {
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', editingMember.memberId);
-          await updateDoc(memberRef, { joinedDate: new Date(editMemberForm.joinedDate).toISOString() });
-          setEditingMember(null);
-          alert("Member details updated.");
-      } catch(err) {
-          console.error(err);
-          alert("Failed to update member.");
       }
   };
   
@@ -1946,10 +1967,14 @@ ${window.location.origin}`;
                     <div>
                         <h3 className="text-xl font-black uppercase text-[#3E2723]">Attendance Check</h3>
                         <p className="text-xs text-amber-600 font-bold mt-1">{attendanceEvent.name} • {getEventDay(attendanceEvent.startDate)} {getEventMonth(attendanceEvent.startDate)}</p>
-                        {attendanceEvent.masterclassModuleId && (
-                            <span className="inline-block mt-1 px-2 py-0.5 bg-purple-100 text-purple-700 text-[8px] font-black uppercase rounded-full">
-                                Linking to Masterclass Module {attendanceEvent.masterclassModuleId}
-                            </span>
+                        {attendanceEvent.masterclassModuleIds && attendanceEvent.masterclassModuleIds.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                                {attendanceEvent.masterclassModuleIds.map(mid => (
+                                    <span key={mid} className="px-2 py-0.5 bg-purple-100 text-purple-700 text-[8px] font-black uppercase rounded-full">
+                                        Module {mid}
+                                    </span>
+                                ))}
+                            </div>
                         )}
                     </div>
                     <div className="flex gap-2">
@@ -2592,41 +2617,101 @@ ${window.location.origin}`;
                                 <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} />
                                 
                                 <div>
-                                    <label className="text-[10px] font-bold uppercase text-gray-500">Link to Masterclass (Optional)</label>
-                                    <select className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.masterclassModuleId || ''} onChange={e => setNewEvent({...newEvent, masterclassModuleId: e.target.value})}>
-                                        <option value="">None</option>
-                                        {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.title}</option>)}
-                                    </select>
-                                </div>
-
-                                <div className="flex items-center gap-2">
-                                    <input type="checkbox" id="isVol" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
-                                    <label htmlFor="isVol" className="text-xs font-bold uppercase">Enable Volunteer Signups</label>
-                                </div>
-
-                                {newEvent.isVolunteer && (
-                                    <div className="p-4 bg-amber-50 rounded-xl space-y-3">
-                                        <div className="flex gap-2">
-                                            <input type="date" className="p-2 border rounded-lg text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
-                                            <select className="p-2 border rounded-lg text-xs" value={tempShift.session} onChange={e => setTempShift({...tempShift, session: e.target.value})}>
-                                                <option value="AM">AM</option><option value="PM">PM</option><option value="WHOLE DAY">Whole Day</option>
-                                            </select>
-                                            <button type="button" onClick={addShift} className="px-4 bg-amber-600 text-white rounded-lg text-xs font-bold">Add Shift</button>
-                                        </div>
-                                        <div className="space-y-1">
-                                            {newEvent.shifts.map(s => (
-                                                <div key={s.id} className="flex justify-between text-xs bg-white p-2 rounded border">
-                                                    <span>{formatDate(s.date)} - {s.session}</span>
-                                                    <button type="button" onClick={() => removeShift(s.id)} className="text-red-500"><Trash2 size={12}/></button>
-                                                </div>
-                                            ))}
-                                        </div>
+                                    <label className="text-[10px] font-bold uppercase text-gray-500 mb-2 block">Link to Masterclass Modules (Optional)</label>
+                                    <div className="grid grid-cols-2 gap-2 p-3 border rounded-xl bg-gray-50 max-h-40 overflow-y-auto">
+                                        {DEFAULT_MASTERCLASS_MODULES.map(m => (
+                                            <label key={m.id} className="flex items-center gap-2 text-xs font-bold cursor-pointer hover:bg-gray-100 p-1 rounded">
+                                                <input 
+                                                    type="checkbox" 
+                                                    className="rounded border-gray-300 text-[#3E2723] focus:ring-[#3E2723]"
+                                                    checked={newEvent.masterclassModuleIds?.includes(String(m.id))}
+                                                    onChange={(e) => {
+                                                        const currentIds = newEvent.masterclassModuleIds || [];
+                                                        if (e.target.checked) {
+                                                            setNewEvent({...newEvent, masterclassModuleIds: [...currentIds, String(m.id)]});
+                                                        } else {
+                                                            setNewEvent({...newEvent, masterclassModuleIds: currentIds.filter(id => id !== String(m.id))});
+                                                        }
+                                                    }}
+                                                />
+                                                <span className="truncate">M{m.id}: {m.short}</span>
+                                            </label>
+                                        ))}
                                     </div>
-                                )}
+                                </div>
 
-                                <div className="flex gap-2 pt-2">
-                                    <button type="button" onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button>
-                                    <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post Event</button>
+                                <div className="space-y-4 pt-2">
+                                    <div className="flex items-center gap-2">
+                                        <input type="checkbox" id="isVol" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
+                                        <label htmlFor="isVol" className="text-xs font-bold uppercase">Enable Volunteer Signups</label>
+                                    </div>
+
+                                    {newEvent.isVolunteer && (
+                                        <div className="p-4 bg-amber-50 rounded-xl space-y-4 border border-amber-100">
+                                            <div>
+                                                <label className="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Schedule Type</label>
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setTempShift({...tempShift, type: 'WHOLE_DAY'})}
+                                                        className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'WHOLE_DAY' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
+                                                    >
+                                                        Whole Day
+                                                    </button>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => setTempShift({...tempShift, type: 'SHIFT'})}
+                                                        className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'SHIFT' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
+                                                    >
+                                                        Specific Shifts
+                                                    </button>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <div className="flex gap-2">
+                                                    <input type="date" className="p-2 border rounded-lg text-xs w-1/3" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
+                                                    <input type="number" placeholder="Cap" className="p-2 border rounded-lg text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} min="1" />
+                                                    
+                                                    {tempShift.type === 'SHIFT' ? (
+                                                        <input 
+                                                            type="text" 
+                                                            placeholder="Shift Name (e.g. AM, 1-4PM)" 
+                                                            className="p-2 border rounded-lg text-xs flex-1" 
+                                                            value={tempShift.name} 
+                                                            onChange={e => setTempShift({...tempShift, name: e.target.value})} 
+                                                        />
+                                                    ) : (
+                                                        <div className="p-2 bg-gray-100 rounded-lg text-xs text-gray-500 flex-1 flex items-center justify-center font-bold italic">
+                                                            Whole Day Event
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <button type="button" onClick={addShift} className="w-full py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors">Add to Schedule</button>
+                                            </div>
+                                            
+                                            {newEvent.shifts.length > 0 && (
+                                                <div className="space-y-1 pt-2 border-t border-amber-200/50">
+                                                    {newEvent.shifts.map(s => (
+                                                        <div key={s.id} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-200">
+                                                            <div>
+                                                                <span className="font-bold text-[#3E2723]">{formatDate(s.date)}</span>
+                                                                <span className="mx-2 text-gray-300">|</span>
+                                                                <span className="text-gray-600">{s.session}</span>
+                                                                <span className="ml-2 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">Cap: {s.capacity}</span>
+                                                            </div>
+                                                            <button type="button" onClick={() => removeShift(s.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12}/></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-2 pt-4 border-t border-gray-100">
+                                    <button type="button" onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs hover:bg-gray-200">Cancel</button>
+                                    <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">Post Event</button>
                                 </div>
                             </form>
                         </div>
@@ -2637,6 +2722,9 @@ ${window.location.origin}`;
                             const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
                             const isRegistered = ev.registered?.includes(profile.memberId);
                             const isExpanded = expandedEventId === ev.id;
+                            
+                            // Determine display tags
+                            const isMultiShift = ev.shifts && ev.shifts.some(s => s.session !== 'Whole Day' && s.session !== 'WHOLE_DAY');
                             
                             return (
                                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
@@ -2652,13 +2740,20 @@ ${window.location.origin}`;
                                             <span className="text-xs uppercase mt-1">{month}</span>
                                         </div>
                                         <div className="flex-1">
-                                            <div className="flex items-start justify-between">
+                                            <div className="flex flex-wrap items-start justify-between gap-2">
                                                 <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
-                                                {ev.masterclassModuleId && (
-                                                    <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-[8px] font-black uppercase ml-2 whitespace-nowrap">
-                                                        Masterclass M{ev.masterclassModuleId}
-                                                    </span>
-                                                )}
+                                                <div className="flex flex-wrap gap-1 justify-end">
+                                                    {ev.isVolunteer && (
+                                                        <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase whitespace-nowrap ${isMultiShift ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                            {isMultiShift ? 'Multi-Shift' : 'Whole Day'}
+                                                        </span>
+                                                    )}
+                                                    {ev.masterclassModuleIds && ev.masterclassModuleIds.length > 0 && ev.masterclassModuleIds.map(mid => (
+                                                        <span key={mid} className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-[8px] font-black uppercase whitespace-nowrap">
+                                                            M{mid}
+                                                        </span>
+                                                    ))}
+                                                </div>
                                             </div>
                                             <p className="text-xs font-bold text-gray-500 uppercase mt-1 flex items-center gap-2">
                                                 <MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
@@ -2695,7 +2790,7 @@ ${window.location.origin}`;
                                                                 >
                                                                     <div>
                                                                         <span className="block text-xs font-bold uppercase">{formatDate(shift.date)}</span>
-                                                                        <span className="block text-[10px] font-medium">{shift.session} Session</span>
+                                                                        <span className="block text-[10px] font-medium">{shift.session}</span>
                                                                     </div>
                                                                     <div className="text-[10px] font-black bg-white/20 px-2 py-1 rounded">
                                                                         {shift.volunteers.length}/{shift.capacity}
