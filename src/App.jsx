@@ -880,20 +880,39 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   useEffect(() => {
     if (!user) return;
-    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
-        const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        setMembers(list);
-        
-        // Sync current user profile if it exists in the registry fetch
-        const myData = list.find(m => m.memberId === profile.memberId);
-        if (myData) {
-            // Compare timestamps or critical fields to avoid unnecessary renders if possible
-            if (JSON.stringify(myData) !== JSON.stringify(profile)) {
-                setProfile(myData);
-                localStorage.setItem('lba_profile', JSON.stringify(myData));
+    
+    // 1. Separate Listener for CURRENT USER (Runs for everyone)
+    // This ensures real-time updates for the logged-in user without needing a refresh
+    const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), (docSnap) => {
+        if (docSnap.exists()) {
+            const data = docSnap.data();
+            // Simple check to avoid unnecessary re-renders if nothing changed
+            if (JSON.stringify(data) !== JSON.stringify(profile)) {
+                console.log("Profile updated from server:", data);
+                setProfile(data);
+                localStorage.setItem('lba_profile', JSON.stringify(data));
             }
         }
-    }, (e) => console.error("Registry sync error:", e));
+    }, (e) => console.error("Profile sync error:", e));
+
+    // 2. Registry Listener (ONLY for Officers)
+    // Normal members don't need to download the whole database
+    let unsubReg = () => {};
+    if (isOfficer) {
+        unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
+            const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
+            setMembers(list);
+        }, (e) => console.error("Registry sync error:", e));
+    } else {
+        // For non-officers, members array can just contain themselves or be empty
+        // But some views like "Team" need members. 
+        // For now, let's keep members array populated for everyone if 'Team' relies on it, 
+        // OR better: optimize later. Reverting to original behavior for 'members' to avoid breaking 'Team' view.
+        unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
+            const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
+            setMembers(list);
+        }, (e) => console.error("Registry sync error:", e));
+    }
 
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Events sync error:", e));
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Announcements sync error:", e));
@@ -977,7 +996,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     });
 
     return () => { 
-        unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC();
+        unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC();
         if (unsubApps) unsubApps();
         unsubUserApps();
     };
@@ -2641,72 +2660,74 @@ ${window.location.origin}`;
                                 </div>
 
                                 <div className="space-y-4 pt-2">
-                                    <div className="flex items-center gap-2">
+                                    {/* Moved Schedule Type OUTSIDE of isVolunteer check so it applies to ALL events */}
+                                    <div className="p-4 bg-gray-50 rounded-xl space-y-4 border border-gray-200">
+                                        <div>
+                                            <label className="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Event Schedule / Shifts</label>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setTempShift({...tempShift, type: 'WHOLE_DAY'})}
+                                                    className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'WHOLE_DAY' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
+                                                >
+                                                    Whole Day
+                                                </button>
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => setTempShift({...tempShift, type: 'SHIFT'})}
+                                                    className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'SHIFT' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
+                                                >
+                                                    Specific Sessions
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <div className="flex gap-2">
+                                                <input type="date" className="p-2 border rounded-lg text-xs w-1/3" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
+                                                {/* Only show capacity if volunteer mode is ON, otherwise it's just an agenda item */}
+                                                {newEvent.isVolunteer && (
+                                                    <input type="number" placeholder="Cap" className="p-2 border rounded-lg text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} min="1" />
+                                                )}
+                                                
+                                                {tempShift.type === 'SHIFT' ? (
+                                                    <input 
+                                                        type="text" 
+                                                        placeholder="Session Name (e.g. AM, 1-4PM)" 
+                                                        className="p-2 border rounded-lg text-xs flex-1" 
+                                                        value={tempShift.name} 
+                                                        onChange={e => setTempShift({...tempShift, name: e.target.value})} 
+                                                    />
+                                                ) : (
+                                                    <div className="p-2 bg-gray-100 rounded-lg text-xs text-gray-500 flex-1 flex items-center justify-center font-bold italic">
+                                                        Whole Day Event
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <button type="button" onClick={addShift} className="w-full py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors">Add to Schedule</button>
+                                        </div>
+                                        
+                                        {newEvent.shifts.length > 0 && (
+                                            <div className="space-y-1 pt-2 border-t border-gray-200">
+                                                {newEvent.shifts.map(s => (
+                                                    <div key={s.id} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-200">
+                                                        <div>
+                                                            <span className="font-bold text-[#3E2723]">{formatDate(s.date)}</span>
+                                                            <span className="mx-2 text-gray-300">|</span>
+                                                            <span className="text-gray-600">{s.session}</span>
+                                                            {newEvent.isVolunteer && <span className="ml-2 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">Cap: {s.capacity}</span>}
+                                                        </div>
+                                                        <button type="button" onClick={() => removeShift(s.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12}/></button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 pt-2">
                                         <input type="checkbox" id="isVol" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
                                         <label htmlFor="isVol" className="text-xs font-bold uppercase">Enable Volunteer Signups</label>
                                     </div>
-
-                                    {newEvent.isVolunteer && (
-                                        <div className="p-4 bg-amber-50 rounded-xl space-y-4 border border-amber-100">
-                                            <div>
-                                                <label className="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Schedule Type</label>
-                                                <div className="flex gap-2">
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => setTempShift({...tempShift, type: 'WHOLE_DAY'})}
-                                                        className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'WHOLE_DAY' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
-                                                    >
-                                                        Whole Day
-                                                    </button>
-                                                    <button 
-                                                        type="button" 
-                                                        onClick={() => setTempShift({...tempShift, type: 'SHIFT'})}
-                                                        className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'SHIFT' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
-                                                    >
-                                                        Specific Shifts
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-2">
-                                                <div className="flex gap-2">
-                                                    <input type="date" className="p-2 border rounded-lg text-xs w-1/3" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
-                                                    <input type="number" placeholder="Cap" className="p-2 border rounded-lg text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} min="1" />
-                                                    
-                                                    {tempShift.type === 'SHIFT' ? (
-                                                        <input 
-                                                            type="text" 
-                                                            placeholder="Shift Name (e.g. AM, 1-4PM)" 
-                                                            className="p-2 border rounded-lg text-xs flex-1" 
-                                                            value={tempShift.name} 
-                                                            onChange={e => setTempShift({...tempShift, name: e.target.value})} 
-                                                        />
-                                                    ) : (
-                                                        <div className="p-2 bg-gray-100 rounded-lg text-xs text-gray-500 flex-1 flex items-center justify-center font-bold italic">
-                                                            Whole Day Event
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <button type="button" onClick={addShift} className="w-full py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors">Add to Schedule</button>
-                                            </div>
-                                            
-                                            {newEvent.shifts.length > 0 && (
-                                                <div className="space-y-1 pt-2 border-t border-amber-200/50">
-                                                    {newEvent.shifts.map(s => (
-                                                        <div key={s.id} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-200">
-                                                            <div>
-                                                                <span className="font-bold text-[#3E2723]">{formatDate(s.date)}</span>
-                                                                <span className="mx-2 text-gray-300">|</span>
-                                                                <span className="text-gray-600">{s.session}</span>
-                                                                <span className="ml-2 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">Cap: {s.capacity}</span>
-                                                            </div>
-                                                            <button type="button" onClick={() => removeShift(s.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12}/></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
                                 </div>
 
                                 <div className="flex gap-2 pt-4 border-t border-gray-100">
@@ -2743,9 +2764,9 @@ ${window.location.origin}`;
                                             <div className="flex flex-wrap items-start justify-between gap-2">
                                                 <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
                                                 <div className="flex flex-wrap gap-1 justify-end">
-                                                    {ev.isVolunteer && (
+                                                    {ev.shifts && ev.shifts.length > 0 && (
                                                         <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase whitespace-nowrap ${isMultiShift ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                            {isMultiShift ? 'Multi-Shift' : 'Whole Day'}
+                                                            {isMultiShift ? 'Multi-Session' : 'Whole Day'}
                                                         </span>
                                                     )}
                                                     {ev.masterclassModuleIds && ev.masterclassModuleIds.length > 0 && ev.masterclassModuleIds.map(mid => (
@@ -2915,34 +2936,38 @@ ${window.location.origin}`;
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {COMMITTEES_INFO.map(c => (
-                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
-                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
-                                    {/* CHANGED: Removed grayscale, added sepia filter for orange-shade effect */}
-                                    <img src={c.image} className="w-full h-full object-cover sepia transition-all duration-500 hover:sepia-0" alt={c.title} />
-                                </div>
-                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
-                                <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                
-                                <div className="bg-amber-50 p-4 rounded-xl mb-6">
-                                    <p className="text-[10px] font-black uppercase text-amber-800 mb-2">Roles & Responsibilities</p>
-                                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
-                                        {c.roles.map((r, i) => <li key={i}>{r}</li>)}
-                                    </ul>
-                                </div>
+                        {COMMITTEES_INFO.map(c => {
+                            const existingApp = userApplications.find(a => a.committee === c.id);
+                            const isPending = existingApp && ['pending', 'for_interview'].includes(existingApp.status);
+                            
+                            return (
+                                <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
+                                    <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
+                                        <img src={c.image} className="w-full h-full object-cover sepia transition-all duration-500 hover:sepia-0" alt={c.title} />
+                                    </div>
+                                    <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
+                                    <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
+                                    
+                                    <div className="bg-amber-50 p-4 rounded-xl mb-6">
+                                        <p className="text-[10px] font-black uppercase text-amber-800 mb-2">Roles & Responsibilities</p>
+                                        <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
+                                            {c.roles.map((r, i) => <li key={i}>{r}</li>)}
+                                        </ul>
+                                    </div>
 
-                                <button 
-                                    onClick={(e) => {
-                                        setCommitteeForm({ role: 'Committee Member' });
-                                        handleApplyCommittee(e, c.id);
-                                    }}
-                                    disabled={submittingApp}
-                                    className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50"
-                                >
-                                    Apply Now
-                                </button>
-                            </div>
-                        ))}
+                                    <button 
+                                        onClick={(e) => {
+                                            setCommitteeForm({ role: 'Committee Member' });
+                                            handleApplyCommittee(e, c.id);
+                                        }}
+                                        disabled={submittingApp || isPending}
+                                        className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isPending ? "Application Pending" : "Apply Now"}
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
