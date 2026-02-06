@@ -2377,7 +2377,480 @@ ${window.location.origin}`;
             </div>
             )}
 
-            {/* ... (Previous views: about, masterclass, team, events, announcements, suggestions, committee_hunt, settings) ... */}
+            {/* --- MISSING VIEWS IMPLEMENTATION --- */}
+
+            {view === 'about' && (
+                <div className="space-y-8 animate-fadeIn text-[#3E2723]">
+                    {legacyContent.imageUrl && (
+                        <div className="w-full h-64 md:h-80 rounded-[40px] overflow-hidden mb-8 shadow-xl">
+                            <img src={getDirectLink(legacyContent.imageUrl)} alt="Legacy Banner" className="w-full h-full object-cover" />
+                        </div>
+                    )}
+                    <div className="bg-white p-8 rounded-[40px] shadow-sm border-t-[8px] border-[#3E2723]">
+                        <h3 className="font-serif text-4xl font-black uppercase mb-4">Our Legacy</h3>
+                        {isEditingLegacy ? (
+                            <div className="space-y-4">
+                                <textarea className="w-full p-4 border rounded-xl" rows="6" value={legacyForm.body} onChange={e => setLegacyForm({ ...legacyForm, body: e.target.value })} />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <input type="text" placeholder="Banner Image URL" className="p-3 border rounded-xl text-xs" value={legacyForm.imageUrl || ''} onChange={e => setLegacyForm({ ...legacyForm, imageUrl: e.target.value })} />
+                                    <input type="text" placeholder="Gallery Folder Link" className="p-3 border rounded-xl text-xs" value={legacyForm.galleryUrl || ''} onChange={e => setLegacyForm({ ...legacyForm, galleryUrl: e.target.value })} />
+                                </div>
+                                <div className="flex gap-2">
+                                    <input type="date" className="p-3 border rounded-xl" value={legacyForm.establishedDate || ''} onChange={e => setLegacyForm({ ...legacyForm, establishedDate: e.target.value })} />
+                                    <button onClick={handleSaveLegacy} className="bg-green-600 text-white px-6 py-2 rounded-xl font-bold uppercase">Save Changes</button>
+                                    <button onClick={() => setIsEditingLegacy(false)} className="bg-gray-200 text-gray-600 px-6 py-2 rounded-xl font-bold uppercase">Cancel</button>
+                                </div>
+                            </div>
+                        ) : (
+                            <div>
+                                <p className="text-lg leading-relaxed whitespace-pre-wrap font-medium text-gray-700">{legacyContent.body}</p>
+                                {legacyContent.galleryUrl && (
+                                    <a href={legacyContent.galleryUrl} target="_blank" rel="noreferrer" className="inline-block mt-4 text-amber-600 font-bold underline">View Photo Gallery</a>
+                                )}
+                                {isAdmin && <button onClick={() => setIsEditingLegacy(true)} className="block mt-4 text-amber-600 text-xs font-bold uppercase hover:underline">Edit Story</button>}
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-[#3E2723] text-white p-8 rounded-[40px]">
+                        <h3 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Milestones</h3>
+                        <div className="space-y-6 border-l-2 border-[#FDB813] pl-6 ml-2">
+                            {legacyContent.achievements?.map((ach, i) => (
+                                <div key={i} className="relative">
+                                    <div className="absolute -left-[31px] top-1 w-4 h-4 bg-[#FDB813] rounded-full border-2 border-[#3E2723]"></div>
+                                    <span className="text-xs font-bold text-amber-200/60 uppercase tracking-widest">{ach.date}</span>
+                                    <p className="font-bold text-lg">{ach.text}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {view === 'masterclass' && (
+                <div className="space-y-8 animate-fadeIn">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
+                        <div>
+                            <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Masterclass</h3>
+                            <p className="text-amber-600 font-bold text-xs uppercase">School of Coffee Excellence</p>
+                        </div>
+                        <button onClick={() => setShowCertificate(true)} className="bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-black transition-colors w-full md:w-auto justify-center"><Award size={16}/> View Certificate</button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {DEFAULT_MASTERCLASS_MODULES.map(mod => {
+                            const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
+                            const details = masterclassData.moduleDetails?.[mod.id] || {};
+                            return (
+                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>
+                                            {["🌱", "⚙️", "💧", "☕", "🍹"][mod.id-1]}
+                                        </div>
+                                        {isCompleted && <BadgeCheck className="text-green-600" size={24}/>}
+                                    </div>
+                                    <h4 className="font-black uppercase text-sm text-[#3E2723] mb-1">{details.title || mod.title}</h4>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Module 0{mod.id}</p>
+                                    
+                                    {details.objectives && <p className="text-xs text-gray-600 mt-2 line-clamp-2">{details.objectives}</p>}
+
+                                    {isCompleted ? (
+                                        <div className="mt-4 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block">Completed</div>
+                                    ) : (
+                                        <div className="mt-4 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block">Locked</div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {isAdmin && (
+                        <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-200 mt-8 space-y-4">
+                            <h4 className="font-black text-sm uppercase text-amber-800 mb-4 flex items-center gap-2"><Settings2 size={16}/> Admin Controls</h4>
+                            
+                            <div className="flex flex-col md:flex-row gap-4">
+                                <select className="p-3 rounded-xl border border-amber-200 text-xs font-bold uppercase" value={adminMcModule} onChange={e => {
+                                    setAdminMcModule(e.target.value);
+                                    const details = masterclassData.moduleDetails?.[e.target.value] || {};
+                                    setTempMcDetails(details);
+                                }}>
+                                    {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.short}</option>)}
+                                </select>
+                                <textarea placeholder="Paste Member IDs (one per line or comma separated)" className="flex-1 p-3 rounded-xl border border-amber-200 text-xs" rows="1" value={adminMcInput} onChange={e => setAdminMcInput(e.target.value)}></textarea>
+                                <button onClick={handleBulkAddMasterclass} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700">Add Attendees</button>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-amber-200">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-amber-800 mb-1 block">Certificate Template URL</label>
+                                    <div className="flex gap-2">
+                                        <input type="text" className="flex-1 p-3 rounded-xl border border-amber-200 text-xs" value={masterclassData.certTemplate || ''} onChange={e => setMasterclassData({...masterclassData, certTemplate: e.target.value})} />
+                                        <button onClick={handleSaveCertTemplate} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold uppercase text-xs">Save</button>
+                                    </div>
+                                </div>
+                                <div className="flex items-end">
+                                    <button onClick={() => setEditingMcCurriculum(true)} className="w-full bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-xs">Edit Curriculum for Module {adminMcModule}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Edit Curriculum Modal */}
+                    {editingMcCurriculum && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+                            <div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]">
+                                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Edit Curriculum: Module {adminMcModule}</h3>
+                                <div className="space-y-4">
+                                    <input type="text" placeholder="Workshop Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={tempMcDetails.title || ''} onChange={e => setTempMcDetails({...tempMcDetails, title: e.target.value})} />
+                                    <textarea placeholder="Objectives" className="w-full p-3 border rounded-xl text-xs" rows="3" value={tempMcDetails.objectives || ''} onChange={e => setTempMcDetails({...tempMcDetails, objectives: e.target.value})} />
+                                    <textarea placeholder="Topics Covered" className="w-full p-3 border rounded-xl text-xs" rows="3" value={tempMcDetails.topics || ''} onChange={e => setTempMcDetails({...tempMcDetails, topics: e.target.value})} />
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setEditingMcCurriculum(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button>
+                                        <button onClick={handleSaveMcCurriculum} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-[#FDB813] font-bold uppercase text-xs">Save Curriculum</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {view === 'team' && (
+                <div className="space-y-12 animate-fadeIn text-center">
+                    <div>
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Executive Committee {getMemberIdMeta().sy}</p>
+                    </div>
+
+                    {/* Tier 1: President */}
+                    {teamStructure.tier1.length > 0 && (
+                        <div className="flex justify-center">
+                            {teamStructure.tier1.map(m => <MemberCard key={m.id} m={m} />)}
+                        </div>
+                    )}
+
+                    {/* Tier 2: Secretary (VP is Tier 3 in logic but effectively high) */}
+                    {teamStructure.tier2.length > 0 && (
+                        <div className="flex justify-center gap-6 flex-wrap">
+                            {teamStructure.tier2.map(m => <MemberCard key={m.id} m={m} />)}
+                        </div>
+                    )}
+
+                    {/* Tier 3: Other Officers */}
+                    {teamStructure.tier3.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+                            {teamStructure.tier3.map(m => <MemberCard key={m.id} m={m} />)}
+                        </div>
+                    )}
+
+                    <div className="border-t border-amber-100 pt-12">
+                        <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Heads</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
+                            {teamStructure.committees.heads.map(m => <MemberCard key={m.id} m={m} />)}
+                        </div>
+                    </div>
+
+                    {teamStructure.committees.members.length > 0 && (
+                        <div className="border-t border-amber-100 pt-12">
+                            <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Members</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+                                {teamStructure.committees.members.map(m => <MemberCard key={m.id} m={m} />)}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {view === 'events' && (
+                <div className="space-y-6 animate-fadeIn">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
+                        {isAdmin && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
+                    </div>
+
+                    {showEventForm && (
+                        <div className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6">
+                            <h4 className="font-black uppercase mb-4">Add New Event</h4>
+                            <form onSubmit={handleAddEvent} className="space-y-3">
+                                <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-gray-500">Start</label>
+                                        <div className="flex gap-1">
+                                            <input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} />
+                                            <input type="time" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold uppercase text-gray-500">End</label>
+                                        <div className="flex gap-1">
+                                            <input type="date" className="p-2 border rounded-xl text-xs w-full" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} />
+                                            <input type="time" className="p-2 border rounded-xl text-xs w-full" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
+                                <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} />
+                                
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-gray-500">Link to Masterclass (Optional)</label>
+                                    <select className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.masterclassModuleId || ''} onChange={e => setNewEvent({...newEvent, masterclassModuleId: e.target.value})}>
+                                        <option value="">None</option>
+                                        {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.title}</option>)}
+                                    </select>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="isVol" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
+                                    <label htmlFor="isVol" className="text-xs font-bold uppercase">Enable Volunteer Signups</label>
+                                </div>
+
+                                {newEvent.isVolunteer && (
+                                    <div className="p-4 bg-amber-50 rounded-xl space-y-3">
+                                        <div className="flex gap-2">
+                                            <input type="date" className="p-2 border rounded-lg text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
+                                            <select className="p-2 border rounded-lg text-xs" value={tempShift.session} onChange={e => setTempShift({...tempShift, session: e.target.value})}>
+                                                <option value="AM">AM</option><option value="PM">PM</option><option value="WHOLE DAY">Whole Day</option>
+                                            </select>
+                                            <button type="button" onClick={addShift} className="px-4 bg-amber-600 text-white rounded-lg text-xs font-bold">Add Shift</button>
+                                        </div>
+                                        <div className="space-y-1">
+                                            {newEvent.shifts.map(s => (
+                                                <div key={s.id} className="flex justify-between text-xs bg-white p-2 rounded border">
+                                                    <span>{formatDate(s.date)} - {s.session}</span>
+                                                    <button type="button" onClick={() => removeShift(s.id)} className="text-red-500"><Trash2 size={12}/></button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="flex gap-2 pt-2">
+                                    <button type="button" onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button>
+                                    <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post Event</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    <div className="space-y-4">
+                        {events.map(ev => {
+                            const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                            const isRegistered = ev.registered?.includes(profile.memberId);
+                            const isExpanded = expandedEventId === ev.id;
+                            
+                            return (
+                                <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                                    {isAdmin && (
+                                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                            <button onClick={() => setAttendanceEvent(ev)} className="p-2 bg-blue-100 text-blue-600 rounded-full" title="Attendance"><ClipboardCheck size={16}/></button>
+                                            <button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-red-100 text-red-600 rounded-full"><Trash2 size={16}/></button>
+                                        </div>
+                                    )}
+                                    <div className="flex flex-col sm:flex-row gap-6">
+                                        <div className="bg-[#3E2723] text-[#FDB813] w-20 h-20 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0">
+                                            <span className="text-2xl">{day}</span>
+                                            <span className="text-xs uppercase mt-1">{month}</span>
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex items-start justify-between">
+                                                <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
+                                                {ev.masterclassModuleId && (
+                                                    <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-[8px] font-black uppercase ml-2 whitespace-nowrap">
+                                                        Masterclass M{ev.masterclassModuleId}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-xs font-bold text-gray-500 uppercase mt-1 flex items-center gap-2">
+                                                <MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
+                                            </p>
+                                            <div className={`text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap ${!isExpanded ? 'line-clamp-3' : ''}`}>
+                                                {ev.description}
+                                            </div>
+                                            {ev.description && ev.description.length > 150 && (
+                                                <button 
+                                                    onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
+                                                    className="text-amber-600 text-xs font-bold uppercase mt-2 hover:underline"
+                                                >
+                                                    {isExpanded ? 'Show Less' : 'Read More'}
+                                                </button>
+                                            )}
+                                            
+                                            {ev.isVolunteer ? (
+                                                <div className="mt-6 space-y-2">
+                                                    <p className="text-xs font-black uppercase text-amber-600">Volunteer Shifts</p>
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                        {ev.shifts?.map(shift => {
+                                                            const isVol = shift.volunteers.includes(profile.memberId);
+                                                            const isFull = shift.volunteers.length >= shift.capacity;
+                                                            return (
+                                                                <button 
+                                                                    key={shift.id} 
+                                                                    onClick={() => handleVolunteerSignup(ev, shift.id)}
+                                                                    disabled={!isVol && isFull}
+                                                                    className={`p-3 rounded-xl border text-left flex justify-between items-center transition-all ${
+                                                                        isVol ? 'bg-[#3E2723] text-[#FDB813] border-[#3E2723]' : 
+                                                                        isFull ? 'bg-gray-100 text-gray-400 border-transparent cursor-not-allowed' : 
+                                                                        'bg-white border-amber-200 hover:border-amber-400'
+                                                                    }`}
+                                                                >
+                                                                    <div>
+                                                                        <span className="block text-xs font-bold uppercase">{formatDate(shift.date)}</span>
+                                                                        <span className="block text-[10px] font-medium">{shift.session} Session</span>
+                                                                    </div>
+                                                                    <div className="text-[10px] font-black bg-white/20 px-2 py-1 rounded">
+                                                                        {shift.volunteers.length}/{shift.capacity}
+                                                                    </div>
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <button 
+                                                    onClick={() => handleRegisterEvent(ev)}
+                                                    className={`mt-6 w-full py-3 rounded-xl font-black uppercase text-xs transition-colors ${
+                                                        isRegistered ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-[#3E2723] text-white hover:bg-black'
+                                                    }`}
+                                                >
+                                                    {isRegistered ? "You're Going!" : "Count Me In"}
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {view === 'announcements' && (
+                <div className="space-y-6 animate-fadeIn">
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
+                        {isAdmin && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
+                    </div>
+
+                    {showAnnounceForm && (
+                        <div className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6">
+                            <form onSubmit={handlePostAnnouncement} className="space-y-3">
+                                <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} />
+                                <textarea placeholder="Content" required className="w-full p-3 border rounded-xl text-xs" rows="4" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} />
+                                <div className="flex gap-2 pt-2">
+                                    <button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); setNewAnnouncement({title:'', content:''}); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button>
+                                    <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {announcements.map(ann => (
+                            <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-100 shadow-sm relative group">
+                                {isAdmin && (
+                                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                        <button onClick={() => handleEditAnnouncement(ann)} className="p-2 text-amber-600"><Pen size={16}/></button>
+                                        <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 text-red-600"><Trash2 size={16}/></button>
+                                    </div>
+                                )}
+                                <span className="inline-block bg-[#FDB813] px-3 py-1 rounded-full text-[10px] font-black uppercase text-[#3E2723] mb-4">{formatDate(ann.date)}</span>
+                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3">{ann.title}</h4>
+                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {view === 'suggestions' && (
+                <div className="space-y-6 animate-fadeIn max-w-2xl mx-auto">
+                    <div className="text-center mb-8">
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Suggestion Box</h3>
+                        <p className="text-gray-500 font-bold text-xs uppercase">Your voice matters. Totally anonymous.</p>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm">
+                        <form onSubmit={handlePostSuggestion}>
+                            <textarea 
+                                className="w-full p-4 bg-gray-50 rounded-2xl border-none outline-none text-sm resize-none focus:ring-2 ring-amber-100" 
+                                rows="4" 
+                                placeholder="What's on your mind? Ideas for events, merch, or improvements..."
+                                value={suggestionText}
+                                onChange={e => setSuggestionText(e.target.value)}
+                            />
+                            <div className="flex justify-end mt-4">
+                                <button type="submit" disabled={!suggestionText.trim()} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs flex items-center gap-2 hover:bg-black disabled:opacity-50">
+                                    <Send size={16}/> Drop Suggestion
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div className="space-y-4">
+                        {suggestions.map(s => (
+                            <div key={s.id} className="bg-white p-6 rounded-[32px] border border-gray-100 relative group">
+                                {isAdmin && (
+                                    <button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity">
+                                        <Trash2 size={16}/>
+                                    </button>
+                                )}
+                                <p className="text-gray-800 text-sm font-medium">"{s.text}"</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase mt-4 text-right">
+                                    {s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                    {isAdmin && (
+                        <div className="text-center pt-8">
+                            <button onClick={handleDownloadSuggestions} className="text-amber-600 font-bold text-xs uppercase hover:underline">Download All Suggestions (CSV)</button>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {view === 'committee_hunt' && (
+                <div className="space-y-8 animate-fadeIn">
+                    <div className="bg-[#3E2723] text-white p-10 rounded-[48px] text-center relative overflow-hidden">
+                        <div className="relative z-10">
+                            <h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3>
+                            <p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Serve the student body, hone your leadership skills, and be part of the legacy.</p>
+                        </div>
+                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {COMMITTEES_INFO.map(c => (
+                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
+                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
+                                    {/* CHANGED: Removed grayscale, added sepia filter for orange-shade effect */}
+                                    <img src={c.image} className="w-full h-full object-cover sepia transition-all duration-500 hover:sepia-0" alt={c.title} />
+                                </div>
+                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
+                                <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
+                                
+                                <div className="bg-amber-50 p-4 rounded-xl mb-6">
+                                    <p className="text-[10px] font-black uppercase text-amber-800 mb-2">Roles & Responsibilities</p>
+                                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
+                                        {c.roles.map((r, i) => <li key={i}>{r}</li>)}
+                                    </ul>
+                                </div>
+
+                                <button 
+                                    onClick={(e) => {
+                                        setCommitteeForm({ role: 'Committee Member' });
+                                        handleApplyCommittee(e, c.id);
+                                    }}
+                                    disabled={submittingApp}
+                                    className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50"
+                                >
+                                    Apply Now
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
             
             {view === 'reports' && isAdmin && (
             <div className="space-y-10 animate-fadeIn text-[#3E2723]">
