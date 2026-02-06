@@ -649,7 +649,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} });
   const [showCertificate, setShowCertificate] = useState(false);
   const [adminMcModule, setAdminMcModule] = useState(1);
-  const [adminMcInput, setAdminMcInput] = useState('');
+  const [adminMcSearch, setAdminMcSearch] = useState('');
+  const [selectedMcMembers, setSelectedMcMembers] = useState([]);
   const [editingMcCurriculum, setEditingMcCurriculum] = useState(false);
   const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '' });
 
@@ -662,6 +663,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Email Modal State (NEW)
   const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' });
+
+  // Renewal/Payment State
+  const [renewalRef, setRenewalRef] = useState('');
 
   // Last visited state for notifications
   const [lastVisited, setLastVisited] = useState(() => {
@@ -693,7 +697,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   // Temp Shift State for Event Creation
   const [tempShift, setTempShift] = useState({ 
     date: '', 
-    type: 'WHOLE_DAY', // 'WHOLE DAY' or 'SHIFT'
+    type: 'WHOLE_DAY', // 'WHOLE_DAY' or 'SHIFT'
     name: '', // e.g. 'AM', 'PM', '10:00-12:00'
     capacity: 5 
   });
@@ -898,20 +902,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     // 2. Registry Listener (ONLY for Officers)
     // Normal members don't need to download the whole database
     let unsubReg = () => {};
-    if (isOfficer) {
+    // For masterclass selection, we DO need a list of members.
+    // If not officer, we might need a separate way to fetch, but for now assuming officers manage masterclass.
+    // To allow masterclass member selection, we keep this active for officers.
+    if (isOfficer || isAdmin) {
         unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
             const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
             setMembers(list);
         }, (e) => console.error("Registry sync error:", e));
     } else {
-        // For non-officers, members array can just contain themselves or be empty
-        // But some views like "Team" need members. 
-        // For now, let's keep members array populated for everyone if 'Team' relies on it, 
-        // OR better: optimize later. Reverting to original behavior for 'members' to avoid breaking 'Team' view.
-        unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
-            const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
-            setMembers(list);
-        }, (e) => console.error("Registry sync error:", e));
+        // Just empty subscription for members
+        unsubReg = () => {};
     }
 
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Events sync error:", e));
@@ -1340,11 +1341,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Masterclass Admin Functions
   const handleBulkAddMasterclass = async () => {
-      if (!adminMcInput.trim()) return;
-      const ids = adminMcInput.split(/[\n,]+/).map(id => id.trim().toUpperCase()).filter(id => id);
+      // Use selectedMcMembers array
+      if (selectedMcMembers.length === 0) return alert("No members selected!");
       
       const currentAttendees = masterclassData.moduleAttendees?.[adminMcModule] || [];
-      const updatedAttendees = [...new Set([...currentAttendees, ...ids])];
+      // Combine and unique
+      const updatedAttendees = [...new Set([...currentAttendees, ...selectedMcMembers])];
       
       const newData = {
           ...masterclassData,
@@ -1356,8 +1358,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       
       try {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData);
-          setAdminMcInput('');
-          alert(`Added ${ids.length} attendees to Module ${adminMcModule}`);
+          setSelectedMcMembers([]); // Reset selection
+          setAdminMcSearch(''); // Reset search
+          alert(`Added ${selectedMcMembers.length} attendees to Module ${adminMcModule}`);
       } catch(e) { console.error(e); }
   };
 
@@ -1573,8 +1576,45 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       if (!confirm(`Change status to ${currentStatus === 'active' ? 'EXPIRED' : 'ACTIVE'}?`)) return;
       try {
           const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId);
-          await updateDoc(memberRef, { status: currentStatus === 'active' ? 'expired' : 'active' });
+          // If expiring, set paymentStatus to 'unpaid' so they have to renew
+          const updates = { 
+              status: currentStatus === 'active' ? 'expired' : 'active' 
+          };
+          if (currentStatus === 'active') {
+              updates.paymentStatus = 'unpaid';
+          }
+          await updateDoc(memberRef, updates);
       } catch(e) { console.error(e); }
+  };
+
+  // Handle Renewal Payment for Expired Members
+  const handleRenewalPayment = async (e) => {
+      e.preventDefault();
+      if (!renewalRef) return;
+      
+      try {
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId);
+          const meta = getMemberIdMeta();
+          
+          await updateDoc(memberRef, {
+              status: 'active',
+              paymentStatus: 'paid',
+              lastRenewedSY: meta.sy,
+              lastRenewedSem: meta.sem,
+              membershipType: 'renewal',
+              paymentDetails: {
+                  method: 'gcash',
+                  refNo: renewalRef,
+                  date: new Date().toISOString()
+              }
+          });
+          
+          setRenewalRef('');
+          alert("Membership renewed successfully! Welcome back.");
+      } catch (err) {
+          console.error("Renewal failed:", err);
+          alert("Renewal failed. Please try again.");
+      }
   };
 
   // User Acknowledgment
@@ -2146,6 +2186,54 @@ ${window.location.origin}`;
 
             {view === 'home' && (
             <div className="space-y-10 animate-fadeIn">
+                {/* Expired Membership Banner */}
+                {profile.status === 'expired' && (
+                    <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-r-xl mb-6 shadow-md">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-xl font-black uppercase text-red-700 flex items-center gap-2">
+                                    <AlertCircle size={24}/> Membership Expired
+                                </h3>
+                                <p className="text-sm text-red-800 mt-2 font-medium">
+                                    Your membership access is currently limited. Please settle your full membership fee to reactivate your account and restore full access to all features.
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <span className="bg-red-200 text-red-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">Status: Expired</span>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-6 bg-white p-6 rounded-2xl border border-red-100">
+                            <h4 className="text-sm font-black uppercase text-gray-700 mb-4">Renewal Payment</h4>
+                            <p className="text-xs text-gray-500 mb-4">Please send the full membership fee via GCash to the number below, then enter your Reference Number to verify.</p>
+                            
+                            <div className="flex flex-col md:flex-row gap-6 items-center">
+                                <div className="bg-blue-50 p-4 rounded-xl text-center w-full md:w-auto">
+                                    <p className="text-[10px] font-black uppercase text-blue-800">GCash</p>
+                                    <p className="text-lg font-black text-blue-900">+639063751402</p>
+                                </div>
+                                
+                                <form onSubmit={handleRenewalPayment} className="flex-1 w-full flex gap-3">
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        placeholder="Enter Reference No." 
+                                        className="flex-1 p-3 border border-gray-300 rounded-xl text-xs uppercase focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                                        value={renewalRef}
+                                        onChange={(e) => setRenewalRef(e.target.value)}
+                                    />
+                                    <button 
+                                        type="submit" 
+                                        className="bg-red-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-red-700 transition-colors shadow-lg"
+                                    >
+                                        Renew Now
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Birthday & Anniversary Banners */}
                 <div className="space-y-4">
                     {isBirthday && (
@@ -2237,7 +2325,7 @@ ${window.location.origin}`;
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
-                        <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
+                        <div className={`${profile.status === 'active' ? 'bg-green-500' : 'bg-gray-500'} text-white px-5 py-2 rounded-full font-black text-[9px] uppercase`}>{profile.status === 'active' ? 'Active' : 'Expired'}</div>
                         <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
                         <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
                     </div>
@@ -2511,16 +2599,59 @@ ${window.location.origin}`;
                         <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-200 mt-8 space-y-4">
                             <h4 className="font-black text-sm uppercase text-amber-800 mb-4 flex items-center gap-2"><Settings2 size={16}/> Admin Controls</h4>
                             
-                            <div className="flex flex-col md:flex-row gap-4">
-                                <select className="p-3 rounded-xl border border-amber-200 text-xs font-bold uppercase" value={adminMcModule} onChange={e => {
-                                    setAdminMcModule(e.target.value);
-                                    const details = masterclassData.moduleDetails?.[e.target.value] || {};
-                                    setTempMcDetails(details);
-                                }}>
-                                    {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.short}</option>)}
-                                </select>
-                                <textarea placeholder="Paste Member IDs (one per line or comma separated)" className="flex-1 p-3 rounded-xl border border-amber-200 text-xs" rows="1" value={adminMcInput} onChange={e => setAdminMcInput(e.target.value)}></textarea>
-                                <button onClick={handleBulkAddMasterclass} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700">Add Attendees</button>
+                            <div className="space-y-4">
+                                <div className="flex flex-col md:flex-row gap-4">
+                                    <select className="p-3 rounded-xl border border-amber-200 text-xs font-bold uppercase w-full md:w-auto" value={adminMcModule} onChange={e => {
+                                        setAdminMcModule(e.target.value);
+                                        const details = masterclassData.moduleDetails?.[e.target.value] || {};
+                                        setTempMcDetails(details);
+                                        setSelectedMcMembers([]); // Reset selections on module change
+                                    }}>
+                                        {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.short}</option>)}
+                                    </select>
+                                    
+                                    <button onClick={handleBulkAddMasterclass} disabled={selectedMcMembers.length === 0} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700 disabled:opacity-50">
+                                        Add {selectedMcMembers.length} Attendees
+                                    </button>
+                                </div>
+
+                                <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search members to add..." 
+                                        className="w-full p-3 text-xs border-b border-amber-100 outline-none"
+                                        value={adminMcSearch}
+                                        onChange={e => setAdminMcSearch(e.target.value.toUpperCase())}
+                                    />
+                                    <div className="max-h-40 overflow-y-auto p-2 space-y-1">
+                                        {members
+                                            .filter(m => 
+                                                // Filter by search AND filter out members already in this module
+                                                (m.name.includes(adminMcSearch) || m.memberId.includes(adminMcSearch)) &&
+                                                !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)
+                                            )
+                                            .slice(0, 50) // Limit render
+                                            .map(m => (
+                                                <label key={m.memberId} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                                        checked={selectedMcMembers.includes(m.memberId)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) setSelectedMcMembers(prev => [...prev, m.memberId]);
+                                                            else setSelectedMcMembers(prev => prev.filter(id => id !== m.memberId));
+                                                        }}
+                                                    />
+                                                    <div>
+                                                        <p className="text-xs font-bold text-gray-700">{m.name}</p>
+                                                        <p className="text-[9px] text-gray-400 font-mono">{m.memberId}</p>
+                                                    </div>
+                                                </label>
+                                            ))
+                                        }
+                                        {members.length === 0 && <p className="text-center text-xs text-gray-400 py-2">Loading members...</p>}
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-amber-200">
@@ -2936,38 +3067,34 @@ ${window.location.origin}`;
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {COMMITTEES_INFO.map(c => {
-                            const existingApp = userApplications.find(a => a.committee === c.id);
-                            const isPending = existingApp && ['pending', 'for_interview'].includes(existingApp.status);
-                            
-                            return (
-                                <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
-                                    <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
-                                        <img src={c.image} className="w-full h-full object-cover sepia transition-all duration-500 hover:sepia-0" alt={c.title} />
-                                    </div>
-                                    <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
-                                    <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                    
-                                    <div className="bg-amber-50 p-4 rounded-xl mb-6">
-                                        <p className="text-[10px] font-black uppercase text-amber-800 mb-2">Roles & Responsibilities</p>
-                                        <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
-                                            {c.roles.map((r, i) => <li key={i}>{r}</li>)}
-                                        </ul>
-                                    </div>
-
-                                    <button 
-                                        onClick={(e) => {
-                                            setCommitteeForm({ role: 'Committee Member' });
-                                            handleApplyCommittee(e, c.id);
-                                        }}
-                                        disabled={submittingApp || isPending}
-                                        className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {isPending ? "Application Pending" : "Apply Now"}
-                                    </button>
+                        {COMMITTEES_INFO.map(c => (
+                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
+                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
+                                    {/* CHANGED: Removed grayscale, added sepia filter for orange-shade effect */}
+                                    <img src={c.image} className="w-full h-full object-cover sepia transition-all duration-500 hover:sepia-0" alt={c.title} />
                                 </div>
-                            );
-                        })}
+                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
+                                <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
+                                
+                                <div className="bg-amber-50 p-4 rounded-xl mb-6">
+                                    <p className="text-[10px] font-black uppercase text-amber-800 mb-2">Roles & Responsibilities</p>
+                                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
+                                        {c.roles.map((r, i) => <li key={i}>{r}</li>)}
+                                    </ul>
+                                </div>
+
+                                <button 
+                                    onClick={(e) => {
+                                        setCommitteeForm({ role: 'Committee Member' });
+                                        handleApplyCommittee(e, c.id);
+                                    }}
+                                    disabled={submittingApp}
+                                    className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50"
+                                >
+                                    Apply Now
+                                </button>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}
