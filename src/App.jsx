@@ -815,6 +815,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [members]);
 
+  // Volunteer Stats
+  const volunteerCount = useMemo(() => {
+    if (!events || !profile.memberId) return 0;
+    return events.reduce((acc, ev) => {
+        if (!ev.isVolunteer || !ev.shifts) return acc;
+        // Count how many shifts in this event the user volunteered for
+        const shiftCount = ev.shifts.filter(s => s.volunteers?.includes(profile.memberId)).length;
+        return acc + shiftCount;
+    }, 0);
+  }, [events, profile.memberId]);
+
   // Notifications Logic
   const notifications = useMemo(() => {
       const hasNew = (items, pageKey) => {
@@ -860,7 +871,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   useEffect(() => {
     if (!user) return;
-    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Registry sync error:", e));
+    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
+        const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
+        setMembers(list);
+        
+        // Sync current user profile if it exists in the registry fetch
+        const myData = list.find(m => m.memberId === profile.memberId);
+        if (myData) {
+            // Compare timestamps or critical fields to avoid unnecessary renders if possible
+            if (JSON.stringify(myData) !== JSON.stringify(profile)) {
+                setProfile(myData);
+                localStorage.setItem('lba_profile', JSON.stringify(myData));
+            }
+        }
+    }, (e) => console.error("Registry sync error:", e));
+
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Events sync error:", e));
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Announcements sync error:", e));
     const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => {
@@ -965,8 +990,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     try {
         const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) };
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated);
+        // Note: setProfile is also called by the real-time listener in Dashboard
         setProfile(updated);
-        // Update local storage too
         localStorage.setItem('lba_profile', JSON.stringify(updated));
         alert("Profile updated successfully!");
     } catch(err) {
@@ -2244,10 +2269,19 @@ ${window.location.origin}`;
                                 <span className="text-[8px] font-black uppercase text-amber-900/60 text-center">Member</span>
                             </div>
                             
-                            {isOfficer && (
+                            {/* Officer Badge - Specific */}
+                            {['Officer', 'Execomm'].includes(profile.positionCategory) && (
                                 <div className="flex flex-col items-center gap-1">
                                     <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>
                                     <span className="text-[8px] font-black uppercase text-indigo-900/60 text-center">Officer</span>
+                                </div>
+                            )}
+
+                            {/* Committee Badge - New */}
+                            {profile.positionCategory === 'Committee' && (
+                                <div className="flex flex-col items-center gap-1">
+                                    <div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex items-center justify-center text-2xl">🎗️</div>
+                                    <span className="text-[8px] font-black uppercase text-pink-900/60 text-center">Committee</span>
                                 </div>
                             )}
                             
@@ -2256,6 +2290,25 @@ ${window.location.origin}`;
                                 <div className="flex flex-col items-center gap-1">
                                     <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>
                                     <span className="text-[8px] font-black uppercase text-yellow-900/60 text-center">Veteran</span>
+                                </div>
+                            )}
+
+                            {/* Volunteer Tier Badge */}
+                            {volunteerCount > 0 && (
+                                <div className="flex flex-col items-center gap-1">
+                                    {(() => {
+                                        let tier = { icon: '🤚', label: 'Volunteer', color: 'bg-teal-50 text-teal-900/60' };
+                                        if (volunteerCount >= 15) tier = { icon: '👑', label: 'Super Vol.', color: 'bg-rose-100 text-rose-900/60' };
+                                        else if (volunteerCount >= 9) tier = { icon: '🚀', label: 'Adv. Vol.', color: 'bg-purple-100 text-purple-900/60' };
+                                        else if (volunteerCount >= 4) tier = { icon: '🔥', label: 'Inter. Vol.', color: 'bg-orange-100 text-orange-900/60' };
+                                        
+                                        return (
+                                            <>
+                                                <div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square rounded-2xl flex items-center justify-center text-2xl ${tier.color.split(' ')[0]}`}>{tier.icon}</div>
+                                                <span className={`text-[8px] font-black uppercase ${tier.color.split(' ')[1]} text-center`}>{tier.label}</span>
+                                            </>
+                                        );
+                                    })()}
                                 </div>
                             )}
 
@@ -2347,7 +2400,7 @@ ${window.location.origin}`;
                     </div>
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
                         <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
-                        <p className="text-2xl font-black text-purple-600">{committeeApps.length}</p>
+                        <p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p>
                     </div>
                 </div>
                 <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
@@ -2656,6 +2709,17 @@ ${window.location.origin}`;
                               <User size={20} className="text-amber-500"/> Personal Details
                           </h4>
                           <form onSubmit={handleUpdateProfile} className="space-y-4">
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
+                                  <input 
+                                      type="text" 
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase"
+                                      value={settingsForm.name || ''}
+                                      onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})}
+                                      placeholder="LAST, FIRST MI."
+                                  />
+                              </div>
+
                               <div>
                                   <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nickname / Display Name</label>
                                   <input 
