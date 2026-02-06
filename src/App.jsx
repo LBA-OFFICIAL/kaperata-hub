@@ -20,7 +20,7 @@ import {
   Briefcase, ClipboardCheck, ChevronDown, ChevronUp, 
   CheckSquare, Music, Database, ExternalLink, Hand, Image as ImageIcon, 
   Link as LinkIcon, RefreshCcw, GraduationCap, PenTool, BookOpen, 
-  AlertOctagon, Power, FileText
+  AlertOctagon, Power, FileText, FileBarChart
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -2002,10 +2002,10 @@ ${window.location.origin}`;
                       </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                     <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
-                     <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
-                     <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
-                     <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
+                      <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
+                      <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
+                      <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
+                      <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
                   </div>
               </div>
 
@@ -2197,10 +2197,10 @@ ${window.location.origin}`;
                              <div className="flex gap-2">
                                 <button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white flex items-center gap-2 ${hubSettings.maintenanceMode ? 'bg-orange-500' : 'bg-gray-400'}`}>
                                      <Power size={12}/> {hubSettings.maintenanceMode ? "MAINTENANCE ON" : "NORMAL"}
-                                 </button>
-                                 <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>
+                                </button>
+                                <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>
                                      {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
-                                 </button>
+                                </button>
                              </div>
                         </div>
                         <hr className="border-amber-100 my-4"/>
@@ -2356,10 +2356,10 @@ ${window.location.origin}`;
                                       
                                       return (
                                           <button 
-                                            onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
-                                            className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${isActive ? (isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`}
-                                            title={isAdmin ? "Click to toggle status" : ""}
-                                            disabled={!isAdmin}
+                                              onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
+                                              className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${isActive ? (isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`}
+                                              title={isAdmin ? "Click to toggle status" : ""}
+                                              disabled={!isAdmin}
                                           >
                                               {isActive ? status : 'EXPIRED'}
                                           </button>
@@ -2413,4 +2413,35 @@ ${window.location.origin}`;
   );
 };
 
-export default App;
+// Main App Component with Auth State Management
+export default function App() {
+    const [user, setUser] = useState(null);
+    const [profile, setProfile] = useState(() => {
+        try {
+            return JSON.parse(localStorage.getItem('lba_profile'));
+        } catch { return null; }
+    });
+
+    useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+            setUser(firebaseUser);
+            if (!firebaseUser) {
+                setProfile(null);
+                localStorage.removeItem('lba_profile');
+            }
+        });
+        return () => unsubscribe();
+    }, []);
+
+    const logout = async () => {
+        await signOut(auth);
+        setProfile(null);
+        localStorage.removeItem('lba_profile');
+    };
+
+    if (!profile) {
+        return <Login user={user} onLoginSuccess={setProfile} />;
+    }
+
+    return <Dashboard user={user} profile={profile} setProfile={setProfile} logout={logout} />;
+}
