@@ -658,7 +658,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [adminMcSearch, setAdminMcSearch] = useState('');
   const [selectedMcMembers, setSelectedMcMembers] = useState([]);
   const [editingMcCurriculum, setEditingMcCurriculum] = useState(false);
-  const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '' });
+  const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' });
 
   // Anniversary State
   const [isAnniversary, setIsAnniversary] = useState(false);
@@ -735,6 +735,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     attendanceRequired: false, 
     evaluationLink: '',
     isVolunteer: false,
+    registrationRequired: true, // Default to true
     openForAll: true,
     volunteerTarget: { officer: 0, committee: 0, member: 0 },
     shifts: [],
@@ -918,21 +919,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         }
     }, (e) => console.error("Profile sync error:", e));
 
-    // 2. Registry Listener (ONLY for Officers)
-    // Normal members don't need to download the whole database
-    let unsubReg = () => {};
-    // For masterclass selection, we DO need a list of members.
-    // If not officer, we might need a separate way to fetch, but for now assuming officers manage masterclass.
-    // To allow masterclass member selection, we keep this active for officers.
-    if (isOfficer || isAdmin) {
-        unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
-            const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
-            setMembers(list);
-        }, (e) => console.error("Registry sync error:", e));
-    } else {
-        // Just empty subscription for members
-        unsubReg = () => {};
-    }
+    // 2. Registry Listener
+    // We need members for the 'Team' view (Brew Crew) and for officers to manage
+    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
+        const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
+        setMembers(list);
+    }, (e) => console.error("Registry sync error:", e));
 
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Events sync error:", e));
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Announcements sync error:", e));
@@ -1181,7 +1173,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           }
           setShowEventForm(false);
           // Reset form including volunteer fields
-          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' });
+          setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' });
       } catch (err) { console.error(err); }
   };
 
@@ -1197,6 +1189,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           attendanceRequired: ev.attendanceRequired || false,
           evaluationLink: ev.evaluationLink || '',
           isVolunteer: ev.isVolunteer || false,
+          registrationRequired: ev.registrationRequired !== undefined ? ev.registrationRequired : true, // Default true if legacy
           openForAll: ev.openForAll !== undefined ? ev.openForAll : true,
           volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 },
           shifts: ev.shifts || [],
@@ -1805,7 +1798,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleGiveAccolade = async () => {
       if (!accoladeText.trim() || !showAccoladeModal) return;
       try {
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', showAccoladeModal.id);
+          // FIX: Use .id (document key) instead of .memberId (field)
+          const docId = showAccoladeModal.id || showAccoladeModal.memberId;
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
           await updateDoc(memberRef, {
               accolades: arrayUnion(accoladeText)
           });
@@ -1814,7 +1809,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           alert("Accolade awarded!");
       } catch (err) {
           console.error("Error giving accolade:", err);
-          alert("Failed to award accolade.");
+          alert("Failed to award accolade: " + err.message);
       }
   };
 
@@ -2097,21 +2092,24 @@ ${window.location.origin}`;
                 </div>
                 
                 {(() => {
-                    // Filter members who registered for this event
+                    // Filter members logic
                     let targetList = members;
                     if (attendanceEvent.isVolunteer && attendanceEvent.shifts) {
                         const volunteerIds = attendanceEvent.shifts.flatMap(s => s.volunteers);
                         targetList = members.filter(m => volunteerIds.includes(m.memberId));
-                    } else if (attendanceEvent.registered && attendanceEvent.registered.length > 0) {
-                        targetList = members.filter(m => attendanceEvent.registered.includes(m.memberId));
+                    } else if (attendanceEvent.registrationRequired) {
+                        targetList = members.filter(m => attendanceEvent.registered && attendanceEvent.registered.includes(m.memberId));
                     }
+                    // Else: show ALL members (default for open events)
                     
                     const sortedMembers = [...targetList].sort((a,b) => (a.name || "").localeCompare(b.name || ""));
 
                     return (
                         <>
                             <div className="flex justify-between items-center mb-4 px-2">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Registered List</span>
+                                <span className="text-xs font-bold text-gray-500 uppercase">
+                                    {attendanceEvent.registrationRequired ? 'Registered List' : 'Member List (Open Event)'}
+                                </span>
                                 <span className="text-xs font-bold bg-[#3E2723] text-[#FDB813] px-3 py-1 rounded-full">
                                     Present: {attendanceEvent.attendees?.length || 0} / {targetList.length}
                                 </span>
@@ -2142,8 +2140,10 @@ ${window.location.origin}`;
                                     })
                                 ) : (
                                     <div className="text-center py-10 opacity-50">
-                                        <p className="text-sm font-bold">No registered members found.</p>
-                                        <p className="text-xs">Members must register for the event to appear here.</p>
+                                        <p className="text-sm font-bold">No members found.</p>
+                                        <p className="text-xs">
+                                            {attendanceEvent.registrationRequired ? "Members must register first." : "Check database sync."}
+                                        </p>
                                     </div>
                                 )}
                             </div>
@@ -2240,6 +2240,58 @@ ${window.location.origin}`;
 
             {view === 'home' && (
             <div className="space-y-10 animate-fadeIn">
+                {/* Expired Membership Banner */}
+                {profile.status === 'expired' && (
+                    <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-r-xl mb-6 shadow-md">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-xl font-black uppercase text-red-700 flex items-center gap-2">
+                                    <AlertCircle size={24}/> Membership Expired
+                                </h3>
+                                <p className="text-sm text-red-800 mt-2 font-medium">
+                                    Your membership access is currently limited. Please settle your full membership fee to reactivate your account and restore full access to all features.
+                                </p>
+                            </div>
+                            <div className="text-right">
+                                <span className="bg-red-200 text-red-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">Status: Expired</span>
+                            </div>
+                        </div>
+                        
+                        <div className="mt-6 bg-white p-6 rounded-2xl border border-red-100">
+                            <h4 className="text-sm font-black uppercase text-gray-700 mb-4">Renewal Payment</h4>
+                            <p className="text-xs text-gray-500 mb-4">Please send the full membership fee via GCash to the number below, then enter your Reference Number to verify.</p>
+                            
+                            <div className="flex flex-col md:flex-row gap-6 items-center">
+                                <div className="bg-blue-50 p-4 rounded-xl text-center w-full md:w-auto">
+                                    <p className="text-[10px] font-black uppercase text-blue-800">GCash Only</p>
+                                    <p className="text-lg font-black text-blue-900">+639063751402</p>
+                                </div>
+                                
+                                <form onSubmit={e => {
+                                    // Expired members must pay full via GCash
+                                    setRenewalMethod('gcash');
+                                    handleRenewalPayment(e);
+                                }} className="flex-1 w-full flex gap-3">
+                                    <input 
+                                        type="text" 
+                                        required 
+                                        placeholder="Enter Reference No." 
+                                        className="flex-1 p-3 border border-gray-300 rounded-xl text-xs uppercase focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                                        value={renewalRef}
+                                        onChange={(e) => setRenewalRef(e.target.value)}
+                                    />
+                                    <button 
+                                        type="submit" 
+                                        className="bg-red-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-red-700 transition-colors shadow-lg"
+                                    >
+                                        Reactivate
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {/* Birthday & Anniversary Banners */}
                 <div className="space-y-4">
                     {isBirthday && (
@@ -2331,7 +2383,7 @@ ${window.location.origin}`;
                     </div>
                     <div className="flex flex-wrap gap-2">
                         <div className="bg-[#FDB813] text-[#3E2723] px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.memberId}</div>
-                        <div className="bg-green-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">Active</div>
+                        <div className={`${profile.status === 'active' ? 'bg-green-500' : 'bg-gray-500'} text-white px-5 py-2 rounded-full font-black text-[9px] uppercase`}>{profile.status === 'active' ? 'Active' : 'Expired'}</div>
                         <div className="bg-white/20 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">{profile.positionCategory}</div>
                         <div className="bg-orange-500 text-white px-5 py-2 rounded-full font-black text-[9px] uppercase">10% B'CAFE</div>
                     </div>
@@ -2450,19 +2502,21 @@ ${window.location.origin}`;
                                 </div>
                             )}
 
-                            {/* MASTERCLASS BADGES */}
+                            {/* MASTERCLASS BADGES (Corrected to use dynamic icons) */}
                             {(() => {
                                 const myBadges = [];
                                 let completedCount = 0;
                                 DEFAULT_MASTERCLASS_MODULES.forEach(mod => {
                                     if (masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId)) {
                                         completedCount++;
-                                        const icons = ["🌱", "⚙️", "💧", "☕", "🍹"];
-                                        const title = masterclassData.moduleDetails?.[mod.id]?.title || mod.title;
-                                        const short = mod.short; // Keep original short name for badge, or could derive new one
+                                        const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
+                                        const customIcon = masterclassData.moduleDetails?.[mod.id]?.icon;
+                                        const iconToUse = customIcon || defaultIcons[mod.id-1];
+                                        const short = mod.short; 
+                                        
                                         myBadges.push(
                                             <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
-                                                <div title={`Completed: ${title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex items-center justify-center text-xl cursor-help border border-green-100">{icons[mod.id-1]}</div>
+                                                <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex items-center justify-center text-xl cursor-help border border-green-100">{iconToUse}</div>
                                                 <span className="text-[8px] font-black uppercase text-green-800 text-center leading-tight">{short}</span>
                                             </div>
                                         );
@@ -2578,11 +2632,15 @@ ${window.location.origin}`;
                         {DEFAULT_MASTERCLASS_MODULES.map(mod => {
                             const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
                             const details = masterclassData.moduleDetails?.[mod.id] || {};
+                            // Use custom icon if set, otherwise default
+                            const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
+                            const icon = details.icon || defaultIcons[mod.id-1];
+
                             return (
                                 <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
                                     <div className="flex justify-between items-start mb-4">
                                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>
-                                            {["🌱", "⚙️", "💧", "☕", "🍹"][mod.id-1]}
+                                            {icon}
                                         </div>
                                         {isCompleted && <BadgeCheck className="text-green-600" size={24}/>}
                                     </div>
@@ -2682,6 +2740,7 @@ ${window.location.origin}`;
                                 <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Edit Curriculum: Module {adminMcModule}</h3>
                                 <div className="space-y-4">
                                     <input type="text" placeholder="Workshop Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={tempMcDetails.title || ''} onChange={e => setTempMcDetails({...tempMcDetails, title: e.target.value})} />
+                                    <input type="text" placeholder="Icon (Emoji)" className="w-full p-3 border rounded-xl text-xs font-bold" value={tempMcDetails.icon || ''} onChange={e => setTempMcDetails({...tempMcDetails, icon: e.target.value})} />
                                     <textarea placeholder="Objectives" className="w-full p-3 border rounded-xl text-xs" rows="3" value={tempMcDetails.objectives || ''} onChange={e => setTempMcDetails({...tempMcDetails, objectives: e.target.value})} />
                                     <textarea placeholder="Topics Covered" className="w-full p-3 border rounded-xl text-xs" rows="3" value={tempMcDetails.topics || ''} onChange={e => setTempMcDetails({...tempMcDetails, topics: e.target.value})} />
                                     <div className="flex gap-3">
@@ -2772,6 +2831,8 @@ ${window.location.origin}`;
                                 <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
                                 <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} />
                                 
+                                <input type="text" placeholder="Post Evaluation Link (Permanent)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} />
+
                                 <div>
                                     <label className="text-[10px] font-bold uppercase text-gray-500 mb-2 block">Link to Masterclass Modules (Optional)</label>
                                     <div className="grid grid-cols-2 gap-2 p-3 border rounded-xl bg-gray-50 max-h-40 overflow-y-auto">
@@ -2797,6 +2858,17 @@ ${window.location.origin}`;
                                 </div>
 
                                 <div className="space-y-4 pt-2">
+                                    <div className="flex items-center gap-4">
+                                         <div className="flex items-center gap-2">
+                                            <input type="checkbox" id="regReq" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} />
+                                            <label htmlFor="regReq" className="text-xs font-bold uppercase">Registration Required</label>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <input type="checkbox" id="isVol" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
+                                            <label htmlFor="isVol" className="text-xs font-bold uppercase">Volunteer Signups</label>
+                                        </div>
+                                    </div>
+
                                     {/* Moved Schedule Type OUTSIDE of isVolunteer check so it applies to ALL events */}
                                     <div className="p-4 bg-gray-50 rounded-xl space-y-4 border border-gray-200">
                                         <div>
@@ -2859,11 +2931,6 @@ ${window.location.origin}`;
                                                 ))}
                                             </div>
                                         )}
-                                    </div>
-
-                                    <div className="flex items-center gap-2 pt-2">
-                                        <input type="checkbox" id="isVol" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
-                                        <label htmlFor="isVol" className="text-xs font-bold uppercase">Enable Volunteer Signups</label>
                                     </div>
                                 </div>
 
@@ -2928,6 +2995,12 @@ ${window.location.origin}`;
                                                 </button>
                                             )}
                                             
+                                            {ev.evaluationLink && (
+                                                 <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
+                                                     📝 Post-Event Evaluation
+                                                 </a>
+                                            )}
+                                            
                                             {ev.isVolunteer ? (
                                                 <div className="mt-6 space-y-2">
                                                     <p className="text-xs font-black uppercase text-amber-600">Volunteer Shifts</p>
@@ -2959,14 +3032,16 @@ ${window.location.origin}`;
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <button 
-                                                    onClick={() => handleRegisterEvent(ev)}
-                                                    className={`mt-6 w-full py-3 rounded-xl font-black uppercase text-xs transition-colors ${
-                                                        isRegistered ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-[#3E2723] text-white hover:bg-black'
-                                                    }`}
-                                                >
-                                                    {isRegistered ? "You're Going!" : "Count Me In"}
-                                                </button>
+                                                ev.registrationRequired && (
+                                                    <button 
+                                                        onClick={() => handleRegisterEvent(ev)}
+                                                        className={`mt-6 w-full py-3 rounded-xl font-black uppercase text-xs transition-colors ${
+                                                            isRegistered ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-[#3E2723] text-white hover:bg-black'
+                                                        }`}
+                                                    >
+                                                        {isRegistered ? "You're Going!" : "Count Me In"}
+                                                    </button>
+                                                )
                                             )}
                                         </div>
                                     </div>
