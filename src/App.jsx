@@ -3228,8 +3228,8 @@ ${window.location.origin}`;
                         {COMMITTEES_INFO.map(c => (
                             <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
                                 <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
-                                    {/* CHANGED: Removed grayscale, added sepia filter for orange-shade effect */}
-                                    <img src={c.image} className="w-full h-full object-cover sepia transition-all duration-500 hover:sepia-0" alt={c.title} />
+                                    {/* CHANGED: Removed grayscale/sepia filter */}
+                                    <img src={c.image} className="w-full h-full object-cover transition-all duration-500" alt={c.title} />
                                 </div>
                                 <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
                                 <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
@@ -3313,6 +3313,24 @@ ${window.location.origin}`;
                                         {hubSettings.renewalMode ? "ON" : "OFF"}
                                     </button>
                                 </div>
+                            </div>
+
+                            <hr className="border-amber-100 my-4"/>
+
+                            {/* --- FINANCIAL SETTINGS (GCASH UPDATE) --- */}
+                            <div className="mb-6">
+                                <h4 className="font-black uppercase text-sm mb-2">Financial Settings</h4>
+                                <div className="flex gap-2 items-center">
+                                    <input 
+                                        type="text" 
+                                        placeholder="Update GCash Number (e.g. 09xxxxxxxxx)" 
+                                        className="flex-1 p-3 border rounded-xl text-xs font-bold"
+                                        value={newGcashNumber}
+                                        onChange={(e) => setNewGcashNumber(e.target.value)}
+                                    />
+                                    <button onClick={handleUpdateGcashNumber} className="bg-[#3E2723] text-white px-4 py-3 rounded-xl font-black uppercase text-xs">Update</button>
+                                </div>
+                                <p className="text-[9px] text-gray-400 mt-1">Current: +63{hubSettings.gcashNumber || '9063751402'}</p>
                             </div>
 
                             <hr className="border-amber-100 my-4"/>
