@@ -283,7 +283,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(''); 
   const [pendingProfile, setPendingProfile] = useState(null);
-  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, maintenanceMode: false });
+  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, maintenanceMode: false, gcashNumber: '09063751402' });
   const [secureKeys, setSecureKeys] = useState(null);
   const [showForgotModal, setShowForgotModal] = useState(false);
 
@@ -607,7 +607,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                </div>
                <div className="p-4 bg-amber-50 rounded-2xl text-[10px] font-black text-amber-900 text-center uppercase">
                   {/* Updated GCash number */}
-                  {paymentMethod === 'gcash' ? "GCash: +639063751402" : "Provide Daily Cash Key"}
+                  {paymentMethod === 'gcash' ? `GCash: +63${hubSettings.gcashNumber || '9063751402'}` : "Provide Daily Cash Key"}
                </div>
                <input type="text" required placeholder={paymentMethod === 'gcash' ? "Reference No." : "Daily Cash Key"} className="w-full p-3 border border-amber-200 rounded-xl outline-none text-xs uppercase" value={paymentMethod === 'gcash' ? refNo : cashOfficerKey} onChange={e => paymentMethod === 'gcash' ? setRefNo(e.target.value) : setCashOfficerKey(e.target.value.toUpperCase())} />
                <button type="button" onClick={() => setAuthMode('register')} className="w-full text-xs font-bold text-gray-500 hover:text-[#3E2723] underline">Back to Registration</button>
@@ -645,7 +645,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       renewalOpen: true, 
       maintenanceMode: false,
       renewalMode: false, 
-      allowedPayment: 'gcash_only' // 'gcash_only' or 'both'
+      allowedPayment: 'gcash_only', // 'gcash_only' or 'both'
+      gcashNumber: '09063751402'
   });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
@@ -669,11 +670,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Email Modal State (NEW)
   const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' });
+  // Accolade Modal State (NEW)
+  const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { id: docId, name: string, currentAccolades: [] }
+  const [accoladeText, setAccoladeText] = useState("");
 
   // Renewal/Payment State
   const [renewalRef, setRenewalRef] = useState('');
   const [renewalMethod, setRenewalMethod] = useState('gcash');
   const [renewalCashKey, setRenewalCashKey] = useState('');
+  const [newGcashNumber, setNewGcashNumber] = useState('');
 
   // Last visited state for notifications
   const [lastVisited, setLastVisited] = useState(() => {
@@ -755,8 +760,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [attendanceEvent, setAttendanceEvent] = useState(null);
 
   // New States for Accolades & Bulk Email
-  const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { memberId }
-  const [accoladeText, setAccoladeText] = useState("");
   const [exportFilter, setExportFilter] = useState('all');
 
   // FIX: Case-insensitive check for officer role
@@ -919,12 +922,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         }
     }, (e) => console.error("Profile sync error:", e));
 
-    // 2. Registry Listener
-    // We need members for the 'Team' view (Brew Crew) and for officers to manage
-    const unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
-        const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        setMembers(list);
-    }, (e) => console.error("Registry sync error:", e));
+    // 2. Registry Listener (ONLY for Officers)
+    // Normal members don't need to download the whole database
+    let unsubReg = () => {};
+    // For masterclass selection, we DO need a list of members.
+    // If not officer, we might need a separate way to fetch, but for now assuming officers manage masterclass.
+    // To allow masterclass member selection, we keep this active for officers.
+    if (isOfficer || isAdmin) {
+        unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
+            const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
+            setMembers(list);
+        }, (e) => console.error("Registry sync error:", e));
+    } else {
+        // Just empty subscription for members
+        unsubReg = () => {};
+    }
 
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Events sync error:", e));
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Announcements sync error:", e));
@@ -1028,7 +1040,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     e.preventDefault();
     setSavingSettings(true);
     try {
-        const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) };
+        const updated = { 
+            ...profile, 
+            ...settingsForm, 
+            birthMonth: parseInt(settingsForm.birthMonth), 
+            birthDay: parseInt(settingsForm.birthDay) 
+        };
+        // Update email if changed
+        if (settingsForm.email !== profile.email) {
+            updated.email = settingsForm.email.toLowerCase();
+        }
+
         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated);
         // Note: setProfile is also called by the real-time listener in Dashboard
         setProfile(updated);
@@ -1400,6 +1422,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           setEditingMcCurriculum(false);
           alert("Curriculum Updated");
       } catch(e) { console.error(e); }
+  };
+
+  const handleUpdateGcashNumber = async () => {
+    if (!newGcashNumber.trim()) return;
+    try {
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+            ...hubSettings,
+            gcashNumber: newGcashNumber
+        });
+        setNewGcashNumber('');
+        alert("GCash Number Updated Successfully");
+    } catch (err) {
+        console.error(err);
+        alert("Failed to update GCash Number");
+    }
   };
 
   const handleApplyCommittee = async (e, targetCommittee) => {
@@ -1805,12 +1842,28 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               accolades: arrayUnion(accoladeText)
           });
           setAccoladeText("");
-          setShowAccoladeModal(null);
+          // Refetch updated accolades for modal
+          const updated = [...(showAccoladeModal.currentAccolades || []), accoladeText];
+          setShowAccoladeModal(prev => ({...prev, currentAccolades: updated}));
           alert("Accolade awarded!");
       } catch (err) {
           console.error("Error giving accolade:", err);
           alert("Failed to award accolade: " + err.message);
       }
+  };
+
+  const handleRemoveAccolade = async (accoladeToRemove) => {
+      if(!confirm("Remove this accolade?")) return;
+      try {
+          const docId = showAccoladeModal.id || showAccoladeModal.memberId;
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
+          await updateDoc(memberRef, {
+              accolades: arrayRemove(accoladeToRemove)
+          });
+          // Update local modal state
+          const updated = showAccoladeModal.currentAccolades.filter(a => a !== accoladeToRemove);
+          setShowAccoladeModal(prev => ({...prev, currentAccolades: updated}));
+      } catch(e) { console.error(e); alert("Failed to remove accolade"); }
   };
 
   const handleResetPassword = async (memberId, email, name) => {
@@ -2160,9 +2213,25 @@ ${window.location.origin}`;
             <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
                 <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trophy size={32} /></div>
                 <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
+                
+                {/* List Existing Accolades */}
+                {showAccoladeModal.currentAccolades && showAccoladeModal.currentAccolades.length > 0 && (
+                    <div className="mb-4 bg-gray-50 rounded-xl p-3 max-h-32 overflow-y-auto">
+                        <p className="text-[9px] font-black uppercase text-gray-400 mb-2 text-left">Current Badges</p>
+                        <ul className="space-y-1">
+                            {showAccoladeModal.currentAccolades.map((acc, idx) => (
+                                <li key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100">
+                                    <span className="text-[10px] font-bold text-gray-700">{acc}</span>
+                                    <button onClick={() => handleRemoveAccolade(acc)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+
                 <input type="text" placeholder="Achievement Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} />
                 <div className="flex gap-3">
-                    <button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                    <button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Close</button>
                     <button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs hover:bg-yellow-600">Award</button>
                 </div>
             </div>
@@ -2264,7 +2333,7 @@ ${window.location.origin}`;
                             <div className="flex flex-col md:flex-row gap-6 items-center">
                                 <div className="bg-blue-50 p-4 rounded-xl text-center w-full md:w-auto">
                                     <p className="text-[10px] font-black uppercase text-blue-800">GCash Only</p>
-                                    <p className="text-lg font-black text-blue-900">+639063751402</p>
+                                    <p className="text-lg font-black text-blue-900">+63{hubSettings.gcashNumber || '9063751402'}</p>
                                 </div>
                                 
                                 <form onSubmit={e => {
@@ -2455,31 +2524,39 @@ ${window.location.origin}`;
                         <div className="grid grid-cols-3 gap-3">
                             {/* Dynamic Badges */}
                             <div className="flex flex-col items-center gap-1">
-                                <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex items-center justify-center text-2xl">☕</div>
-                                <span className="text-[8px] font-black uppercase text-amber-900/60 text-center">Member</span>
+                                <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
+                                    <div className="text-2xl mb-1">☕</div>
+                                    <span className="text-[6px] font-black uppercase text-amber-900/60 leading-tight">Member</span>
+                                </div>
                             </div>
                             
                             {/* Officer Badge - Specific */}
                             {['Officer', 'Execomm'].includes(profile.positionCategory) && (
                                 <div className="flex flex-col items-center gap-1">
-                                    <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex items-center justify-center text-2xl">🛡️</div>
-                                    <span className="text-[8px] font-black uppercase text-indigo-900/60 text-center">Officer</span>
+                                    <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
+                                        <div className="text-2xl mb-1">🛡️</div>
+                                        <span className="text-[6px] font-black uppercase text-indigo-900/60 leading-tight">Officer</span>
+                                    </div>
                                 </div>
                             )}
 
                             {/* Committee Badge - New */}
                             {profile.positionCategory === 'Committee' && (
                                 <div className="flex flex-col items-center gap-1">
-                                    <div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex items-center justify-center text-2xl">🎗️</div>
-                                    <span className="text-[8px] font-black uppercase text-pink-900/60 text-center">Committee</span>
+                                    <div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
+                                        <div className="text-2xl mb-1">🎗️</div>
+                                        <span className="text-[6px] font-black uppercase text-pink-900/60 leading-tight">Comm.</span>
+                                    </div>
                                 </div>
                             )}
                             
                             {/* Safe check for memberId before calculation */}
                             {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && (
                                 <div className="flex flex-col items-center gap-1">
-                                    <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex items-center justify-center text-2xl">🏅</div>
-                                    <span className="text-[8px] font-black uppercase text-yellow-900/60 text-center">Veteran</span>
+                                    <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
+                                        <div className="text-2xl mb-1">🏅</div>
+                                        <span className="text-[6px] font-black uppercase text-yellow-900/60 leading-tight">Veteran</span>
+                                    </div>
                                 </div>
                             )}
 
@@ -2492,11 +2569,14 @@ ${window.location.origin}`;
                                         else if (volunteerCount >= 9) tier = { icon: '🚀', label: 'Adv. Vol.', color: 'bg-purple-100 text-purple-900/60' };
                                         else if (volunteerCount >= 4) tier = { icon: '🔥', label: 'Inter. Vol.', color: 'bg-orange-100 text-orange-900/60' };
                                         
+                                        const textColor = tier.color.split(' ')[1] || 'text-gray-500';
+                                        const bgColor = tier.color.split(' ')[0] || 'bg-gray-100';
+
                                         return (
-                                            <>
-                                                <div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square rounded-2xl flex items-center justify-center text-2xl ${tier.color.split(' ')[0]}`}>{tier.icon}</div>
-                                                <span className={`text-[8px] font-black uppercase ${tier.color.split(' ')[1]} text-center`}>{tier.label}</span>
-                                            </>
+                                            <div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square ${bgColor} rounded-2xl flex flex-col items-center justify-center text-center p-1`}>
+                                                <div className="text-2xl mb-1">{tier.icon}</div>
+                                                <span className={`text-[6px] font-black uppercase ${textColor} leading-tight`}>{tier.label}</span>
+                                            </div>
                                         );
                                     })()}
                                 </div>
@@ -2516,8 +2596,10 @@ ${window.location.origin}`;
                                         
                                         myBadges.push(
                                             <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
-                                                <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex items-center justify-center text-xl cursor-help border border-green-100">{iconToUse}</div>
-                                                <span className="text-[8px] font-black uppercase text-green-800 text-center leading-tight">{short}</span>
+                                                <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 border border-green-100">
+                                                    <div className="text-2xl mb-1">{iconToUse}</div>
+                                                    <span className="text-[6px] font-black uppercase text-green-800 text-center leading-tight">{short}</span>
+                                                </div>
                                             </div>
                                         );
                                     }
@@ -2525,8 +2607,10 @@ ${window.location.origin}`;
                                 if (completedCount === 5) {
                                     myBadges.unshift(
                                         <div key="mc-master" className="flex flex-col items-center gap-1">
-                                            <div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-500 rounded-2xl flex items-center justify-center text-2xl cursor-help shadow-lg border-2 border-white">🎓</div>
-                                            <span className="text-[8px] font-black uppercase text-amber-700 text-center leading-tight">Master</span>
+                                            <div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-500 rounded-2xl flex flex-col items-center justify-center text-center p-1 shadow-lg border-2 border-white">
+                                                <div className="text-2xl mb-1">🎓</div>
+                                                <span className="text-[6px] font-black uppercase text-amber-900 leading-tight">Master</span>
+                                            </div>
                                         </div>
                                     );
                                 }
@@ -2536,8 +2620,10 @@ ${window.location.origin}`;
                             {/* Added Custom Accolades */}
                             {profile.accolades?.map((acc, i) => (
                                 <div key={i} className="flex flex-col items-center gap-1">
-                                    <div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex items-center justify-center text-2xl cursor-help">🏆</div>
-                                    <span className="text-[8px] font-black uppercase text-purple-900/60 text-center leading-tight line-clamp-2">{acc}</span>
+                                    <div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
+                                        <div className="text-2xl mb-1">🏆</div>
+                                        <span className="text-[6px] font-black uppercase text-purple-900/60 leading-tight line-clamp-2">{acc}</span>
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -2753,905 +2839,6 @@ ${window.location.origin}`;
                     )}
                 </div>
             )}
-
-            {view === 'team' && (
-                <div className="space-y-12 animate-fadeIn text-center">
-                    <div>
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Executive Committee {getMemberIdMeta().sy}</p>
-                    </div>
-
-                    {/* Tier 1: President */}
-                    {teamStructure.tier1.length > 0 && (
-                        <div className="flex justify-center">
-                            {teamStructure.tier1.map(m => <MemberCard key={m.id} m={m} />)}
-                        </div>
-                    )}
-
-                    {/* Tier 2: Secretary (VP is Tier 3 in logic but effectively high) */}
-                    {teamStructure.tier2.length > 0 && (
-                        <div className="flex justify-center gap-6 flex-wrap">
-                            {teamStructure.tier2.map(m => <MemberCard key={m.id} m={m} />)}
-                        </div>
-                    )}
-
-                    {/* Tier 3: Other Officers */}
-                    {teamStructure.tier3.length > 0 && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
-                            {teamStructure.tier3.map(m => <MemberCard key={m.id} m={m} />)}
-                        </div>
-                    )}
-
-                    <div className="border-t border-amber-100 pt-12">
-                        <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Heads</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
-                            {teamStructure.committees.heads.map(m => <MemberCard key={m.id} m={m} />)}
-                        </div>
-                    </div>
-
-                    {teamStructure.committees.members.length > 0 && (
-                        <div className="border-t border-amber-100 pt-12">
-                            <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Members</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
-                                {teamStructure.committees.members.map(m => <MemberCard key={m.id} m={m} />)}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {view === 'events' && (
-                <div className="space-y-6 animate-fadeIn">
-                    <div className="flex justify-between items-center">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
-                        {isAdmin && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
-                    </div>
-
-                    {showEventForm && (
-                        <div className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6">
-                            <h4 className="font-black uppercase mb-4">Add New Event</h4>
-                            <form onSubmit={handleAddEvent} className="space-y-3">
-                                <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} />
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <label className="text-[10px] font-bold uppercase text-gray-500">Start</label>
-                                        <div className="flex gap-1">
-                                            <input type="date" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} />
-                                            <input type="time" required className="p-2 border rounded-xl text-xs w-full" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold uppercase text-gray-500">End</label>
-                                        <div className="flex gap-1">
-                                            <input type="date" className="p-2 border rounded-xl text-xs w-full" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} />
-                                            <input type="time" className="p-2 border rounded-xl text-xs w-full" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} />
-                                        </div>
-                                    </div>
-                                </div>
-                                <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
-                                <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} />
-                                
-                                <input type="text" placeholder="Post Evaluation Link (Permanent)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} />
-
-                                <div>
-                                    <label className="text-[10px] font-bold uppercase text-gray-500 mb-2 block">Link to Masterclass Modules (Optional)</label>
-                                    <div className="grid grid-cols-2 gap-2 p-3 border rounded-xl bg-gray-50 max-h-40 overflow-y-auto">
-                                        {DEFAULT_MASTERCLASS_MODULES.map(m => (
-                                            <label key={m.id} className="flex items-center gap-2 text-xs font-bold cursor-pointer hover:bg-gray-100 p-1 rounded">
-                                                <input 
-                                                    type="checkbox" 
-                                                    className="rounded border-gray-300 text-[#3E2723] focus:ring-[#3E2723]"
-                                                    checked={newEvent.masterclassModuleIds?.includes(String(m.id))}
-                                                    onChange={(e) => {
-                                                        const currentIds = newEvent.masterclassModuleIds || [];
-                                                        if (e.target.checked) {
-                                                            setNewEvent({...newEvent, masterclassModuleIds: [...currentIds, String(m.id)]});
-                                                        } else {
-                                                            setNewEvent({...newEvent, masterclassModuleIds: currentIds.filter(id => id !== String(m.id))});
-                                                        }
-                                                    }}
-                                                />
-                                                <span className="truncate">M{m.id}: {m.short}</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-4 pt-2">
-                                    <div className="flex items-center gap-4">
-                                         <div className="flex items-center gap-2">
-                                            <input type="checkbox" id="regReq" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} />
-                                            <label htmlFor="regReq" className="text-xs font-bold uppercase">Registration Required</label>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <input type="checkbox" id="isVol" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} />
-                                            <label htmlFor="isVol" className="text-xs font-bold uppercase">Volunteer Signups</label>
-                                        </div>
-                                    </div>
-
-                                    {/* Moved Schedule Type OUTSIDE of isVolunteer check so it applies to ALL events */}
-                                    <div className="p-4 bg-gray-50 rounded-xl space-y-4 border border-gray-200">
-                                        <div>
-                                            <label className="text-[10px] font-bold uppercase text-gray-500 mb-1 block">Event Schedule / Shifts</label>
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setTempShift({...tempShift, type: 'WHOLE_DAY'})}
-                                                    className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'WHOLE_DAY' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
-                                                >
-                                                    Whole Day
-                                                </button>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => setTempShift({...tempShift, type: 'SHIFT'})}
-                                                    className={`flex-1 py-2 text-xs font-bold rounded-lg border ${tempShift.type === 'SHIFT' ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-500'}`}
-                                                >
-                                                    Specific Sessions
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <div className="flex gap-2">
-                                                <input type="date" className="p-2 border rounded-lg text-xs w-1/3" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
-                                                {/* Only show capacity if volunteer mode is ON, otherwise it's just an agenda item */}
-                                                {newEvent.isVolunteer && (
-                                                    <input type="number" placeholder="Cap" className="p-2 border rounded-lg text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} min="1" />
-                                                )}
-                                                
-                                                {tempShift.type === 'SHIFT' ? (
-                                                    <input 
-                                                        type="text" 
-                                                        placeholder="Session Name (e.g. AM, 1-4PM)" 
-                                                        className="p-2 border rounded-lg text-xs flex-1" 
-                                                        value={tempShift.name} 
-                                                        onChange={e => setTempShift({...tempShift, name: e.target.value})} 
-                                                    />
-                                                ) : (
-                                                    <div className="p-2 bg-gray-100 rounded-lg text-xs text-gray-500 flex-1 flex items-center justify-center font-bold italic">
-                                                        Whole Day Event
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <button type="button" onClick={addShift} className="w-full py-2 bg-amber-600 text-white rounded-lg text-xs font-bold hover:bg-amber-700 transition-colors">Add to Schedule</button>
-                                        </div>
-                                        
-                                        {newEvent.shifts.length > 0 && (
-                                            <div className="space-y-1 pt-2 border-t border-gray-200">
-                                                {newEvent.shifts.map(s => (
-                                                    <div key={s.id} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-gray-200">
-                                                        <div>
-                                                            <span className="font-bold text-[#3E2723]">{formatDate(s.date)}</span>
-                                                            <span className="mx-2 text-gray-300">|</span>
-                                                            <span className="text-gray-600">{s.session}</span>
-                                                            {newEvent.isVolunteer && <span className="ml-2 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded text-gray-500">Cap: {s.capacity}</span>}
-                                                        </div>
-                                                        <button type="button" onClick={() => removeShift(s.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12}/></button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 pt-4 border-t border-gray-100">
-                                    <button type="button" onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs hover:bg-gray-200">Cancel</button>
-                                    <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">Post Event</button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
-
-                    <div className="space-y-4">
-                        {events.map(ev => {
-                            const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
-                            const isRegistered = ev.registered?.includes(profile.memberId);
-                            const isExpanded = expandedEventId === ev.id;
-                            
-                            // Determine display tags
-                            const isMultiShift = ev.shifts && ev.shifts.some(s => s.session !== 'Whole Day' && s.session !== 'WHOLE_DAY');
-                            
-                            return (
-                                <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                                    {isAdmin && (
-                                        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                                            <button onClick={() => setAttendanceEvent(ev)} className="p-2 bg-blue-100 text-blue-600 rounded-full" title="Attendance"><ClipboardCheck size={16}/></button>
-                                            <button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-red-100 text-red-600 rounded-full"><Trash2 size={16}/></button>
-                                        </div>
-                                    )}
-                                    <div className="flex flex-col sm:flex-row gap-6">
-                                        <div className="bg-[#3E2723] text-[#FDB813] w-20 h-20 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0">
-                                            <span className="text-2xl">{day}</span>
-                                            <span className="text-xs uppercase mt-1">{month}</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                                <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
-                                                <div className="flex flex-wrap gap-1 justify-end">
-                                                    {ev.shifts && ev.shifts.length > 0 && (
-                                                        <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase whitespace-nowrap ${isMultiShift ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}`}>
-                                                            {isMultiShift ? 'Multi-Session' : 'Whole Day'}
-                                                        </span>
-                                                    )}
-                                                    {ev.masterclassModuleIds && ev.masterclassModuleIds.length > 0 && ev.masterclassModuleIds.map(mid => (
-                                                        <span key={mid} className="bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-[8px] font-black uppercase whitespace-nowrap">
-                                                            M{mid}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <p className="text-xs font-bold text-gray-500 uppercase mt-1 flex items-center gap-2">
-                                                <MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
-                                            </p>
-                                            <div className={`text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap ${!isExpanded ? 'line-clamp-3' : ''}`}>
-                                                {ev.description}
-                                            </div>
-                                            {ev.description && ev.description.length > 150 && (
-                                                <button 
-                                                    onClick={() => setExpandedEventId(isExpanded ? null : ev.id)}
-                                                    className="text-amber-600 text-xs font-bold uppercase mt-2 hover:underline"
-                                                >
-                                                    {isExpanded ? 'Show Less' : 'Read More'}
-                                                </button>
-                                            )}
-                                            
-                                            {ev.evaluationLink && (
-                                                 <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">
-                                                     📝 Post-Event Evaluation
-                                                 </a>
-                                            )}
-                                            
-                                            {ev.isVolunteer ? (
-                                                <div className="mt-6 space-y-2">
-                                                    <p className="text-xs font-black uppercase text-amber-600">Volunteer Shifts</p>
-                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                        {ev.shifts?.map(shift => {
-                                                            const isVol = shift.volunteers.includes(profile.memberId);
-                                                            const isFull = shift.volunteers.length >= shift.capacity;
-                                                            return (
-                                                                <button 
-                                                                    key={shift.id} 
-                                                                    onClick={() => handleVolunteerSignup(ev, shift.id)}
-                                                                    disabled={!isVol && isFull}
-                                                                    className={`p-3 rounded-xl border text-left flex justify-between items-center transition-all ${
-                                                                        isVol ? 'bg-[#3E2723] text-[#FDB813] border-[#3E2723]' : 
-                                                                        isFull ? 'bg-gray-100 text-gray-400 border-transparent cursor-not-allowed' : 
-                                                                        'bg-white border-amber-200 hover:border-amber-400'
-                                                                    }`}
-                                                                >
-                                                                    <div>
-                                                                        <span className="block text-xs font-bold uppercase">{formatDate(shift.date)}</span>
-                                                                        <span className="block text-[10px] font-medium">{shift.session}</span>
-                                                                    </div>
-                                                                    <div className="text-[10px] font-black bg-white/20 px-2 py-1 rounded">
-                                                                        {shift.volunteers.length}/{shift.capacity}
-                                                                    </div>
-                                                                </button>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                ev.registrationRequired && (
-                                                    <button 
-                                                        onClick={() => handleRegisterEvent(ev)}
-                                                        className={`mt-6 w-full py-3 rounded-xl font-black uppercase text-xs transition-colors ${
-                                                            isRegistered ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-[#3E2723] text-white hover:bg-black'
-                                                        }`}
-                                                    >
-                                                        {isRegistered ? "You're Going!" : "Count Me In"}
-                                                    </button>
-                                                )
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {view === 'announcements' && (
-                <div className="space-y-6 animate-fadeIn">
-                    <div className="flex justify-between items-center">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
-                        {isAdmin && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
-                    </div>
-
-                    {showAnnounceForm && (
-                        <div className="bg-white p-6 rounded-[32px] border-2 border-amber-200 mb-6">
-                            <form onSubmit={handlePostAnnouncement} className="space-y-3">
-                                <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} />
-                                <textarea placeholder="Content" required className="w-full p-3 border rounded-xl text-xs" rows="4" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} />
-                                <div className="flex gap-2 pt-2">
-                                    <button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); setNewAnnouncement({title:'', content:''}); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button>
-                                    <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {announcements.map(ann => (
-                            <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-100 shadow-sm relative group">
-                                {isAdmin && (
-                                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
-                                        <button onClick={() => handleEditAnnouncement(ann)} className="p-2 text-amber-600"><Pen size={16}/></button>
-                                        <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 text-red-600"><Trash2 size={16}/></button>
-                                    </div>
-                                )}
-                                <span className="inline-block bg-[#FDB813] px-3 py-1 rounded-full text-[10px] font-black uppercase text-[#3E2723] mb-4">{formatDate(ann.date)}</span>
-                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3">{ann.title}</h4>
-                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {view === 'suggestions' && (
-                <div className="space-y-6 animate-fadeIn max-w-2xl mx-auto">
-                    <div className="text-center mb-8">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Suggestion Box</h3>
-                        <p className="text-gray-500 font-bold text-xs uppercase">Your voice matters. Totally anonymous.</p>
-                    </div>
-
-                    <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm">
-                        <form onSubmit={handlePostSuggestion}>
-                            <textarea 
-                                className="w-full p-4 bg-gray-50 rounded-2xl border-none outline-none text-sm resize-none focus:ring-2 ring-amber-100" 
-                                rows="4" 
-                                placeholder="What's on your mind? Ideas for events, merch, or improvements..."
-                                value={suggestionText}
-                                onChange={e => setSuggestionText(e.target.value)}
-                            />
-                            <div className="flex justify-end mt-4">
-                                <button type="submit" disabled={!suggestionText.trim()} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs flex items-center gap-2 hover:bg-black disabled:opacity-50">
-                                    <Send size={16}/> Drop Suggestion
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-
-                    <div className="space-y-4">
-                        {suggestions.map(s => (
-                            <div key={s.id} className="bg-white p-6 rounded-[32px] border border-gray-100 relative group">
-                                {isAdmin && (
-                                    <button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-opacity">
-                                        <Trash2 size={16}/>
-                                    </button>
-                                )}
-                                <p className="text-gray-800 text-sm font-medium">"{s.text}"</p>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase mt-4 text-right">
-                                    {s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                    {isAdmin && (
-                        <div className="text-center pt-8">
-                            <button onClick={handleDownloadSuggestions} className="text-amber-600 font-bold text-xs uppercase hover:underline">Download All Suggestions (CSV)</button>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {view === 'committee_hunt' && (
-                <div className="space-y-8 animate-fadeIn">
-                    <div className="bg-[#3E2723] text-white p-10 rounded-[48px] text-center relative overflow-hidden">
-                        <div className="relative z-10">
-                            <h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3>
-                            <p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Serve the student body, hone your leadership skills, and be part of the legacy.</p>
-                        </div>
-                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {COMMITTEES_INFO.map(c => (
-                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
-                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
-                                    {/* CHANGED: Removed grayscale, added sepia filter for orange-shade effect */}
-                                    <img src={c.image} className="w-full h-full object-cover sepia transition-all duration-500 hover:sepia-0" alt={c.title} />
-                                </div>
-                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
-                                <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                
-                                <div className="bg-amber-50 p-4 rounded-xl mb-6">
-                                    <p className="text-[10px] font-black uppercase text-amber-800 mb-2">Roles & Responsibilities</p>
-                                    <ul className="text-[10px] text-amber-900 space-y-1 list-disc pl-4">
-                                        {c.roles.map((r, i) => <li key={i}>{r}</li>)}
-                                    </ul>
-                                </div>
-
-                                <button 
-                                    onClick={(e) => {
-                                        setCommitteeForm({ role: 'Committee Member' });
-                                        handleApplyCommittee(e, c.id);
-                                    }}
-                                    disabled={submittingApp}
-                                    className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50"
-                                >
-                                    Apply Now
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-            
-            {view === 'reports' && isAdmin && (
-            <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-                <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
-                    <StatIcon icon={TrendingUp} variant="amber" />
-                    <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
-                        <p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
-                        <p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
-                        <p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p>
-                    </div>
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
-                        <p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p>
-                    </div>
-                </div>
-                <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
-                    <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
-                    <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="space-y-6">
-                        <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="font-black uppercase text-sm">Registration Status</h4>
-                                <div className="flex gap-2">
-                                    <button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white flex items-center gap-2 ${hubSettings.maintenanceMode ? 'bg-orange-500' : 'bg-gray-400'}`}>
-                                        <Power size={12}/> {hubSettings.maintenanceMode ? "MAINTENANCE ON" : "NORMAL"}
-                                    </button>
-                                    <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.registrationOpen ? 'bg-green-500' : 'bg-red-500'}`}>
-                                        {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
-                                    </button>
-                                </div>
-                            </div>
-                            
-                            <hr className="border-amber-100 my-4"/>
-                            
-                            {/* --- RENEWAL CONTROLS --- */}
-                            <div className="flex justify-between items-center mb-6">
-                                <h4 className="font-black uppercase text-sm">Renewal Season</h4>
-                                <div className="flex gap-2">
-                                    <button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2">
-                                        <CreditCard size={12}/> {hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}
-                                    </button>
-                                    <button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white ${hubSettings.renewalMode ? 'bg-green-500' : 'bg-gray-400'}`}>
-                                        {hubSettings.renewalMode ? "ON" : "OFF"}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <hr className="border-amber-100 my-4"/>
-                            <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
-                            {/* ... Financial Reports UI ... */}
-                            <div className="flex gap-2 mb-4">
-                                <select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}>
-                                    <option value="all">All Semesters</option>
-                                    {semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p>
-                                    <p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p>
-                                    <p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p>
-                                </div>
-                            </div>
-                            <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
-                                <FileBarChart size={14}/> Download Report
-                            </button>
-                        </div>
-                        <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
-                            {/* ... Security Vault ... */}
-                            <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                            <div className="space-y-2">
-                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                    <span className="text-[10px] font-black uppercase">Officer Key</span>
-                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
-                                </div>
-                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                    <span className="text-[10px] font-black uppercase">Head Key</span>
-                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
-                                </div>
-                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                    <span className="text-[10px] font-black uppercase">Comm Key</span>
-                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
-                                </div>
-                            </div>
-                            <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                            <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
-                            <button onClick={handleMigrateToRenewal} className="w-full mt-4 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Migrate: Set All to Renewal</button>
-                            <button onClick={handleRecoverLostData} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Recover Lost Members (Collision Fix)</button>
-                        </div>
-                    </div>
-                    {/* ... Committee Apps ... */}
-                    <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
-                        <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {committeeApps && committeeApps.length > 0 ? (
-                                committeeApps.map(app => (
-                                    <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <p className="font-black text-sm text-[#3E2723]">{app.name}</p>
-                                                <p className="text-[10px] font-mono text-gray-500">{app.memberId}</p>
-                                            </div>
-                                            <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${
-                                                app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 
-                                                'bg-yellow-100 text-yellow-700'
-                                            }`}>
-                                                {app.status === 'for_interview' ? 'Interview' : app.status}
-                                            </span>
-                                        </div>
-                                        <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
-                                        <div className="flex gap-2 pt-3 border-t border-amber-200/50">
-                                            <button onClick={() => initiateAppAction(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">Interview</button>
-                                            <button onClick={() => initiateAppAction(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
-                                            <button onClick={() => initiateAppAction(app, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
-                                            <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
-                                            <a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a>
-                                        </div>
-                                        <p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
-                                    </div>
-                                ))
-                            ) : (
-                                <p className="text-xs text-gray-500 italic">No applications found.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-            )}
-
-            {/* MEMBERS VIEW (Registry) */}
-            {view === 'members' && isOfficer && (
-            <div className="space-y-6 animate-fadeIn text-[#3E2723]">
-                <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
-                    <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
-                    <div className="flex gap-2 w-full md:w-auto justify-end">
-                        <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
-                            <option value="all">All</option>
-                            <option value="active">Active</option>
-                            <option value="inactive">Inactive</option>
-                            <option value="officers">Officers</option>
-                            <option value="committee">Committee</option>
-                        </select>
-                        <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
-                        <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
-                        <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
-                        <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
-                    </div>
-                </div>
-                
-                {/* --- MOBILE REGISTRY VIEW (CARDS) --- */}
-                <div className="md:hidden space-y-4">
-                    {paginatedRegistry.map(m => (
-                        <div key={m.id || m.memberId} className="bg-white p-4 rounded-2xl border border-amber-100 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                                <div className="flex items-center gap-3">
-                                    <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border border-[#3E2723]" />
-                                    <div>
-                                        <p className="font-black text-xs uppercase text-[#3E2723]">{m.name}</p>
-                                        <p className="text-[9px] text-gray-500 font-mono">{m.memberId}</p>
-                                    </div>
-                                </div>
-                                <button 
-                                    onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
-                                    className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${m.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
-                                >
-                                    {m.status === 'active' ? 'Active' : 'Expired'}
-                                </button>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 mt-2 mb-3">
-                                <div className="bg-gray-50 p-2 rounded-lg">
-                                    <p className="text-[8px] text-gray-400 uppercase">Position</p>
-                                    {isAdmin ? (
-                                        <select 
-                                            className="w-full bg-transparent text-[10px] font-bold text-gray-700 outline-none" 
-                                            value={m.positionCategory || "Member"} 
-                                            onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)}
-                                        >
-                                            {POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                    ) : (
-                                        <p className="text-[10px] font-bold text-gray-700">{m.positionCategory}</p>
-                                    )}
-                                </div>
-                                <div className="bg-gray-50 p-2 rounded-lg">
-                                    <p className="text-[8px] text-gray-400 uppercase">Title</p>
-                                    {isAdmin ? (
-                                        <select 
-                                            className="w-full bg-transparent text-[10px] font-bold text-gray-700 outline-none" 
-                                            value={m.specificTitle || "Member"} 
-                                            onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)}
-                                        >
-                                            <option value="Member">Member</option>
-                                            <option value="Org Adviser">Org Adviser</option>
-                                            {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
-                                            {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                    ) : (
-                                        <p className="text-[10px] font-bold text-gray-700 truncate">{m.specificTitle}</p>
-                                    )}
-                                </div>
-                            </div>
-                            <div className="flex justify-end gap-2 border-t border-gray-100 pt-2">
-                                <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="p-2 bg-yellow-50 text-yellow-600 rounded-lg"><Trophy size={14}/></button>
-                                {isAdmin && (
-                                    <>
-                                        <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: m.joinedDate ? m.joinedDate.split('T')[0] : '' }); }} className="p-2 bg-amber-50 text-amber-600 rounded-lg"><Pen size={14}/></button>
-                                        <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="p-2 bg-blue-50 text-blue-600 rounded-lg"><RefreshCcw size={14}/></button>
-                                        <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="p-2 bg-red-50 text-red-600 rounded-lg"><Trash2 size={14}/></button>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                </div>
-
-                {/* --- DESKTOP REGISTRY VIEW (TABLE) --- */}
-                <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
-                    {paginatedRegistry.length === 0 ? (
-                        <div className="p-10 text-center">
-                            <Users size={32} className="mx-auto text-gray-300 mb-2"/>
-                            <p className="text-xs font-bold text-gray-400">Registry is empty.</p>
-                        </div>
-                    ) : (
-                    <table className="w-full text-left uppercase table-fixed">
-                        <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
-                            <tr className="text-[10px]">
-                                <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
-                                <th className="p-4 w-1/3">Barista</th>
-                                <th className="p-4 w-32 text-center">ID</th>
-                                <th className="p-4 w-24 text-center">Status</th>
-                                <th className="p-4 w-40 text-center">Designation</th>
-                                <th className="p-4 w-32 text-right">Manage</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-[#3E2723] divide-y divide-amber-50">
-                            {paginatedRegistry.map(m => (
-                            <tr key={m.id || m.memberId} className={`hover:bg-amber-50/50 ${m.status !== 'active' ? 'opacity-50 grayscale' : ''}`}>
-                                <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                                <td className="py-4 px-4">
-                                    <div className="flex items-center gap-4">
-                                    <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" />
-                                    <div className="min-w-0">
-                                        <p className="font-black text-xs truncate">{m.name}</p>
-                                        <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                            {m.accolades?.map((acc, i) => (
-                                                <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    </div>
-                                </td>
-                                <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
-                                <td className="text-center font-black text-[10px] uppercase">
-                                    {(() => {
-                                        const isOfficerRole = ['Officer', 'Execomm', 'Committee', 'Org Adviser'].includes(m.positionCategory);
-                                        const status = m.membershipType || (isOfficerRole ? 'renewal' : 'new');
-                                        const isNew = status.toLowerCase() === 'new';
-                                        const isActive = m.status === 'active';
-                                        
-                                        return (
-                                            <button 
-                                                onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
-                                                className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${isActive ? (isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`}
-                                                title={isAdmin ? "Click to toggle status" : ""}
-                                                disabled={!isAdmin}
-                                            >
-                                                {isActive ? status : 'EXPIRED'}
-                                            </button>
-                                        );
-                                    })()}
-                                </td>
-                                <td className="text-center">
-                                    <div className="flex flex-col gap-1 items-center">
-                                        <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                        <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
-                                    </div>
-                                </td>
-                                <td className="text-right p-4">
-                                    <div className="flex items-center justify-end gap-1">
-                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
-                                        {isAdmin && (
-                                            <>
-                                                <button 
-                                                    onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: m.joinedDate ? m.joinedDate.split('T')[0] : '' }); }} 
-                                                    className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" 
-                                                    title="Edit Member Details"
-                                                >
-                                                    <Pen size={14}/>
-                                                </button>
-                                                <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
-                                                <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
-                                            </>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                    )}
-                </div>
-
-                {/* Pagination Controls */}
-                <div className="flex justify-between items-center bg-white p-4 rounded-2xl border border-amber-100 mt-4">
-                    <button onClick={prevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Previous</button>
-                    <span className="text-xs font-black uppercase text-gray-500">Page {currentPage} of {totalPages}</span>
-                    <button onClick={nextPage} disabled={currentPage === totalPages} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50 hover:bg-gray-200">Next</button>
-                </div>
-
-            </div>
-            )}
-            
-            {view === 'settings' && (
-              <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
-                  <div className="flex items-center gap-4 mb-8">
-                      <div className="p-4 bg-amber-100 text-amber-700 rounded-2xl">
-                          <Settings2 size={32} />
-                      </div>
-                      <div>
-                          <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Settings</h3>
-                          <p className="text-gray-500 font-bold text-xs uppercase">Manage your barista profile</p>
-                      </div>
-                  </div>
-            
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Profile Details Form */}
-                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
-                          <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2">
-                              <User size={20} className="text-amber-500"/> Personal Details
-                          </h4>
-                          <form onSubmit={handleUpdateProfile} className="space-y-4">
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
-                                  <input 
-                                      type="text" 
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase"
-                                      value={settingsForm.name || ''}
-                                      onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})}
-                                      placeholder="LAST, FIRST MI."
-                                  />
-                              </div>
-
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nickname / Display Name</label>
-                                  <input 
-                                      type="text" 
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={settingsForm.nickname || ''}
-                                      onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})}
-                                      placeholder="How should we call you?"
-                                  />
-                              </div>
-                              
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Profile Photo URL</label>
-                                  <input 
-                                      type="text" 
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={settingsForm.photoUrl || ''}
-                                      onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})}
-                                      placeholder="https://..."
-                                  />
-                                  <p className="text-[9px] text-gray-400 mt-1 ml-1">Paste a direct link to an image (Google Drive/Photos links supported).</p>
-                              </div>
-            
-                              <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                      <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Month</label>
-                                      <select 
-                                          className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                          value={settingsForm.birthMonth || ''}
-                                          onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}
-                                      >
-                                          <option value="">Month</option>
-                                          {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                                      </select>
-                                  </div>
-                                  <div>
-                                      <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Day</label>
-                                      <input 
-                                          type="number" 
-                                          min="1" max="31"
-                                          className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                          value={settingsForm.birthDay || ''}
-                                          onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})}
-                                      />
-                                  </div>
-                              </div>
-            
-                              <div className="pt-4">
-                                  <button 
-                                      type="submit" 
-                                      disabled={savingSettings}
-                                      className="w-full py-4 bg-[#3E2723] text-[#FDB813] rounded-2xl font-black uppercase text-xs hover:bg-black transition-colors disabled:opacity-50"
-                                  >
-                                      {savingSettings ? "Saving..." : "Update Profile"}
-                                  </button>
-                              </div>
-                          </form>
-                      </div>
-            
-                      {/* Security Form */}
-                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
-                          <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2">
-                              <Lock size={20} className="text-red-500"/> Security
-                          </h4>
-                          <form onSubmit={handleChangePassword} className="space-y-4">
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Current Password</label>
-                                  <input 
-                                      type="password" 
-                                      required
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={passwordForm.current}
-                                      onChange={e => setPasswordForm({...passwordForm, current: e.target.value})}
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">New Password</label>
-                                  <input 
-                                      type="password" 
-                                      required
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={passwordForm.new}
-                                      onChange={e => setPasswordForm({...passwordForm, new: e.target.value})}
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Confirm New Password</label>
-                                  <input 
-                                      type="password" 
-                                      required
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={passwordForm.confirm}
-                                      onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})}
-                                  />
-                              </div>
-            
-                              <div className="pt-4">
-                                  <button 
-                                      type="submit" 
-                                      className="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase text-xs hover:bg-red-600 transition-colors"
-                                  >
-                                      Change Password
-                                  </button>
-                              </div>
-                          </form>
-                      </div>
-                  </div>
-            
-                  <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs">
-                      <p>Member ID: <span className="font-mono text-white font-bold">{profile.memberId}</span></p>
-                      <p className="mt-2">Need help with your account? Contact the PR Committee.</p>
-                  </div>
-              </div>
-            )}
-
         </main>
         <DataPrivacyFooter />
       </div>
