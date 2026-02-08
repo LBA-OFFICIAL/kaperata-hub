@@ -964,7 +964,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         setUserApplications(data);
     });
 
-    // Fetch Tasks for "The Roastery" (Officers + Committee)
+    // Fetch Tasks for "The Task Bar" (Officers + Committee)
     let unsubTasks = () => {};
     if (isOfficer) {
         unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => {
@@ -2139,7 +2139,7 @@ ${window.location.origin}`;
     { id: 'suggestions', label: 'Suggestion Box', icon: MessageSquare, hasNotification: notifications.suggestions },
     { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
     ...(isOfficer ? [
-        { id: 'daily_grind', label: 'The Roastery', icon: ClipboardList }, // Updated Label
+        { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList }, // Updated Label
         { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members }
     ] : []),
     ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
@@ -2458,9 +2458,8 @@ ${window.location.origin}`;
             </div>
             </header>
 
-            {/* --- HOME DASHBOARD (Existing) --- */}
             {view === 'home' && (
-              <div className="space-y-10 animate-fadeIn">
+            <div className="space-y-10 animate-fadeIn">
                 {/* Expired Membership Banner */}
                 {profile.status === 'expired' && (
                     <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-r-xl mb-6 shadow-md">
@@ -3107,7 +3106,7 @@ ${window.location.origin}`;
             {view === 'daily_grind' && isOfficer && (
                  <div className="space-y-8 animate-fadeIn">
                     <div className="flex justify-between items-center">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Roastery</h3>
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3>
                         <button onClick={() => { setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '' }); setShowTaskForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>
                     </div>
 
