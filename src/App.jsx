@@ -640,7 +640,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 
 const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [view, setView] = useState('home');
-  // ... (Other state variables remain the same)
   const [members, setMembers] = useState([]);
   const [events, setEvents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -792,7 +791,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   // New States for Accolades & Bulk Email
   const [exportFilter, setExportFilter] = useState('all');
 
-  // ... (Hooks and helper functions remain same) ...
   // FIX: Case-insensitive check for officer role
   const isOfficer = useMemo(() => {
       if (!profile?.positionCategory) return false;
@@ -800,27 +798,32 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       return ['OFFICER', 'EXECOMM', 'COMMITTEE'].includes(pc);
   }, [profile?.positionCategory]);
 
+  // FIX: Stricter check for Terminal access (Officers/Execomm only, no Committee)
   const isAdmin = useMemo(() => {
       if (!profile?.positionCategory) return false;
       const pc = String(profile.positionCategory).toUpperCase();
       return ['OFFICER', 'EXECOMM'].includes(pc);
   }, [profile?.positionCategory]);
 
+  // Check if member is expired
   const isExpired = useMemo(() => {
       return profile.status === 'expired';
   }, [profile.status]);
 
+  // Check if member is exempt from renewal (Officers, Committees, etc)
   const isExemptFromRenewal = useMemo(() => {
      const pc = String(profile.positionCategory).toUpperCase();
      return ['OFFICER', 'EXECOMM', 'COMMITTEE', 'ORG ADVISER'].includes(pc);
   }, [profile.positionCategory]);
 
+  // Birthday Logic
   const isBirthday = useMemo(() => {
     if (!profile.birthMonth || !profile.birthDay) return false;
     const today = new Date();
     return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate();
   }, [profile]);
 
+  // Financial Stats
   const financialStats = useMemo(() => {
     if (!members) return { totalPaid: 0, cashCount: 0, gcashCount: 0, exemptCount: 0 };
     
@@ -830,6 +833,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         filtered = members.filter(m => m.lastRenewedSY === sy && m.lastRenewedSem === sem);
     }
     
+    // Exempt logic: Officers, Execomm, Committee are exempt from cash/revenue reports
     const payingMembers = filtered.filter(m => {
         const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
         return !isExempt && m.paymentStatus === 'paid';
@@ -846,16 +850,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [members, financialFilter]);
 
+  // Unique Semesters for filter
   const semesterOptions = useMemo(() => {
     if(!members) return [];
     const sems = new Set(members.map(m => `${m.lastRenewedSY}-${m.lastRenewedSem}`));
     return Array.from(sems).filter(s => s !== "undefined-undefined").sort().reverse();
   }, [members]);
 
+  // Team Hierarchy Filtering
   const teamStructure = useMemo(() => {
     if (!members) return { tier1: [], tier2: [], tier3: [], committees: { heads: [], members: [] } };
     
     const sortedMembers = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    
+    // Helper to check title case-insensitively with safety
     const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
     const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
 
@@ -872,30 +880,37 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [members]);
 
+  // Volunteer Stats
   const volunteerCount = useMemo(() => {
     if (!events || !profile.memberId) return 0;
     return events.reduce((acc, ev) => {
         if (!ev.isVolunteer || !ev.shifts) return acc;
+        // Count how many shifts in this event the user volunteered for
         const shiftCount = ev.shifts.filter(s => s.volunteers?.includes(profile.memberId)).length;
         return acc + shiftCount;
     }, 0);
   }, [events, profile.memberId]);
 
+  // Notifications Logic
   const notifications = useMemo(() => {
       const hasNew = (items, pageKey) => {
           if (!items || items.length === 0) return false;
           const lastVisit = lastVisited[pageKey];
-          if (!lastVisit) return true;
+          if (!lastVisit) return true; // Never visited -> show dot
+          // Check if any item created AFTER last visit
           return items.some(i => {
               const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0);
               return d > new Date(lastVisit);
           });
       };
 
+      // Committee Hunt Logic
       let huntNotify = false;
       if (isOfficer) {
+          // Officers see dot if pending apps exist
           huntNotify = committeeApps.some(a => a.status === 'pending');
       } else {
+          // Members see dot if their app status updated recently
           huntNotify = userApplications.some(a => {
              const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null;
              const lastVisit = lastVisited['committee_hunt'];
@@ -904,6 +919,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           });
       }
 
+      // Registry Logic (Officers only)
       let regNotify = false;
       if (isOfficer) {
           regNotify = hasNew(members.map(m => ({ createdAt: m.joinedDate })), 'members');
@@ -920,23 +936,34 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   useEffect(() => {
     if (!user) return;
+    
+    // 1. Separate Listener for CURRENT USER (Runs for everyone)
+    // This ensures real-time updates for the logged-in user without needing a refresh
     const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
+            // Simple check to avoid unnecessary re-renders if nothing changed
             if (JSON.stringify(data) !== JSON.stringify(profile)) {
+                console.log("Profile updated from server:", data);
                 setProfile(data);
                 localStorage.setItem('lba_profile', JSON.stringify(data));
             }
         }
     }, (e) => console.error("Profile sync error:", e));
 
+    // 2. Registry Listener (ONLY for Officers)
+    // Normal members don't need to download the whole database
     let unsubReg = () => {};
+    // For masterclass selection, we DO need a list of members.
+    // If not officer, we might need a separate way to fetch, but for now assuming officers manage masterclass.
+    // To allow masterclass member selection, we keep this active for officers.
     if (isOfficer || isAdmin) {
         unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
             const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
             setMembers(list);
         }, (e) => console.error("Registry sync error:", e));
     } else {
+        // Just empty subscription for members
         unsubReg = () => {};
     }
 
@@ -948,6 +975,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         setSuggestions(data);
     }, (e) => console.error("Suggestions sync error:", e));
     
+    // Fetch committee applications for officers
     let unsubApps;
     if (isAdmin) {
         unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => {
@@ -956,11 +984,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         }, (e) => console.error("Apps sync error:", e));
     }
 
+    // Fetch user's own applications
     const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         setUserApplications(data);
     });
 
+    // Fetch Tasks for "The Task Bar" (Officers + Committee)
     let unsubTasks = () => {};
     if (isOfficer) {
         unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => {
@@ -969,6 +999,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         });
     }
 
+    // Fetch Activity Logs for Terminal (Admins Only)
     let unsubLogs = () => {};
     if (isAdmin) {
         unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => {
@@ -977,16 +1008,19 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         });
     }
 
+    // Fetch Polls
     const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         setPolls(data);
     });
 
+    // Fetch Series Posts (Barista Diaries)
     const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         setSeriesPosts(data);
     });
 
+    // --- ADDED: Set Icons in Head ---
     const setIcons = () => {
         const head = document.head;
         let linkIcon = document.querySelector("link[rel~='icon']");
@@ -1006,6 +1040,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         linkApple.href = APP_ICON_URL;
     };
     setIcons();
+    // --------------------------------
 
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
@@ -1015,18 +1050,29 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              const data = s.data();
              setLegacyForm({ 
                  ...data, 
-                 achievements: data.achievements || [],
+                 achievements: data.achievements || [], // Ensure array exists
                  imageUrl: data.imageUrl || '',
                  galleryUrl: data.galleryUrl || '',
                  imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' }
              });
+             
+             // Check Anniversary
+             if (data.establishedDate) {
+                 const today = new Date();
+                 const est = new Date(data.establishedDate);
+                 if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) {
+                     setIsAnniversary(true);
+                 }
+             }
          }
     }, (e) => {});
     
+    // Masterclass Data
     const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => {
         if(s.exists()) {
             setMasterclassData(s.data());
         } else {
+            // Init if not exists
             const initData = { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} };
             setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), initData);
         }
@@ -1040,7 +1086,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     };
   }, [user, isAdmin, isOfficer, profile.memberId]);
 
-  // ... (All helper functions like logAction, handleUpdateProfile, etc. remain the same) ...
+  // Helper for Logging Actions
   const logAction = async (action, details) => {
       if (!profile) return;
       try {
@@ -1053,7 +1099,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           });
       } catch (err) { console.error("Logging failed:", err); }
   };
-  
+
   // Real-time Sync for Attendance Event
   useEffect(() => {
     if (attendanceEvent && events.length > 0) {
@@ -1127,9 +1173,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const handlePostSuggestion = async (e) => {
       e.preventDefault();
+      // EXPIRED CHECK
       if (isExpired) return alert("Your membership is expired. Please renew to post suggestions.");
+      
       if (!suggestionText.trim()) return;
       try {
+          // Use 'Anonymous' as authorName
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), {
               text: suggestionText,
               authorId: profile.memberId,
@@ -1141,6 +1190,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch (err) { console.error(err); }
   };
 
+  // --- MEMBER'S CORNER ACTIONS ---
   const handleCreatePoll = async (e) => {
       e.preventDefault();
       if (!newPoll.question || !newPoll.option1 || !newPoll.option2) return;
@@ -1165,10 +1215,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       if (isExpired) return alert("Renew membership to vote.");
       try {
           const pollRef = doc(db, 'artifacts', appId, 'public', 'data', 'polls', pollId);
+          // Get current poll data to update correctly
           const poll = polls.find(p => p.id === pollId);
           if (!poll) return;
 
           const updatedOptions = poll.options.map(opt => {
+              // Remove user from all options first to ensure single vote
               const newVotes = opt.votes.filter(uid => uid !== profile.memberId);
               if (opt.id === optionId) {
                   newVotes.push(profile.memberId);
@@ -1187,6 +1239,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch (e) { console.error(e); }
   };
 
+  // --- BARISTA DIARIES ACTIONS ---
   const handlePostSeries = async (e) => {
       e.preventDefault();
       try {
@@ -1208,7 +1261,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', id));
       } catch (e) { console.error(e); }
   };
-  
+
+  // Form handling for shifts
   const addShift = () => {
     if (!tempShift.date) return;
     const sessionName = tempShift.type === 'WHOLE_DAY' ? 'Whole Day' : (tempShift.name || 'Shift');
@@ -1223,6 +1277,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             volunteers: [] 
         }]
     }));
+    // Keep date for convenience, reset name
     setTempShift(prev => ({ ...prev, name: '' })); 
   };
   
@@ -1233,20 +1288,27 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     }));
   };
 
+  // Legacy Achievements Handling
   const handleAddAchievement = () => {
       if (!tempAchievement.text.trim()) return;
       const newAch = { 
           text: tempAchievement.text.trim(),
           date: tempAchievement.date || new Date().toISOString().split('T')[0]
       };
+      // Sort immediately
       const updatedList = [...(legacyForm.achievements || []), newAch].sort((a,b) => new Date(a.date) - new Date(b.date));
-      setLegacyForm(prev => ({ ...prev, achievements: updatedList }));
+      
+      setLegacyForm(prev => ({
+          ...prev,
+          achievements: updatedList
+      }));
       setTempAchievement({ date: '', text: '' });
   };
 
   const handleUpdateAchievement = (index, field, value) => {
       const updated = [...legacyForm.achievements];
       updated[index] = { ...updated[index], [field]: value };
+      // Resort
       updated.sort((a,b) => new Date(a.date || '1970-01-01') - new Date(b.date || '1970-01-01'));
       setLegacyForm(prev => ({ ...prev, achievements: updated }));
   };
@@ -1261,6 +1323,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleAddEvent = async (e) => {
       e.preventDefault();
       try {
+          // Prepare payload
           const eventPayload = { 
               ...newEvent, 
               name: newEvent.name.toUpperCase(),
@@ -1271,7 +1334,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           };
 
           if (editingEvent) {
-             delete eventPayload.createdAt;
+             delete eventPayload.createdAt; // Don't overwrite creation time
              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), eventPayload);
              logAction("Update Event", `Updated event: ${newEvent.name}`);
              setEditingEvent(null);
@@ -1280,6 +1343,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              logAction("Create Event", `Created event: ${newEvent.name}`);
           }
           setShowEventForm(false);
+          // Reset form including volunteer fields
           setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' });
       } catch (err) { console.error(err); }
   };
@@ -1296,7 +1360,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           attendanceRequired: ev.attendanceRequired || false,
           evaluationLink: ev.evaluationLink || '',
           isVolunteer: ev.isVolunteer || false,
-          registrationRequired: ev.registrationRequired !== undefined ? ev.registrationRequired : true, 
+          registrationRequired: ev.registrationRequired !== undefined ? ev.registrationRequired : true, // Default true if legacy
           openForAll: ev.openForAll !== undefined ? ev.openForAll : true,
           volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 },
           shifts: ev.shifts || [],
@@ -1322,12 +1386,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const isPresent = attendanceEvent.attendees?.includes(memberId);
       
       try {
+          // 1. Update Event Attendance
           if (isPresent) {
               await updateDoc(eventRef, { attendees: arrayRemove(memberId) });
           } else {
               await updateDoc(eventRef, { attendees: arrayUnion(memberId) });
           }
 
+          // 2. Sync with Masterclass Tracker if applicable
           if (attendanceEvent.masterclassModuleIds && attendanceEvent.masterclassModuleIds.length > 0) {
              const trackerRef = doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker');
              const updates = {};
@@ -1338,25 +1404,33 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              await updateDoc(trackerRef, updates);
           }
 
+          // Update local state to reflect change immediately (optimistic UI)
           setAttendanceEvent(prev => ({
               ...prev,
               attendees: isPresent 
                   ? prev.attendees.filter(id => id !== memberId)
                   : [...(prev.attendees || []), memberId]
           }));
-      } catch(err) { console.error("Attendance update failed", err); }
+      } catch(err) {
+          console.error("Attendance update failed", err);
+      }
   };
 
   const handleDownloadAttendance = () => {
     if (!attendanceEvent) return;
     const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId));
+    
+    // Robust CSV generation using Blob
     const headers = ["Name", "ID", "Position"];
     const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle]);
+    
     generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`);
   };
   
   const handleRegisterEvent = async (ev) => {
+      // EXPIRED CHECK
       if (isExpired) return alert("Your membership is expired. Please renew to join events.");
+
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
       const isRegistered = ev.registered?.includes(profile.memberId);
       try {
@@ -1368,9 +1442,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch (err) { console.error(err); }
   };
 
+  // Volunteer Shift Signup
   const handleVolunteerSignup = async (ev, shiftId) => {
+      // EXPIRED CHECK
       if (isExpired) return alert("Your membership is expired. Please renew to volunteer.");
+
       const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id);
+      
+      // We need to clone the shifts array, modify the specific shift, and update
       const updatedShifts = ev.shifts.map(shift => {
           if (shift.id === shiftId) {
               const isVolunteered = shift.volunteers.includes(profile.memberId);
@@ -1379,17 +1458,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               } else {
                   if (shift.volunteers.length >= shift.capacity) {
                       alert("This shift is full!");
-                      return shift; 
+                      return shift; // No change
                   }
                   return { ...shift, volunteers: [...shift.volunteers, profile.memberId] };
               }
           }
           return shift;
       });
+
+      // Optimistic UI update could happen here, but Firestore listener handles it mostly
       try {
          await updateDoc(eventRef, { shifts: updatedShifts });
       } catch(err) { console.error("Volunteer signup error", err); }
   };
+
 
   const handlePostAnnouncement = async (e) => {
       e.preventDefault();
@@ -1436,29 +1518,45 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch(err) { console.error(err); }
   };
 
+  // Registry Manual Edit Function
   const handleUpdateMemberDetails = async (e) => {
       e.preventDefault();
       if (!editingMember) return;
+      
       try {
+          // Use .id which is the actual document key, rather than .memberId which is a field
           const docId = editingMember.id || editingMember.memberId;
           const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
           await updateDoc(memberRef, { joinedDate: new Date(editMemberForm.joinedDate).toISOString() });
           logAction("Update Member", `Updated details for ${editingMember.name}`);
           setEditingMember(null);
           alert("Member details updated.");
-      } catch(err) { console.error(err); alert("Failed to update member: " + err.message); }
+      } catch(err) {
+          console.error(err);
+          alert("Failed to update member: " + err.message);
+      }
   };
 
+  // Masterclass Admin Functions
   const handleBulkAddMasterclass = async () => {
       if (selectedMcMembers.length === 0) return alert("No members selected!");
+      
       const currentAttendees = masterclassData.moduleAttendees?.[adminMcModule] || [];
       const updatedAttendees = [...new Set([...currentAttendees, ...selectedMcMembers])];
-      const newData = { ...masterclassData, moduleAttendees: { ...masterclassData.moduleAttendees, [adminMcModule]: updatedAttendees } };
+      
+      const newData = {
+          ...masterclassData,
+          moduleAttendees: {
+              ...masterclassData.moduleAttendees,
+              [adminMcModule]: updatedAttendees
+          }
+      };
+      
       try {
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData);
           logAction("Masterclass Add", `Added ${selectedMcMembers.length} to Module ${adminMcModule}`);
-          setSelectedMcMembers([]); 
-          setAdminMcSearch('');
+          setSelectedMcMembers([]); // Reset selection
+          setAdminMcSearch(''); // Reset search
           alert(`Added ${selectedMcMembers.length} attendees to Module ${adminMcModule}`);
       } catch(e) { console.error(e); }
   };
@@ -1472,7 +1570,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const handleSaveMcCurriculum = async () => {
       try {
-          const newData = { ...masterclassData, moduleDetails: { ...masterclassData.moduleDetails, [adminMcModule]: tempMcDetails } };
+          const newData = {
+              ...masterclassData,
+              moduleDetails: { ...masterclassData.moduleDetails, [adminMcModule]: tempMcDetails }
+          };
           await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData);
           logAction("Update Curriculum", `Updated Module ${adminMcModule}`);
           setEditingMcCurriculum(false);
@@ -1483,18 +1584,27 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleUpdateGcashNumber = async () => {
     if (!newGcashNumber.trim()) return;
     try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, gcashNumber: newGcashNumber });
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+            ...hubSettings,
+            gcashNumber: newGcashNumber
+        });
         logAction("Update GCash", `Changed GCash number to ${newGcashNumber}`);
         setNewGcashNumber('');
         alert("GCash Number Updated Successfully");
-    } catch (err) { console.error(err); alert("Failed to update GCash Number"); }
+    } catch (err) {
+        console.error(err);
+        alert("Failed to update GCash Number");
+    }
   };
 
   const handleApplyCommittee = async (e, targetCommittee) => {
       e.preventDefault();
+      // EXPIRED CHECK
       if (isExpired) return alert("Your membership is expired. Please renew to apply.");
+
       setSubmittingApp(true);
       try {
+          // Check for existing application to prevent duplicates
           const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId));
           const snap = await getDocs(q);
           if(!snap.empty) {
@@ -1502,6 +1612,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               setSubmittingApp(false);
               return;
           }
+
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), {
               memberId: profile.memberId,
               name: profile.name,
@@ -1510,21 +1621,35 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               role: committeeForm.role,
               status: 'pending',
               createdAt: serverTimestamp(),
-              statusUpdatedAt: serverTimestamp() 
+              statusUpdatedAt: serverTimestamp() // Add this so member gets notification
           });
           alert("Application submitted successfully!");
-      } catch(err) { console.error(err); alert("Failed to submit application."); } finally { setSubmittingApp(false); }
+      } catch(err) {
+          console.error(err);
+          alert("Failed to submit application.");
+      } finally {
+          setSubmittingApp(false);
+      }
   };
 
+  // --- TASK BOARD ACTIONS ---
   const handleAddTask = async (e) => {
       e.preventDefault();
       try {
           if (editingTask) {
-             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTask.id), { ...newTask, lastEdited: serverTimestamp() });
+             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTask.id), {
+                 ...newTask,
+                 lastEdited: serverTimestamp()
+             });
              logAction("Update Task", `Updated task: ${newTask.title}`);
              setEditingTask(null);
           } else {
-             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), { ...newTask, createdBy: profile.memberId, creatorName: profile.name, createdAt: serverTimestamp() });
+             await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), { 
+                 ...newTask, 
+                 createdBy: profile.memberId,
+                 creatorName: profile.name,
+                 createdAt: serverTimestamp() 
+             });
              logAction("Create Task", `Created task: ${newTask.title}`);
           }
           setShowTaskForm(false);
@@ -1533,7 +1658,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   const handleUpdateTaskStatus = async (taskId, newStatus) => {
-      try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', taskId), { status: newStatus }); } catch (err) { console.error(err); }
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', taskId), { status: newStatus });
+          // Optional: Log status change? 
+      } catch (err) { console.error(err); }
   };
 
   const handleDeleteTask = async (id) => {
@@ -1545,14 +1673,25 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   const handleEditTask = (task) => {
-      setNewTask({ title: task.title, description: task.description, deadline: task.deadline, link: task.link, status: task.status, notes: task.notes || '' });
+      setNewTask({
+          title: task.title,
+          description: task.description,
+          deadline: task.deadline,
+          link: task.link,
+          status: task.status,
+          notes: task.notes || ''
+      });
       setEditingTask(task);
       setShowTaskForm(true);
   };
 
+  // --- NEW ACTIONS FOR TERMINAL ---
+  // Initiate Action (Open Email Modal)
   const initiateAppAction = (app, type) => {
-      let subject = "", body = "";
+      let subject = "";
+      let body = "";
       const signature = "\n\nBest regards,\nLPU Baristas' Association";
+
       if (type === 'for_interview') {
           subject = `LBA Committee Application: Interview Invitation`;
           body = `Dear ${app.name},\n\nWe have reviewed your application for the ${app.committee} and would like to invite you for an interview.\n\nPlease let us know your availability.\n${signature}`;
@@ -1563,24 +1702,41 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           subject = `LBA Committee Application Update`;
           body = `Dear ${app.name},\n\nThank you for your interest in joining the LBA Committee. After careful consideration, we regret to inform you that we cannot move forward with your application at this time.\n\nWe encourage you to stay active and apply again in the future.\n${signature}`;
       }
+
       setEmailModal({ isOpen: true, app, type, subject, body });
   };
 
+  // Confirm Action from Modal
   const confirmAppAction = async () => {
       if (!emailModal.app) return;
+      
       try {
           const { app, type, subject, body } = emailModal;
           const batch = writeBatch(db);
           const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id);
-          const updates = { status: type, statusUpdatedAt: serverTimestamp(), lastEmailSent: new Date().toISOString() };
+          
+          const updates = { 
+              status: type,
+              statusUpdatedAt: serverTimestamp(),
+              lastEmailSent: new Date().toISOString()
+          };
+          
           batch.update(appRef, updates);
+
           if (type === 'accepted') {
               const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId);
-              batch.update(memberRef, { accolades: arrayUnion(`${app.committee} - ${app.role}`) });
+              batch.update(memberRef, {
+                  accolades: arrayUnion(`${app.committee} - ${app.role}`)
+              });
           }
+
           await batch.commit();
+          
           logAction("Committee Action", `${type.toUpperCase()} application for ${app.name}`);
+
+          // Open Email Client
           window.location.href = `mailto:${app.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+          
           setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' });
           alert("Status updated and email client opened!");
       } catch (err) { console.error(err); alert("Error updating status."); }
@@ -1596,21 +1752,30 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const handleToggleRegistration = async () => {
       try {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, registrationOpen: !hubSettings.registrationOpen });
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+              ...hubSettings,
+              registrationOpen: !hubSettings.registrationOpen
+          });
           logAction("Toggle Reg", `Registration ${!hubSettings.registrationOpen ? 'Opened' : 'Closed'}`);
       } catch (err) { console.error(err); }
   };
 
   const handleToggleMaintenance = async () => {
       try {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, maintenanceMode: !hubSettings.maintenanceMode });
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+              ...hubSettings,
+              maintenanceMode: !hubSettings.maintenanceMode
+          });
           logAction("Toggle Maintenance", `Maintenance ${!hubSettings.maintenanceMode ? 'Enabled' : 'Disabled'}`);
       } catch (err) { console.error(err); }
   };
 
   const handleToggleRenewalMode = async () => {
     try {
-        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, renewalMode: !hubSettings.renewalMode });
+        await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+            ...hubSettings,
+            renewalMode: !hubSettings.renewalMode
+        });
         logAction("Toggle Renewal", `Renewal Mode ${!hubSettings.renewalMode ? 'ON' : 'OFF'}`);
     } catch (err) { console.error(err); }
   };
@@ -1618,14 +1783,464 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleToggleAllowedPayment = async () => {
       const newMode = hubSettings.allowedPayment === 'gcash_only' ? 'both' : 'gcash_only';
       try {
-          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, allowedPayment: newMode });
+          await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), {
+              ...hubSettings,
+              allowedPayment: newMode
+          });
       } catch (err) { console.error(err); }
   };
 
-  // ... (Other handlers unchanged) ...
+  const handleDownloadFinancials = () => {
+      let filtered = members;
+      if (financialFilter !== 'all') {
+          const [sy, sem] = financialFilter.split('-');
+          filtered = members.filter(m => m.lastRenewedSY === sy && m.lastRenewedSem === sem);
+      }
+
+      // Logic: Include everyone, but mark exempt
+      const headers = ["Name", "ID", "Category", "Payment Status", "Method", "Ref No"];
+      const rows = filtered.map(m => {
+          const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt';
+          const status = isExempt ? 'EXEMPT' : (m.paymentStatus === 'paid' ? 'PAID' : 'UNPAID');
+          return [m.name, m.memberId, m.positionCategory, status, m.paymentDetails?.method || '', m.paymentDetails?.refNo || ''];
+      });
+
+      generateCSV(headers, rows, `LBA_Financials_${financialFilter}.csv`);
+      logAction("Export Financials", `Downloaded financials for ${financialFilter}`);
+  };
+  
+  const handleSanitizeDatabase = async () => {
+      if (!confirm("This will REMOVE DUPLICATES (by Name) and RE-GENERATE Member IDs. Are you sure?")) return;
+      const batch = writeBatch(db);
+      try {
+          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc'));
+          const snapshot = await getDocs(q);
+          
+          let count = 0;
+          snapshot.docs.forEach((docSnap) => {
+             const data = docSnap.data();
+             const category = data.positionCategory || "Member";
+             const meta = getMemberIdMeta(); 
+             
+             count++;
+             const padded = String(count).padStart(4, '0');
+             const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category);
+             const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`;
+             
+             batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId });
+          });
+          
+          await batch.commit();
+          logAction("Sanitize DB", "Executed database sanitization");
+          alert(`Database sanitized! ${count} records updated.`);
+      } catch (err) {
+          console.error("Sanitize error", err);
+          alert("Failed to sanitize: " + err.message);
+      }
+  };
+
+  const handleMigrateToRenewal = async () => {
+      if(!confirm("This will update ALL current members to 'Renewal' status. Proceed?")) return;
+      
+      const batch = writeBatch(db);
+      try {
+          // Get all members with 'new' status or undefined status
+          const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'));
+          const snapshot = await getDocs(q);
+          let count = 0;
+          
+          snapshot.forEach(doc => {
+              const data = doc.data();
+              if (data.membershipType !== 'renewal') {
+                  batch.update(doc.ref, { membershipType: 'renewal' });
+                  count++;
+              }
+          });
+          
+          if(count > 0) {
+              await batch.commit();
+              logAction("Migrate Renewal", `Migrated ${count} members to renewal`);
+              alert(`Migration Complete: ${count} members updated to Renewal status.`);
+          } else {
+              alert("No members needed updating.");
+          }
+      } catch (err) {
+          console.error(err);
+          alert("Migration failed.");
+      }
+  };
+  
+  const handleToggleStatus = async (memberId, currentStatus) => {
+      if (!confirm(`Change status to ${currentStatus === 'active' ? 'EXPIRED' : 'ACTIVE'}?`)) return;
+      try {
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId);
+          // If expiring, set paymentStatus to 'unpaid' so they have to renew
+          const updates = { 
+              status: currentStatus === 'active' ? 'expired' : 'active' 
+          };
+          if (currentStatus === 'active') {
+              updates.paymentStatus = 'unpaid';
+          }
+          await updateDoc(memberRef, updates);
+          logAction("Toggle Status", `Changed ${memberId} to ${updates.status}`);
+      } catch(e) { console.error(e); }
+  };
+
+  // Handle Renewal Payment for Expired Members
+  const handleRenewalPayment = async (e) => {
+      e.preventDefault();
+      if (renewalMethod === 'gcash' && !renewalRef) return;
+      if (renewalMethod === 'cash' && !renewalCashKey) return;
+      
+      if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) {
+          return alert("Invalid Cash Key.");
+      }
+
+      try {
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId);
+          const meta = getMemberIdMeta();
+          
+          await updateDoc(memberRef, {
+              status: 'active',
+              paymentStatus: 'paid',
+              lastRenewedSY: meta.sy,
+              lastRenewedSem: meta.sem,
+              membershipType: 'renewal',
+              paymentDetails: {
+                  method: renewalMethod,
+                  refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH',
+                  date: new Date().toISOString()
+              }
+          });
+          
+          setRenewalRef('');
+          setRenewalCashKey('');
+          alert("Membership renewed successfully! Welcome back.");
+      } catch (err) {
+          console.error("Renewal failed:", err);
+          alert("Renewal failed. Please try again.");
+      }
+  };
+
+  // User Acknowledgment
+  const handleAcknowledgeApp = async (appId) => {
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', appId), {
+              acknowledged: true
+          });
+      } catch (err) { console.error(err); }
+  };
+
+  // Special Recovery Function for specific incident
+  const handleRecoverLostData = async () => {
+      if(!confirm("This will restore David (Fixed ID), Geremiah & Cassandra (New Sequential IDs). Continue?")) return;
+      
+      try {
+          // 1. Get the current highest count to determine new IDs for G & C
+          const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+          const allDocs = await getDocs(registryRef);
+          let maxCount = 0;
+          
+          allDocs.forEach(doc => {
+              const mid = doc.data().memberId;
+              const match = mid.match(/-(\d)(\d{4,})C?$/);
+              if (match) {
+                  const num = parseInt(match[2], 10);
+                  if (num > maxCount) maxCount = num;
+              }
+          });
+
+          // 2. Prepare Data
+          const batch = writeBatch(db);
+          const meta = getMemberIdMeta(); // Use current semester for G & C new IDs
+          
+          // David: Fixed ID
+          const davidId = "LBA2526-20007C";
+          const davidRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', davidId);
+          batch.set(davidRef, {
+             name: "DAVID MATTHEW ADRIAS",
+             memberId: davidId,
+             email: "david.adrias@lpu.edu.ph", 
+             program: "BSIT", 
+             positionCategory: "Committee", 
+             specificTitle: "Committee Member", 
+             role: "member", 
+             status: "active",
+             paymentStatus: "exempt",
+             joinedDate: new Date().toISOString(),
+             password: "LBA" + davidId.slice(-5),
+             uid: "recovered_david_" + Date.now(),
+             membershipType: "renewal"
+          });
+
+          // Geremiah: New ID
+          const geremiahCount = maxCount + 1;
+          const geremiahId = generateLBAId("Committee", geremiahCount - 1);
+          const geremiahRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', geremiahId);
+          batch.set(geremiahRef, {
+             name: "GEREMIAH HERNANI",
+             memberId: geremiahId,
+             email: "geremiah.hernani@lpu.edu.ph",
+             program: "BSIT",
+             positionCategory: "Committee",
+             specificTitle: "Committee Member",
+             role: "member",
+             status: "active",
+             paymentStatus: "exempt",
+             joinedDate: new Date().toISOString(),
+             password: "LBA" + geremiahId.slice(-5),
+             uid: "recovered_geremiah_" + Date.now(),
+             membershipType: "renewal"
+          });
+
+          // Cassandra: New ID
+          const cassandraCount = maxCount + 2;
+          const cassandraId = generateLBAId("Committee", cassandraCount - 1);
+          const cassandraRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', cassandraId);
+          batch.set(cassandraRef, {
+             name: "CASSANDRA CASIPIT",
+             memberId: cassandraId,
+             email: "cassandra.casipit@lpu.edu.ph",
+             program: "BSIT",
+             positionCategory: "Committee",
+             specificTitle: "Committee Member",
+             role: "member",
+             status: "active",
+             paymentStatus: "exempt",
+             joinedDate: new Date().toISOString(),
+             password: "LBA" + cassandraId.slice(-5),
+             uid: "recovered_cassandra_" + Date.now(),
+             membershipType: "renewal"
+          });
+
+          // Update counter
+          const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
+          batch.set(counterRef, { memberCount: cassandraCount }, { merge: true });
+
+          await batch.commit();
+          alert(`Recovery successful!\nDavid: ${davidId}\nGeremiah: ${geremiahId}\nCassandra: ${cassandraId}`);
+      } catch (err) {
+          console.error(err);
+          alert("Recovery failed: " + err.message);
+      }
+  };
+
+  // --- NEW FEATURES ---
+  const handleExportCSV = () => {
+      let dataToExport = [...members];
+      if (exportFilter === 'active') dataToExport = dataToExport.filter(m => m.status === 'active');
+      else if (exportFilter === 'inactive') dataToExport = dataToExport.filter(m => m.status !== 'active');
+      else if (exportFilter === 'officers') dataToExport = dataToExport.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
+      else if (exportFilter === 'committee') dataToExport = dataToExport.filter(m => m.positionCategory === 'Committee');
+      
+      const headers = ["Name", "ID", "Email", "Program", "Position", "Status"];
+      const rows = dataToExport.map(e => [e.name, e.memberId, e.email, e.program, e.specificTitle, e.status]);
+
+      generateCSV(headers, rows, `LBA_Registry_${exportFilter}.csv`);
+      logAction("Export CSV", `Exported ${exportFilter} registry`);
+  };
+
+  const handleBulkEmail = () => {
+    const recipients = selectedBaristas.length > 0 
+        ? members.filter(m => selectedBaristas.includes(m.memberId))
+        : filteredRegistry;
+    
+    const emails = recipients
+        .map(m => m.email)
+        .filter(e => e)
+        .join(',');
+        
+    if (!emails) return alert("No valid emails found.");
+    window.location.href = `mailto:?bcc=${emails}`;
+  };
+
+  const handleGiveAccolade = async () => {
+      if (!accoladeText.trim() || !showAccoladeModal) return;
+      try {
+          // FIX: Use .id (document key) instead of .memberId (field)
+          const docId = showAccoladeModal.id || showAccoladeModal.memberId;
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
+          await updateDoc(memberRef, {
+              accolades: arrayUnion(accoladeText)
+          });
+          setAccoladeText("");
+          // Refetch updated accolades for modal
+          const updated = [...(showAccoladeModal.currentAccolades || []), accoladeText];
+          setShowAccoladeModal(prev => ({...prev, currentAccolades: updated}));
+          logAction("Award Accolade", `Awarded '${accoladeText}' to ${docId}`);
+          alert("Accolade awarded!");
+      } catch (err) {
+          console.error("Error giving accolade:", err);
+          alert("Failed to award accolade: " + err.message);
+      }
+  };
+
+  const handleRemoveAccolade = async (accoladeToRemove) => {
+      if(!confirm("Remove this accolade?")) return;
+      try {
+          const docId = showAccoladeModal.id || showAccoladeModal.memberId;
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
+          await updateDoc(memberRef, {
+              accolades: arrayRemove(accoladeToRemove)
+          });
+          // Update local modal state
+          const updated = showAccoladeModal.currentAccolades.filter(a => a !== accoladeToRemove);
+          setShowAccoladeModal(prev => ({...prev, currentAccolades: updated}));
+          logAction("Remove Accolade", `Removed '${accoladeToRemove}' from ${docId}`);
+      } catch(e) { console.error(e); alert("Failed to remove accolade"); }
+  };
+
+  const handleResetPassword = async (memberId, email, name) => {
+    if (!confirm(`Reset password for ${name}?`)) return;
+    const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
+    
+    const subject = "LBA Password Reset Request";
+    const body = `Dear ${name},
+
+We received a request to reset the password associated with your membership account at LPU Baristas' Association.
+To regain access to your account, please use the following credentials. For security purposes, we recommend you copy and paste these details directly to avoid errors.
+
+Member ID: ${memberId}
+Temporary Password: ${tempPassword}
+
+How to Access Your Account:
+Click the link below to access the secure login portal:
+${window.location.origin}
+
+Enter your Member ID and the Temporary Password provided above.
+Once logged in, you will be prompted to create a new, permanent password immediately.
+
+Please Note:
+This temporary password will expire in 1 hour (manual enforcement required).
+If you did not request this password reset, please contact our support team immediately at lbaofficial.pr@gmail.com and do not click the link above.
+
+Thank you,
+The LPU Baristas' Association Support Team
+${window.location.origin}`;
+
+    try {
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), {
+            password: tempPassword
+        });
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        logAction("Reset Password", `Reset password for ${memberId}`);
+        alert("Password reset! Opening email client...");
+    } catch (err) {
+        console.error(err);
+        alert("Failed to reset password.");
+    }
+  };
+
+  // Registry Helpers
+  const filteredRegistry = useMemo(() => {
+    let res = [...members];
+    if (searchQuery) res = res.filter(m => (m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase())) || (m.memberId && m.memberId.toLowerCase().includes(searchQuery.toLowerCase())));
+    res.sort((a, b) => (a[sortConfig.key] || "").localeCompare(b[sortConfig.key] || "") * (sortConfig.direction === 'asc' ? 1 : -1));
+    return res;
+  }, [members, searchQuery, sortConfig]);
+
+  // Pagination Logic
+  const totalPages = Math.ceil(filteredRegistry.length / itemsPerPage);
+  const paginatedRegistry = filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const nextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
+  const prevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
+
+
+  const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
+  const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
+
+  const handleUpdatePosition = async (targetId, cat, specific = "") => {
+    if (!isAdmin) return; // RESTRICTED: Only Admins (Officer/Execomm) can update positions
+    const target = members.find(m => m.memberId === targetId);
+    if (!target) return;
+    
+    let newId = target.memberId;
+    const isL = ['Officer', 'Execomm', 'Committee'].includes(cat);
+    const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId;
+    newId = baseId + (isL ? 'C' : '');
+    const updates = { positionCategory: cat, specificTitle: specific || cat, memberId: newId, role: ['Officer', 'Execomm'].includes(cat) ? 'admin' : 'member', paymentStatus: isL ? 'exempt' : target.paymentStatus };
+    if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId));
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates });
+  };
+
+  const initiateRemoveMember = (mid, name) => {
+    setConfirmDelete({ mid, name });
+  };
+
+  const confirmRemoveMember = async () => {
+    if (!confirmDelete) return;
+    try {
+        await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid));
+        logAction("Remove Member", `Removed member: ${confirmDelete.name}`);
+    } catch(e) { console.error(e); } finally { setConfirmDelete(null); }
+  };
+  
+  const handleBulkImportCSV = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+       try {
+          const text = evt.target.result;
+          const rows = text.split('\n').filter(r => r.trim().length > 0);
+          const batch = writeBatch(db);
+          let count = members.length;
+          for (let i = 1; i < rows.length; i++) {
+             const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim());
+             if (!name || !email) continue;
+             const mid = generateLBAId(pos, count++);
+             const meta = getMemberIdMeta();
+             // Changed default status to 'expired' per requirement
+             const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'expired', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() };
+             batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data);
+          }
+          await batch.commit();
+          logAction("Bulk Import", `Imported ${rows.length - 1} members`);
+       } catch (err) {} finally { setIsImporting(false); e.target.value = ""; }
+    };
+    reader.readAsText(file);
+  };
+  
+  const downloadImportTemplate = () => {
+    const headers = ["Name", "Email", "Program", "PositionCategory", "SpecificTitle"];
+    const rows = [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]];
+    generateCSV(headers, rows, "LBA_Import_Template.csv");
+  };
+
+  const handleRotateSecurityKeys = async () => {
+    const newKeys = {
+        officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(),
+        headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(),
+        commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase()
+    };
+    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys);
+    logAction("Rotate Keys", "Security keys rotated");
+  };
+
+  // Suggestion Download Helper
+  const handleDownloadSuggestions = () => {
+    // Filter suggestions locally for the last 7 days
+    const filteredSuggestions = suggestions.filter(s => {
+        if (!s.createdAt) return true; 
+        const date = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt);
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        return date > oneWeekAgo;
+    });
+
+    const headers = ["Date", "Suggestion"];
+    const rows = filteredSuggestions.map(s => [
+        s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now",
+        s.text
+    ]);
+    generateCSV(headers, rows, `LBA_Suggestions_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
 
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: Home },
+    // Removed Settings from menu
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'masterclass', label: 'Masterclass', icon: GraduationCap },
     { id: 'team', label: 'Brew Crew', icon: Users },
@@ -3106,9 +3721,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   </div>
               </div>
             )}
-
+             <DataPrivacyFooter />
         </main>
-        <DataPrivacyFooter />
       </div>
     </div>
   );
