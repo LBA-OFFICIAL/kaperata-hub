@@ -22,7 +22,7 @@ import {
   Link as LinkIcon, RefreshCcw, GraduationCap, PenTool, BookOpen, 
   AlertOctagon, Power, FileText, FileBarChart, MoreVertical, CreditCard,
   ClipboardList, CheckSquare2, ExternalLink as Link2, MessageCircle,
-  BarChart2, Smile
+  BarChart2, Smile, FolderKanban, UserCheck
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -222,7 +222,7 @@ const getEventDateParts = (startStr, endStr) => {
 // --- Components ---
 
 const MaintenanceBanner = () => (
-    <div className="w-full bg-[#3E2723] text-[#FDB813] text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse z-[100] border-b-2 border-[#FDB813]">
+    <div className="w-full bg-[#3E2723] text-[#FDB813] text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse border-b-2 border-[#FDB813]">
         <Coffee size={14} />
         <span>Machine Calibration in Progress • Some Features Unavailable</span>
     </div>
@@ -647,6 +647,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [committeeApps, setCommitteeApps] = useState([]); 
   const [userApplications, setUserApplications] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [expandedProjectId, setExpandedProjectId] = useState(null);
+  
   const [logs, setLogs] = useState([]);
   const [polls, setPolls] = useState([]);
   const [seriesPosts, setSeriesPosts] = useState([]);
@@ -657,12 +660,23 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrl: '', caption: '' });
   const [showSeriesForm, setShowSeriesForm] = useState(false);
 
+  // Project Form State
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [newProject, setNewProject] = useState({ 
+    title: '', 
+    description: '', 
+    deadline: '', 
+    projectHeadId: '', 
+    projectHeadName: '' 
+  });
+  const [editingProject, setEditingProject] = useState(null);
+
   const [hubSettings, setHubSettings] = useState({ 
       registrationOpen: true, 
       renewalOpen: true, 
       maintenanceMode: false,
       renewalMode: false, 
-      allowedPayment: 'gcash_only', 
+      allowedPayment: 'gcash_only', // 'gcash_only' or 'both'
       gcashNumber: '09063751402'
   });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
@@ -685,10 +699,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [editingMember, setEditingMember] = useState(null);
   const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' });
 
-  // Email Modal State
+  // Email Modal State (NEW)
   const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' });
-  // Accolade Modal State
-  const [showAccoladeModal, setShowAccoladeModal] = useState(null); 
+  // Accolade Modal State (NEW)
+  const [showAccoladeModal, setShowAccoladeModal] = useState(null); // { id: docId, name: string, currentAccolades: [] }
   const [accoladeText, setAccoladeText] = useState("");
 
   // Task Board State
@@ -699,7 +713,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       deadline: '',
       link: '',
       status: 'pending',
-      notes: '' 
+      notes: '',
+      projectId: '' // Linked to project
   });
   const [editingTask, setEditingTask] = useState(null);
 
@@ -804,6 +819,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const pc = String(profile.positionCategory).toUpperCase();
       return ['OFFICER', 'EXECOMM'].includes(pc);
   }, [profile?.positionCategory]);
+
+  const isCommitteeHead = useMemo(() => {
+      return profile.positionCategory === 'Committee' && (profile.specificTitle || '').includes('Head');
+  }, [profile]);
 
   // Check if member is expired
   const isExpired = useMemo(() => {
@@ -990,7 +1009,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         setUserApplications(data);
     });
 
-    // Fetch Tasks for "The Task Bar" (Officers + Committee)
+    // Fetch Projects for "The Task Bar" (Officers + Committee)
+    let unsubProjects = () => {};
+    if (isOfficer) {
+        unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => {
+             const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
+             setProjects(data);
+        });
+    }
+
+    // Fetch Tasks (Filtered by project ID client side for now as simpler)
     let unsubTasks = () => {};
     if (isOfficer) {
         unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => {
@@ -1080,7 +1108,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
     return () => { 
         unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC();
-        unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries();
+        unsubProjects(); unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries();
         if (unsubApps) unsubApps();
         unsubUserApps();
     };
@@ -1632,9 +1660,30 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       }
   };
 
-  // --- TASK BOARD ACTIONS ---
+  // --- PROJECT & TASK ACTIONS ---
+  const handleCreateProject = async (e) => {
+      e.preventDefault();
+      try {
+          const projectHead = members.find(m => m.memberId === newProject.projectHeadId);
+          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), {
+              title: newProject.title,
+              description: newProject.description,
+              deadline: newProject.deadline,
+              projectHeadId: newProject.projectHeadId,
+              projectHeadName: projectHead ? projectHead.name : '',
+              createdBy: profile.memberId,
+              createdAt: serverTimestamp(),
+              status: 'active'
+          });
+          setShowProjectForm(false);
+          setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' });
+          logAction("Create Project", `Created project: ${newProject.title}`);
+      } catch(e) { console.error(e); }
+  };
+
   const handleAddTask = async (e) => {
       e.preventDefault();
+      if (!newTask.projectId) return alert("Task must belong to a project");
       try {
           if (editingTask) {
              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTask.id), {
@@ -1653,7 +1702,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              logAction("Create Task", `Created task: ${newTask.title}`);
           }
           setShowTaskForm(false);
-          setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '' });
+          setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: newTask.projectId }); // Keep projectId
       } catch (err) { console.error(err); }
   };
 
@@ -1679,7 +1728,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           deadline: task.deadline,
           link: task.link,
           status: task.status,
-          notes: task.notes || ''
+          notes: task.notes || '',
+          projectId: task.projectId
       });
       setEditingTask(task);
       setShowTaskForm(true);
@@ -2499,6 +2549,40 @@ ${window.location.origin}`;
                       <div className="flex gap-3 pt-2">
                           <button onClick={() => { setShowTaskForm(false); setEditingTask(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
                           <button onClick={handleAddTask} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">Save Task</button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Project Form Modal */}
+      {showProjectForm && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+              <div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]">
+                  <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Create New Project</h3>
+                  <div className="space-y-4">
+                      <input type="text" placeholder="Project Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
+                      <textarea placeholder="Description / Goals" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} />
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Deadline</label>
+                              <input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} />
+                          </div>
+                          <div>
+                              <label className="text-[10px] font-bold text-gray-500 uppercase">Assign Project Head</label>
+                              <select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}>
+                                  <option value="">Select Member...</option>
+                                  {members.map(m => (
+                                      <option key={m.memberId} value={m.memberId}>{m.name}</option>
+                                  ))}
+                              </select>
+                          </div>
+                      </div>
+
+                      <div className="flex gap-3 pt-2">
+                          <button onClick={() => setShowProjectForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                          <button onClick={handleCreateProject} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">Create Project</button>
                       </div>
                   </div>
               </div>
@@ -3351,61 +3435,104 @@ ${window.location.origin}`;
                 </div>
             )}
 
+            {/* --- REFACTORED: The Task Bar (Project-Centric) --- */}
             {view === 'daily_grind' && isOfficer && (
                  <div className="space-y-8 animate-fadeIn">
                     <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3>
-                        <button onClick={() => { setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '' }); setShowTaskForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>
+                        <button onClick={() => { setEditingProject(null); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); setShowProjectForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-                        {['pending', 'brewing', 'served'].map(status => (
-                            <div key={status} className="bg-gray-50/50 p-4 rounded-[32px] border border-gray-200 flex flex-col h-full min-h-[500px]">
-                                <h4 className="font-black uppercase text-xs text-gray-500 mb-4 px-2 flex items-center gap-2">
-                                    {status === 'pending' ? <Coffee size={14}/> : status === 'brewing' ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>}
-                                    {status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}
-                                    <span className="ml-auto bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full text-[9px]">{tasks.filter(t => t.status === status).length}</span>
-                                </h4>
-                                <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
-                                    {tasks.filter(t => t.status === status).map(task => (
-                                        <div key={task.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 hover:border-amber-200 transition-colors group">
-                                            <div className="flex justify-between items-start mb-2">
-                                                <h5 className="font-bold text-sm text-[#3E2723] leading-tight">{task.title}</h5>
-                                                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                                     <button onClick={() => handleEditTask(task)} className="text-amber-500 hover:text-amber-700"><Pen size={12}/></button>
-                                                     <button onClick={() => handleDeleteTask(task.id)} className="text-red-400 hover:text-red-600"><Trash2 size={12}/></button>
-                                                </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* PROJECT LIST */}
+                        {projects.map(proj => {
+                            const isExpanded = expandedProjectId === proj.id;
+                            const projectTasks = tasks.filter(t => t.projectId === proj.id);
+                            const completedCount = projectTasks.filter(t => t.status === 'served').length;
+                            const totalCount = projectTasks.length;
+                            const progress = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
+
+                            return (
+                                <div key={proj.id} className={`bg-white rounded-[32px] border transition-all ${isExpanded ? 'col-span-full border-[#3E2723] shadow-xl' : 'border-amber-100 shadow-sm hover:shadow-md'}`}>
+                                    {/* Project Header Card */}
+                                    <div className="p-6 cursor-pointer" onClick={() => setExpandedProjectId(isExpanded ? null : proj.id)}>
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4>
+                                                <p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center gap-1"><UserCheck size={12}/> Head: {proj.projectHeadName || 'Unassigned'}</p>
                                             </div>
-                                            {task.description && <p className="text-[10px] text-gray-500 mb-3 line-clamp-2">{task.description}</p>}
-                                            
-                                            <div className="flex flex-col gap-2 mt-auto">
-                                                <div className="flex items-center justify-between">
-                                                    {task.deadline && (
-                                                        <span className={`text-[9px] font-bold px-2 py-1 rounded-md flex items-center gap-1 ${new Date(task.deadline) < new Date() && status !== 'served' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
-                                                            <Clock size={10}/> {new Date(task.deadline).toLocaleDateString(undefined, {month:'short', day:'numeric'})}
-                                                        </span>
-                                                    )}
-                                                    {task.link && <a href={task.link} target="_blank" rel="noreferrer" className="text-blue-500 hover:underline text-[9px] flex items-center gap-1"><Link2 size={10}/> Link</a>}
-                                                </div>
-
-                                                {task.notes && (
-                                                    <div className="bg-amber-50 p-2 rounded-lg mt-1">
-                                                        <p className="text-[8px] font-black uppercase text-amber-800 mb-0.5 flex items-center gap-1"><MessageCircle size={8}/> Notes</p>
-                                                        <p className="text-[9px] text-amber-900 leading-snug">{task.notes}</p>
-                                                    </div>
-                                                )}
-
-                                                <div className="flex gap-1 mt-1 pt-2 border-t border-gray-100">
-                                                    {status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 py-1.5 rounded-lg bg-gray-100 text-[8px] font-bold text-gray-500 hover:bg-gray-200">← Roast</button>}
-                                                    {status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 py-1.5 rounded-lg bg-amber-100 text-[8px] font-bold text-amber-700 hover:bg-amber-200">{status === 'pending' ? 'Brew →' : '← Brew'}</button>}
-                                                    {status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 py-1.5 rounded-lg bg-green-100 text-[8px] font-bold text-green-700 hover:bg-green-200">Serve →</button>}
-                                                </div>
+                                            <div className="text-right">
+                                                <span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span>
+                                                <p className="text-[9px] text-gray-400 mt-1">{completedCount}/{totalCount} Tasks</p>
                                             </div>
                                         </div>
-                                    ))}
+                                        
+                                        {/* Progress Bar */}
+                                        <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4">
+                                            <div className="bg-[#3E2723] h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                                        </div>
+
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1"><Clock size={12}/> Due: {new Date(proj.deadline).toLocaleDateString()}</span>
+                                            <button className="text-[10px] font-black uppercase text-amber-600 flex items-center gap-1 hover:underline">
+                                                {isExpanded ? 'Close Board' : 'Open Board'} <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}/>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* EXPANDED TASK BOARD */}
+                                    {isExpanded && (
+                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn">
+                                             <div className="flex justify-between items-center mb-6">
+                                                <p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>
+                                                {/* Only Project Head, Admins, or Committee Heads can add tasks */}
+                                                {(isAdmin || isCommitteeHead || profile.memberId === proj.projectHeadId) && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id }); setShowTaskForm(true); }} 
+                                                        className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50"
+                                                    >
+                                                        + Add Task
+                                                    </button>
+                                                )}
+                                             </div>
+
+                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                 {['pending', 'brewing', 'served'].map(status => (
+                                                     <div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200">
+                                                         <h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">
+                                                            {status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckSquare2 size={12}/>}
+                                                            {status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}
+                                                         </h5>
+                                                         <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                                             {projectTasks.filter(t => t.status === status).map(task => (
+                                                                 <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group">
+                                                                     <div className="flex justify-between items-start mb-1">
+                                                                         <span className="font-bold text-xs text-[#3E2723]">{task.title}</span>
+                                                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                             <button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button>
+                                                                             <button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button>
+                                                                         </div>
+                                                                     </div>
+                                                                     {task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Link</a>}
+                                                                     
+                                                                     {task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}
+                                                                     
+                                                                     <div className="flex gap-1 border-t border-gray-50 pt-1">
+                                                                         {status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}
+                                                                         {status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}
+                                                                         {status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}
+                                                                     </div>
+                                                                 </div>
+                                                             ))}
+                                                         </div>
+                                                     </div>
+                                                 ))}
+                                             </div>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                  </div>
             )}
@@ -3521,7 +3648,28 @@ ${window.location.origin}`;
                         <StatIcon icon={TrendingUp} variant="amber" />
                         <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
                     </div>
-
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
+                            <p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
+                            <p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
+                            <p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
+                            <p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p>
+                        </div>
+                    </div>
+                    <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
+                        <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
+                        <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
+                    </div>
                      {/* OPERATIONS LOG SECTION */}
                     <div className="bg-white p-8 rounded-[40px] border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
                         <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><ClipboardList size={16}/> Operations Log</h4>
@@ -3545,6 +3693,41 @@ ${window.location.origin}`;
                         </div>
                     </div>
 
+                     {/* SYSTEM CONTROLS (RESTORED) */}
+                    <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+                        <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
+                        
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                <span className="text-xs font-bold text-gray-600">Maintenance Mode</span>
+                                <button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
+                                    {hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}
+                                </button>
+                            </div>
+                            
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                <span className="text-xs font-bold text-gray-600">Registration</span>
+                                <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>
+                                    {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
+                                </button>
+                            </div>
+
+                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                <span className="text-xs font-bold text-gray-600">Renewal Season</span>
+                                <button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
+                                    {hubSettings.renewalMode ? "ACTIVE" : "OFF"}
+                                </button>
+                            </div>
+
+                             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                <span className="text-xs font-bold text-gray-600">Payment Methods</span>
+                                <button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">
+                                    {hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* FINANCIAL SETTINGS */}
                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
                         <h4 className="font-black uppercase text-sm mb-4">Financial Settings</h4>
@@ -3561,7 +3744,88 @@ ${window.location.origin}`;
                         <p className="text-[9px] text-gray-400 mt-2">Current System Number: +63{hubSettings.gcashNumber || '9063751402'}</p>
                     </div>
 
-                    {/* ... (Rest of Reports View) ... */}
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+                            <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
+                            {/* ... Financial Reports UI ... */}
+                            <div className="flex gap-2 mb-4">
+                                <select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}>
+                                    <option value="all">All Semesters</option>
+                                    {semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                <div className="p-3 bg-gray-50 rounded-xl text-center">
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p>
+                                    <p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p>
+                                </div>
+                                <div className="p-3 bg-gray-50 rounded-xl text-center">
+                                    <p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p>
+                                    <p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p>
+                                </div>
+                            </div>
+                            <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
+                                <FileBarChart size={14}/> Download Report
+                            </button>
+                        </div>
+                        <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
+                            {/* ... Security Vault ... */}
+                            <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
+                            <div className="space-y-2">
+                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                    <span className="text-[10px] font-black uppercase">Officer Key</span>
+                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
+                                </div>
+                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                    <span className="text-[10px] font-black uppercase">Head Key</span>
+                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
+                                </div>
+                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
+                                    <span className="text-[10px] font-black uppercase">Comm Key</span>
+                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
+                                </div>
+                            </div>
+                            <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
+                            <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
+                            <button onClick={handleMigrateToRenewal} className="w-full mt-4 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Migrate: Set All to Renewal</button>
+                            <button onClick={handleRecoverLostData} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Recover Lost Members (Collision Fix)</button>
+                        </div>
+                    </div>
+                    {/* ... Committee Apps ... */}
+                    <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
+                        <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {committeeApps && committeeApps.length > 0 ? (
+                                committeeApps.map(app => (
+                                    <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <p className="font-black text-sm text-[#3E2723]">{app.name}</p>
+                                                <p className="text-[10px] font-mono text-gray-500">{app.memberId}</p>
+                                            </div>
+                                            <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${
+                                                app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 
+                                                'bg-yellow-100 text-yellow-700'
+                                            }`}>
+                                                {app.status === 'for_interview' ? 'Interview' : app.status}
+                                            </span>
+                                        </div>
+                                        <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
+                                        <div className="flex gap-2 pt-3 border-t border-amber-200/50">
+                                            <button onClick={() => initiateAppAction(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">Interview</button>
+                                            <button onClick={() => initiateAppAction(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
+                                            <button onClick={() => initiateAppAction(app, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
+                                            <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                            <a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a>
+                                        </div>
+                                        <p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-xs text-gray-500 italic">No applications found.</p>
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
         
