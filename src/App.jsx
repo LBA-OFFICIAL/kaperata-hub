@@ -183,19 +183,15 @@ const getEventMonth = (dateStr) => {
 // Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
-    
     const start = new Date(startStr);
     const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase();
     const startDay = start.getDate();
-
     if (!endStr || startStr === endStr) {
         return { day: `${startDay}`, month: startMonth };
     }
-
     const end = new Date(endStr);
     const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase();
     const endDay = end.getDate();
-
     if (startMonth === endMonth) {
         return { day: `${startDay}-${endDay}`, month: startMonth };
     } else {
@@ -236,14 +232,12 @@ const DataPrivacyFooter = () => (
       <ShieldCheck size={12} /> Data Privacy Statement
     </div>
     <p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">
-      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance. We do not share your information with unauthorized third parties.
+      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance.
     </p>
     <div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider">
       <span>© {new Date().getFullYear()} LBA</span>
       <span>•</span>
       <a href="#" className="hover:text-[#3E2723] hover:underline" onClick={(e) => e.preventDefault()}>Privacy Policy</a>
-      <span>•</span>
-      <a href="#" className="hover:text-[#3E2723] hover:underline" onClick={(e) => e.preventDefault()}>Terms of Use</a>
     </div>
   </div>
 );
@@ -351,7 +345,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const newProfile = await runTransaction(db, async (transaction) => {
                          const counterSnap = await transaction.get(counterRef);
                          let nextCount;
-                         
                          const storedCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0;
                          const baseCount = Math.max(storedCount, 0);
                          nextCount = baseCount + 1;
@@ -419,7 +412,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
                     const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
                     
-                    // Fallback count logic moved inside transaction or implied, simplification here for brevity as transaction handles safety
                     const finalProfile = await runTransaction(db, async (transaction) => {
                          const counterSnap = await transaction.get(counterRef);
                          let nextCount;
@@ -592,6 +584,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 
 const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [view, setView] = useState('home');
+  // ... (Other states)
   const [members, setMembers] = useState([]);
   const [events, setEvents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -729,7 +722,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     description: '', 
     attendanceRequired: false, 
     evaluationLink: '',
-    isVolunteer: false,
+    isVolunteer: false, 
     registrationRequired: true, 
     openForAll: true,
     volunteerTarget: { officer: 0, committee: 0, member: 0 },
@@ -857,6 +850,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleUpdateGcashNumber = async () => { if (!newGcashNumber.trim()) return; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, gcashNumber: newGcashNumber }); logAction("Update GCash", newGcashNumber); setNewGcashNumber(''); alert("Updated"); } catch (err) {} };
   const handleApplyCommittee = async (e, targetCommittee) => { e.preventDefault(); if (isExpired) return alert("Renew membership to apply."); setSubmittingApp(true); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)); const snap = await getDocs(q); if(!snap.empty) { alert("Already applied."); setSubmittingApp(false); return; } await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), { memberId: profile.memberId, name: profile.name, email: profile.email, committee: targetCommittee, role: committeeForm.role, status: 'pending', createdAt: serverTimestamp(), statusUpdatedAt: serverTimestamp() }); alert("Submitted!"); } catch(err) {} finally { setSubmittingApp(false); } };
   
+  // --- PROJECT ACTIONS (Now includes Committee Heads) ---
   const handleCreateProject = async (e) => { 
       e.preventDefault(); 
       try { 
@@ -877,6 +871,41 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch(e) {} 
   };
 
+  const handleEditProjectDetails = async (e) => {
+    e.preventDefault();
+    if (!editingProject) return;
+    try {
+        const projectHead = members.find(m => m.memberId === newProject.projectHeadId);
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', editingProject.id), {
+             title: newProject.title,
+             description: newProject.description,
+             deadline: newProject.deadline,
+             projectHeadId: newProject.projectHeadId,
+             projectHeadName: projectHead ? projectHead.name : '',
+             lastEdited: serverTimestamp()
+        });
+        logAction("Edit Project", newProject.title);
+        setShowProjectForm(false);
+        setEditingProject(null);
+    } catch(err) {}
+  };
+
+  const handleDeleteProject = async (id) => {
+      if(!confirm("Delete project and all tasks?")) return;
+      try {
+          // Delete tasks first
+          const tasksQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), where('projectId', '==', id));
+          const tasksSnap = await getDocs(tasksQuery);
+          const batch = writeBatch(db);
+          tasksSnap.forEach(t => batch.delete(t.ref));
+          await batch.commit();
+
+          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', id));
+          logAction("Delete Project", id);
+      } catch(e) {}
+  };
+
+  // --- TASK ACTIONS (Updated with Assignment & Output) ---
   const handleAddTask = async (e) => { 
       e.preventDefault(); 
       if (!newTask.projectId) return alert("Task must belong to a project"); 
@@ -984,7 +1013,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
     ...(isOfficer || isCommitteeHead ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList } ] : []),
     ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
-    ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
+    ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : []),
+    { id: 'settings', label: 'Settings', icon: Settings2 }
   ];
 
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
@@ -1043,7 +1073,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         </div>
       )}
 
-      {showProjectForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">New Project</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} /><textarea placeholder="Desc" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} /><div className="grid grid-cols-2 gap-4"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} /><select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}><option value="">Select Head</option>{members.map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}</select></div><div className="flex gap-3 pt-2"><button onClick={() => setShowProjectForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleCreateProject} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Create</button></div></div></div></div>}
+      {showProjectForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingProject ? 'Edit Project' : 'New Project'}</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} /><textarea placeholder="Desc" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} /><div className="grid grid-cols-2 gap-4"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} /><select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}><option value="">Select Head</option>{members.map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}</select></div><div className="flex gap-3 pt-2"><button onClick={() => { setShowProjectForm(false); setEditingProject(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={editingProject ? handleEditProjectDetails : handleCreateProject} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">{editingProject ? 'Save Changes' : 'Create'}</button></div></div></div></div>}
       
       {showPollForm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
@@ -1068,9 +1098,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
       {showSeriesForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Diary Post</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newSeriesPost.title} onChange={e => setNewSeriesPost({...newSeriesPost, title: e.target.value})} /><textarea placeholder="Image URLs (comma separated for album)" className="w-full p-3 border rounded-xl text-xs" value={newSeriesPost.imageUrl} onChange={e => setNewSeriesPost({...newSeriesPost, imageUrl: e.target.value})} /><textarea placeholder="Caption" className="w-full p-3 border rounded-xl text-xs h-24" value={newSeriesPost.caption} onChange={e => setNewSeriesPost({...newSeriesPost, caption: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowSeriesForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handlePostSeries} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button></div></div></div></div>}
       
-      {showEventForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723] overflow-y-auto max-h-[90vh]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'New Event'}</h3><div className="space-y-4"><input type="text" placeholder="Event Name" className="w-full p-3 border rounded-xl text-xs font-bold" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} /><div className="grid grid-cols-2 gap-2"><input type="date" className="p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div><div className="flex gap-2 items-center"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} /><span className="text-xs">Reg Required</span><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="ml-4" /><span className="text-xs">Volunteer Event</span></div>{newEvent.isVolunteer && <div className="bg-amber-50 p-3 rounded-xl"><h4 className="text-xs font-bold mb-2">Shifts</h4><div className="flex gap-2 mb-2"><input type="date" className="p-2 border rounded text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><input type="number" placeholder="Cap" className="p-2 border rounded text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button onClick={addShift} className="p-2 bg-[#3E2723] text-white rounded text-xs">Add</button></div><div className="space-y-1">{newEvent.shifts.map(s => (<div key={s.id} className="flex justify-between text-xs bg-white p-2 rounded border"><span>{s.date} - {s.session} (Cap: {s.capacity})</span><button onClick={() => removeShift(s.id)} className="text-red-500">x</button></div>))}</div></div>}<div className="flex gap-3 pt-2"><button onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleAddEvent} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></div></div></div>}
+      {showEventForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723] overflow-y-auto max-h-[90vh]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'New Event'}</h3><div className="space-y-4"><input type="text" placeholder="Event Name" className="w-full p-3 border rounded-xl text-xs font-bold" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} /><div className="grid grid-cols-2 gap-2"><input type="date" className="p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div><div className="flex flex-col gap-2"><div className="flex gap-2 items-center"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} /><span className="text-xs">Reg Required</span><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="ml-4" /><span className="text-xs">Volunteer Event</span><input type="checkbox" checked={newEvent.openForAll} onChange={e => setNewEvent({...newEvent, openForAll: e.target.checked})} className="ml-4" /><span className="text-xs">Open For All</span></div></div>{newEvent.isVolunteer && <div className="bg-amber-50 p-3 rounded-xl"><h4 className="text-xs font-bold mb-2">Shifts</h4><div className="flex gap-2 mb-2"><input type="date" className="p-2 border rounded text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><input type="number" placeholder="Cap" className="p-2 border rounded text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button onClick={addShift} className="p-2 bg-[#3E2723] text-white rounded text-xs">Add</button></div><div className="space-y-1">{newEvent.shifts.map(s => (<div key={s.id} className="flex justify-between text-xs bg-white p-2 rounded border"><span>{s.date} - {s.session} (Cap: {s.capacity})</span><button onClick={() => removeShift(s.id)} className="text-red-500">x</button></div>))}</div></div>}<textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} /><input type="text" placeholder="Venue" className="w-full p-3 border rounded-xl text-xs" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} /><input type="text" placeholder="Evaluation Link (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleAddEvent} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></div></div></div>}
       
-      {showAnnounceForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Announcement</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} /><textarea placeholder="Content" className="w-full p-3 border rounded-xl text-xs h-32" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowAnnounceForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handlePostAnnouncement} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button></div></div></div></div>}
+      {showAnnounceForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Announcement</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} /><textarea placeholder="Content" className="w-full p-3 border rounded-xl text-xs h-32" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowAnnounceForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handlePostAnnouncement} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button></div></div></div></div>}
 
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden relative">
           <aside className={`bg-[#3E2723] text-amber-50 flex-col md:w-64 md:flex ${mobileMenuOpen ? 'fixed inset-0 z-50 w-64 shadow-2xl flex' : 'hidden'}`}>
@@ -1094,8 +1124,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <div>
                                 <h3 className="font-serif text-2xl sm:text-3xl font-black uppercase leading-tight">{profile.name}</h3>
                                 <div className="flex items-center gap-2 mt-1">
-                                    <p className="text-white/90 font-bold text-lg uppercase tracking-wide">"{profile.nickname || 'Barista'}"</p>
                                     <span className="bg-white/20 px-2 py-0.5 rounded text-[10px] font-mono opacity-80 tracking-widest">{profile.memberId}</span>
+                                    <p className="text-white/90 font-bold text-lg uppercase tracking-wide">"{profile.nickname || 'Barista'}"</p>
                                 </div>
                                 <p className="text-[#FDB813] font-black text-sm uppercase mt-1">{profile.specificTitle || 'Member'}</p>
                             </div>
@@ -1103,6 +1133,32 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2 space-y-6">
+                             {/* Notices */}
+                            <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm">
+                                <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Bell size={16} className="text-amber-500"/> Notices</h3>
+                                {announcements.length === 0 ? <p className="text-gray-400 text-xs text-center py-4">No new notices.</p> : announcements.slice(0, 2).map(ann => (
+                                    <div key={ann.id} className="border-b last:border-0 border-gray-100 pb-2 mb-2">
+                                        <p className="font-bold text-xs text-[#3E2723] uppercase">{ann.title}</p>
+                                        <p className="text-[10px] text-gray-500 line-clamp-1">{ann.content}</p>
+                                    </div>
+                                ))}
+                            </div>
+                             {/* Upcoming Events */}
+                            <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm">
+                                <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Calendar size={16} className="text-amber-500"/> Upcoming</h3>
+                                {events.length === 0 ? <p className="text-gray-400 text-xs text-center py-4">No upcoming events.</p> : events.slice(0, 2).map(ev => {
+                                     const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                                     return (
+                                        <div key={ev.id} className="flex items-center gap-4 mb-3">
+                                            <div className="bg-amber-50 text-amber-800 w-10 h-10 rounded-lg flex flex-col items-center justify-center font-black leading-none shrink-0"><span className="text-xs">{day}</span><span className="text-[8px] uppercase">{month}</span></div>
+                                            <div><p className="font-bold text-xs uppercase text-[#3E2723]">{ev.name}</p><p className="text-[10px] text-gray-500">{ev.venue}</p></div>
+                                        </div>
+                                     )
+                                })}
+                            </div>
+                        </div>
+
                         <div className="bg-white p-6 rounded-[32px] border border-amber-100 h-full">
                             <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
                                 <Trophy size={16} className="text-amber-500"/> Trophy Case
@@ -1359,6 +1415,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              <div className="pt-4 border-t border-gray-100"><label className="text-[10px] font-bold uppercase text-gray-400">Update GCash</label><div className="flex gap-2 mt-1"><input type="text" className="flex-1 p-2 border rounded-lg text-xs" placeholder="09xxxxxxxxx" value={newGcashNumber} onChange={e => setNewGcashNumber(e.target.value)} /><button onClick={handleUpdateGcashNumber} className="bg-[#3E2723] text-white px-4 rounded-lg text-xs font-bold">Save</button></div></div>
                          </div>
                      </div>
+                     <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white shadow-xl">
+                        <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
+                        <div className="space-y-2">
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Officer Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span></div>
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Head Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span></div>
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Comm Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span></div>
+                            <div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Exempt Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.exemptKey || "N/A"}</span></div>
+                        </div>
+                     </div>
                  </div>
              )}
              
@@ -1387,7 +1452,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <div key={proj.id} className={`bg-white rounded-[32px] border transition-all ${isExpanded ? 'col-span-full border-[#3E2723] shadow-xl' : 'border-amber-100 shadow-sm hover:shadow-md'}`}>
                                     <div className="p-6 cursor-pointer" onClick={() => setExpandedProjectId(isExpanded ? null : proj.id)}><div className="flex justify-between items-start mb-4"><div><h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4><p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center gap-1"><UserCheck size={12}/> Head: {proj.projectHeadName || 'Unassigned'}</p></div><div className="text-right"><span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span><p className="text-[9px] text-gray-400 mt-1">{completedCount}/{totalCount} Tasks</p></div></div><div className="w-full bg-gray-100 rounded-full h-1.5 mb-4"><div className="bg-[#3E2723] h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div></div><div className="flex justify-between items-center"><span className="text-[10px] font-bold text-gray-500 flex items-center gap-1"><Clock size={12}/> Due: {new Date(proj.deadline).toLocaleDateString()}</span><button className="text-[10px] font-black uppercase text-amber-600 flex items-center gap-1 hover:underline">{isExpanded ? 'Close Board' : 'Open Board'} <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}/></button></div></div>
                                     {isExpanded && (
-                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn"><div className="flex justify-between items-center mb-6"><p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>{(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id, assigneeId: '', assigneeName: '', outputLink: '', outputCaption: '' }); setShowTaskForm(true); }} className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50">+ Add Task</button>}</div><div className="grid grid-cols-1 md:grid-cols-3 gap-4">{['pending', 'brewing', 'served'].map(status => (<div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200"><h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle size={12}/>}{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5><div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">{projectTasks.filter(t => t.status === status).map(task => (<div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group"><div className="flex justify-between items-start mb-1"><div className="flex flex-col"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span>{task.assigneeName && <span className="text-[8px] text-gray-500 font-bold uppercase mt-0.5 flex items-center gap-1"><User size={8}/> {task.assigneeName}</span>}</div><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button><button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button></div></div>{task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Ref Link</a>}{task.outputLink && <a href={task.outputLink} target="_blank" className="text-[9px] text-green-600 hover:underline flex items-center gap-1 mb-1 font-bold"><Link size={8}/> Output Submitted</a>}{task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}<div className="flex gap-1 border-t border-gray-50 pt-1">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}</div></div>))}</div></div>))}</div></div>
+                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn">
+                                            <div className="flex justify-between items-center mb-6">
+                                                <p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>
+                                                <div className="flex gap-2">
+                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingProject(proj); setNewProject({ title: proj.title, description: proj.description, deadline: proj.deadline, projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName }); setShowProjectForm(true); }} className="bg-gray-100 text-gray-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200">Edit Project</button>}
+                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(proj.id); }} className="bg-red-100 text-red-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-200">Delete</button>}
+                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id, assigneeId: '', assigneeName: '', outputLink: '', outputCaption: '' }); setShowTaskForm(true); }} className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50">+ Add Task</button>}
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{['pending', 'brewing', 'served'].map(status => (<div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200"><h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle size={12}/>}{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5><div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">{projectTasks.filter(t => t.status === status).map(task => (<div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group"><div className="flex justify-between items-start mb-1"><div className="flex flex-col"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span>{task.assigneeName && <span className="text-[8px] text-gray-500 font-bold uppercase mt-0.5 flex items-center gap-1"><User size={8}/> {task.assigneeName}</span>}</div><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button><button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button></div></div>{task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Ref Link</a>}{task.outputLink && <a href={task.outputLink} target="_blank" className="text-[9px] text-green-600 hover:underline flex items-center gap-1 mb-1 font-bold"><Link size={8}/> Output Submitted</a>}{task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}<div className="flex gap-1 border-t border-gray-50 pt-1">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}</div></div>))}</div></div>))}</div>
+                                        </div>
                                     )}
                                 </div>
                             );
