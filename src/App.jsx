@@ -180,6 +180,29 @@ const getEventMonth = (dateStr) => {
     return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
 };
 
+// Safe date helpers for event rendering
+const getEventDateParts = (startStr, endStr) => {
+    if (!startStr) return { day: '?', month: '?' };
+    
+    const start = new Date(startStr);
+    const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase();
+    const startDay = start.getDate();
+
+    if (!endStr || startStr === endStr) {
+        return { day: `${startDay}`, month: startMonth };
+    }
+
+    const end = new Date(endStr);
+    const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase();
+    const endDay = end.getDate();
+
+    if (startMonth === endMonth) {
+        return { day: `${startDay}-${endDay}`, month: startMonth };
+    } else {
+        return { day: `${startDay}-${endDay}`, month: `${startMonth}/${endMonth}` };
+    }
+};
+
 // --- Components ---
 
 const MaintenanceBanner = () => (
@@ -198,13 +221,22 @@ const StatIcon = ({ icon: Icon, variant = 'default' }) => {
   return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
 };
 
+const MemberCard = ({ m }) => (
+    <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64 transform hover:scale-105 transition-transform duration-300">
+       <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover shadow-lg"/>
+       <h4 className="font-black text-xs uppercase mb-1 text-[#3E2723]">{m.name}</h4>
+       {m.nickname && <p className="text-[10px] text-gray-500 mb-2 italic">"{m.nickname}"</p>}
+       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">{m.specificTitle}</span>
+    </div>
+);
+
 const DataPrivacyFooter = () => (
   <div className="w-full py-8 mt-12 border-t border-amber-900/10 text-[#3E2723]/40 text-center">
     <div className="flex items-center justify-center gap-2 mb-2 font-black uppercase text-[10px] tracking-widest">
       <ShieldCheck size={12} /> Data Privacy Statement
     </div>
     <p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">
-      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance.
+      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance. We do not share your information with unauthorized third parties.
     </p>
     <div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider">
       <span>© {new Date().getFullYear()} LBA</span>
@@ -299,10 +331,27 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
                     const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
                     
-                    // Transaction logic for safe ID generation
+                    let fallbackCount = 0;
+                    try {
+                        const allDocs = await getDocs(registryRef);
+                        if (!allDocs.empty) {
+                             let maxIdNum = 0;
+                             allDocs.forEach(d => {
+                                 const mId = d.data().memberId;
+                                 const match = mId.match(/-(\d)(\d{4,})C?$/); 
+                                 if (match && match[2]) {
+                                     const num = parseInt(match[2], 10);
+                                     if (num > maxIdNum) maxIdNum = num;
+                                 }
+                             });
+                             fallbackCount = maxIdNum;
+                        }
+                    } catch(e) { console.warn("Fallback count fetch failed", e); }
+
                     const newProfile = await runTransaction(db, async (transaction) => {
                          const counterSnap = await transaction.get(counterRef);
                          let nextCount;
+                         
                          const storedCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0;
                          const baseCount = Math.max(storedCount, 0);
                          nextCount = baseCount + 1;
