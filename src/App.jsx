@@ -207,7 +207,6 @@ const getEventMonth = (dateStr) => {
     return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
 };
 
-// Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
     const start = new Date(startStr);
@@ -235,26 +234,13 @@ const MaintenanceBanner = () => (
     </div>
 );
 
-const MemberCard = ({ m }) => (
-    <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64 transform hover:scale-105 transition-transform duration-300">
-       <img 
-         src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} 
-         onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`; }}
-         className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover shadow-lg"
-       />
-       <h4 className="font-black text-xs uppercase mb-1 text-[#3E2723]">{m.name}</h4>
-       {m.nickname && <p className="text-[10px] text-gray-500 mb-2 italic">"{m.nickname}"</p>}
-       <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">{m.specificTitle}</span>
-    </div>
-);
-
 const DataPrivacyFooter = () => (
   <div className="w-full py-8 mt-12 border-t border-amber-900/10 text-[#3E2723]/40 text-center">
     <div className="flex items-center justify-center gap-2 mb-2 font-black uppercase text-[10px] tracking-widest">
       <ShieldCheck size={12} /> Data Privacy Statement
     </div>
     <p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">
-      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance. We do not share your information with unauthorized third parties.
+      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance.
     </p>
     <div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider">
       <span>© {new Date().getFullYear()} LBA</span>
@@ -349,10 +335,27 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
                     const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
                     
-                    // Transaction logic for safe ID generation
+                    let fallbackCount = 0;
+                    try {
+                        const allDocs = await getDocs(registryRef);
+                        if (!allDocs.empty) {
+                             let maxIdNum = 0;
+                             allDocs.forEach(d => {
+                                 const mId = d.data().memberId;
+                                 const match = mId.match(/-(\d)(\d{4,})C?$/); 
+                                 if (match && match[2]) {
+                                     const num = parseInt(match[2], 10);
+                                     if (num > maxIdNum) maxIdNum = num;
+                                 }
+                             });
+                             fallbackCount = maxIdNum;
+                        }
+                    } catch(e) { console.warn("Fallback count fetch failed", e); }
+
                     const newProfile = await runTransaction(db, async (transaction) => {
                          const counterSnap = await transaction.get(counterRef);
                          let nextCount;
+                         
                          const storedCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0;
                          const baseCount = Math.max(storedCount, 0);
                          nextCount = baseCount + 1;
@@ -650,7 +653,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Edit Member Modal State
   const [editingMember, setEditingMember] = useState(null);
-  const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' });
+  const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '', positionCategory: '', committee: '', specificTitle: '' });
 
   // Email Modal State
   const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' });
@@ -708,6 +711,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const [tempShift, setTempShift] = useState({ date: '', type: 'WHOLE_DAY', name: '', capacity: 5 });
   const [savingSettings, setSavingSettings] = useState(false);
+  const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
   
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
@@ -866,7 +870,36 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleDeleteAnnouncement = async (id) => { if(!confirm("Delete announcement?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', id)); logAction("Delete Announcement", id); } catch(err) {} };
   const handleEditAnnouncement = (ann) => { setNewAnnouncement({ title: ann.title, content: ann.content }); setEditingAnnouncement(ann); setShowAnnounceForm(true); };
   const handleSaveLegacy = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), legacyForm); logAction("Update Legacy", "Updated About Us"); setIsEditingLegacy(false); } catch(err) {} };
-  const handleUpdateMemberDetails = async (e) => { e.preventDefault(); if (!editingMember) return; try { const docId = editingMember.id || editingMember.memberId; const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); await updateDoc(memberRef, { joinedDate: new Date(editMemberForm.joinedDate).toISOString() }); logAction("Update Member", editingMember.name); setEditingMember(null); alert("Updated."); } catch(err) {} };
+  const handleUpdateMemberDetails = async (e) => { 
+      e.preventDefault(); 
+      if (!editingMember) return; 
+      
+      try { 
+          const docId = editingMember.id || editingMember.memberId; 
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); 
+          
+          let specificTitle = editingMember.specificTitle;
+
+          // If assigning to a committee, construct the title
+          if (editMemberForm.positionCategory === 'Committee' && editMemberForm.committee) {
+              const committeeName = COMMITTEES_INFO.find(c => c.id === editMemberForm.committee)?.title || editMemberForm.committee;
+              specificTitle = `Committee Member - ${committeeName}`;
+          } else if (editMemberForm.specificTitle) {
+              specificTitle = editMemberForm.specificTitle;
+          }
+
+          const updates = { 
+              joinedDate: new Date(editMemberForm.joinedDate).toISOString(),
+              positionCategory: editMemberForm.positionCategory || editingMember.positionCategory,
+              specificTitle: specificTitle
+          };
+
+          await updateDoc(memberRef, updates); 
+          logAction("Update Member", `${editingMember.name} - ${specificTitle}`); 
+          setEditingMember(null); 
+          alert("Updated."); 
+      } catch(err) { console.error(err); alert("Update failed"); } 
+  };
   const handleBulkAddMasterclass = async () => { if (selectedMcMembers.length === 0) return alert("No members selected!"); const currentAttendees = masterclassData.moduleAttendees?.[adminMcModule] || []; const updatedAttendees = [...new Set([...currentAttendees, ...selectedMcMembers])]; const newData = { ...masterclassData, moduleAttendees: { ...masterclassData.moduleAttendees, [adminMcModule]: updatedAttendees } }; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData); logAction("Masterclass Add", `Added ${selectedMcMembers.length} to Module ${adminMcModule}`); setSelectedMcMembers([]); setAdminMcSearch(''); alert("Added."); } catch(e) {} };
   const handleSaveCertTemplate = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), masterclassData); alert("Saved"); } catch(e) {} };
   const handleSaveMcCurriculum = async () => { try { const newData = { ...masterclassData, moduleDetails: { ...masterclassData.moduleDetails, [adminMcModule]: tempMcDetails } }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData); logAction("Update Curriculum", `Updated Module ${adminMcModule}`); setEditingMcCurriculum(false); alert("Updated"); } catch(e) {} };
@@ -955,7 +988,32 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   const initiateAppAction = (app, type) => { let subject = "", body = ""; const signature = "\n\nBest regards,\nLPU Baristas' Association"; if (type === 'for_interview') { subject = `LBA: Interview Invitation`; body = `Dear ${app.name},\n\nWe invite you for an interview regarding your application for ${app.committee}.\n${signature}`; } else if (type === 'accepted') { subject = `LBA: Congratulations!`; body = `Dear ${app.name},\n\nAccepted as ${app.role} for ${app.committee}!\n${signature}`; } else if (type === 'denied') { subject = `LBA Application Update`; body = `Dear ${app.name},\n\nThank you for applying. We cannot move forward at this time.\n${signature}`; } setEmailModal({ isOpen: true, app, type, subject, body }); };
-  const confirmAppAction = async () => { if (!emailModal.app) return; try { const { app, type, subject, body } = emailModal; const batch = writeBatch(db); const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id); batch.update(appRef, { status: type, statusUpdatedAt: serverTimestamp(), lastEmailSent: new Date().toISOString() }); if (type === 'accepted') { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId); batch.update(memberRef, { accolades: arrayUnion(`${app.committee} - ${app.role}`) }); } await batch.commit(); logAction("Committee Action", `${type} for ${app.name}`); window.location.href = `mailto:${app.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' }); alert("Updated & Email opened."); } catch (err) {} };
+  const confirmAppAction = async () => { 
+      if (!emailModal.app) return; 
+      try { 
+          const { app, type, subject, body } = emailModal; 
+          const batch = writeBatch(db); 
+          const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id); 
+          
+          batch.update(appRef, { status: type, statusUpdatedAt: serverTimestamp(), lastEmailSent: new Date().toISOString() }); 
+          
+          if (type === 'accepted') { 
+              const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId); 
+              // Automatically update member to Committee status and specific title
+              batch.update(memberRef, { 
+                  positionCategory: 'Committee',
+                  specificTitle: `Committee Member - ${app.committee}`,
+                  accolades: arrayUnion(`Accepted: ${app.committee}`) 
+              }); 
+          } 
+          
+          await batch.commit(); 
+          logAction("Committee Action", `${type} for ${app.name}`); 
+          window.location.href = `mailto:${app.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; 
+          setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' }); 
+          alert("Updated & Email opened."); 
+      } catch (err) { console.error(err); alert("Error updating application."); } 
+  };
   const handleDeleteApp = async (id) => { if (!confirm("Delete application?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id)); logAction("Delete App", id); } catch(err) {} };
   const handleToggleRegistration = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, registrationOpen: !hubSettings.registrationOpen }); } catch (err) {} };
   const handleToggleMaintenance = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, maintenanceMode: !hubSettings.maintenanceMode }); } catch (err) {} };
@@ -1012,10 +1070,46 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
-      {hubSettings.maintenanceMode && <div className="absolute top-0 left-0 right-0 z-[101]"><MaintenanceBanner /></div>}
+      {hubSettings.maintenanceMode && <div className="absolute top-0 left-0 right-0 z-[101] w-full"><MaintenanceBanner /></div>}
       {confirmDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm</h3><p className="text-sm text-gray-600 mb-8">Remove <span className="font-bold">{confirmDelete.name}</span>?</p><div className="flex gap-3"><button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs">Delete</button></div></div></div>}
       {emailModal.isOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Send Email</h3><div className="space-y-4"><input type="text" className="w-full p-3 border rounded-xl text-xs font-bold" value={emailModal.subject} onChange={e => setEmailModal({...emailModal, subject: e.target.value})} /><textarea className="w-full p-3 border rounded-xl text-xs h-32" value={emailModal.body} onChange={e => setEmailModal({...emailModal, body: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' })} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={confirmAppAction} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Send</button></div></div></div></div>}
-      {editingMember && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Edit Details</h3><form onSubmit={handleUpdateMemberDetails}><label>Joined Date</label><input type="date" className="w-full p-3 border rounded-xl text-xs font-bold" value={editMemberForm.joinedDate} onChange={e => setEditMemberForm({...editMemberForm, joinedDate: e.target.value})} /><div className="flex gap-3 pt-4"><button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></form></div></div>}
+      {editingMember && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Edit Details</h3><form onSubmit={handleUpdateMemberDetails} className="space-y-4">
+            <div><label className="text-[10px] font-bold text-gray-400 uppercase">Joined Date</label><input type="date" className="w-full p-3 border rounded-xl text-xs font-bold" value={editMemberForm.joinedDate} onChange={e => setEditMemberForm({...editMemberForm, joinedDate: e.target.value})} /></div>
+            
+            {/* COMMITTEE ASSIGNMENT TOGGLE */}
+            {['Officer', 'Committee', 'Execomm'].includes(editingMember.positionCategory) && (
+                <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
+                    <label className="text-[10px] font-black text-amber-800 uppercase mb-2 block">Committee Assignment</label>
+                    <select 
+                        className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold uppercase mb-2"
+                        value={editMemberForm.positionCategory || editingMember.positionCategory}
+                        onChange={e => setEditMemberForm({...editMemberForm, positionCategory: e.target.value})}
+                    >
+                        {POSITION_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    
+                    {/* Show Committee Selector if Category is Committee */}
+                    {((editMemberForm.positionCategory || editingMember.positionCategory) === 'Committee') && (
+                        <select 
+                            className="w-full p-3 border border-amber-200 rounded-xl text-xs"
+                            value={editMemberForm.committee}
+                            onChange={e => setEditMemberForm({...editMemberForm, committee: e.target.value})}
+                        >
+                            <option value="">Select Committee...</option>
+                            {COMMITTEES_INFO.map(comm => (
+                                <option key={comm.id} value={comm.id}>{comm.title}</option>
+                            ))}
+                        </select>
+                    )}
+                    
+                    <div className="text-[9px] text-amber-600 mt-1 italic">
+                        Selecting a committee will auto-update the title to "Committee Member - [Name]".
+                    </div>
+                </div>
+            )}
+            
+            <div className="flex gap-3 pt-4"><button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div>
+        </form></div></div>}
       {showCertificate && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"><div className="relative max-w-4xl w-full"><button onClick={() => setShowCertificate(false)} className="absolute -top-12 right-0 text-white"><X size={32}/></button>{masterclassData.certTemplate ? <div className="relative bg-white shadow-2xl rounded-lg overflow-hidden"><img src={getDirectLink(masterclassData.certTemplate)} className="w-full h-auto" /><div className="absolute inset-0 flex flex-col items-center justify-center pt-20"><h2 className="font-serif text-3xl md:text-5xl font-black text-[#3E2723] uppercase tracking-widest text-center px-4 mb-4">{profile.name}</h2><p className="font-serif text-lg md:text-2xl text-amber-700 font-bold uppercase">Certified Master Barista</p><p className="font-mono text-sm md:text-lg text-gray-500 mt-8">{new Date().toLocaleDateString()}</p></div></div> : <div className="bg-white p-8 rounded-2xl text-center"><AlertCircle size={48} className="mx-auto text-amber-500 mb-4"/><h3 className="font-bold text-xl mb-2">Missing Template</h3></div>}</div></div>}
       {attendanceEvent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 w-full max-w-2xl h-[80vh] flex flex-col border-b-[8px] border-[#3E2723]"><div className="flex justify-between items-center mb-6 border-b pb-4 border-amber-100"><div><h3 className="text-xl font-black uppercase text-[#3E2723]">Attendance</h3><p className="text-xs text-amber-600 font-bold mt-1">{attendanceEvent.name}</p></div><div className="flex gap-2"><button onClick={handleDownloadAttendance} className="p-2 bg-green-100 text-green-700 rounded-full"><Download size={20}/></button><button onClick={() => setAttendanceEvent(null)} className="p-2 bg-gray-100 rounded-full"><X size={20}/></button></div></div><div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">{[...(attendanceEvent.registrationRequired ? members.filter(m => attendanceEvent.registered?.includes(m.memberId)) : members)].sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(m => { const isPresent = attendanceEvent.attendees?.includes(m.memberId); return (<div key={m.id} onClick={() => handleToggleAttendance(m.memberId)} className={`p-4 rounded-xl flex items-center justify-between cursor-pointer border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent'}`}><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>{m.name?.charAt(0)}</div><div><p className="text-xs font-bold uppercase">{m.name}</p><p className="text-[9px] text-gray-400">{m.memberId}</p></div></div>{isPresent && <CheckCircle size={14} className="text-green-500"/>}</div>); })}</div></div></div>}
       {showAccoladeModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Accolade</h3><div className="mb-4 bg-gray-50 rounded-xl p-3 max-h-32 overflow-y-auto"><ul className="space-y-1">{(showAccoladeModal.currentAccolades || []).map((acc, idx) => (<li key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100"><span className="text-[10px] font-bold text-gray-700">{acc}</span><button onClick={() => handleRemoveAccolade(acc)} className="text-red-400"><X size={12}/></button></li>))}</ul></div><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} /><div className="flex gap-3"><button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Close</button><button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs">Award</button></div></div></div>}
@@ -1063,7 +1157,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         </div>
       )}
 
-      {showProjectForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingProject ? 'Edit Project' : 'New Project'}</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} /><textarea placeholder="Desc" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} /><div className="grid grid-cols-2 gap-4"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} /><select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}><option value="">Select Head</option>{members.map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}</select></div><div className="flex gap-3 pt-2"><button onClick={() => { setShowProjectForm(false); setEditingProject(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={editingProject ? handleEditProjectDetails : handleCreateProject} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">{editingProject ? 'Save Changes' : 'Create'}</button></div></div></div></div>}
+      {showProjectForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">New Project</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} /><textarea placeholder="Desc" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} /><div className="grid grid-cols-2 gap-4"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} /><select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}><option value="">Select Head</option>{members.map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}</select></div><div className="flex gap-3 pt-2"><button onClick={() => setShowProjectForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleCreateProject} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Create</button></div></div></div></div>}
       
       {showPollForm && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
@@ -1088,7 +1182,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
       {showSeriesForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Diary Post</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newSeriesPost.title} onChange={e => setNewSeriesPost({...newSeriesPost, title: e.target.value})} /><textarea placeholder="Image URLs (comma separated for album)" className="w-full p-3 border rounded-xl text-xs" value={newSeriesPost.imageUrl} onChange={e => setNewSeriesPost({...newSeriesPost, imageUrl: e.target.value})} /><textarea placeholder="Caption" className="w-full p-3 border rounded-xl text-xs h-24" value={newSeriesPost.caption} onChange={e => setNewSeriesPost({...newSeriesPost, caption: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowSeriesForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handlePostSeries} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button></div></div></div></div>}
       
-      {showEventForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723] overflow-y-auto max-h-[90vh]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'New Event'}</h3><div className="space-y-4"><input type="text" placeholder="Event Name" className="w-full p-3 border rounded-xl text-xs font-bold" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} /><div className="grid grid-cols-2 gap-2"><input type="date" className="p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div><div className="flex flex-col gap-2"><div className="flex gap-2 items-center"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} /><span className="text-xs">Reg Required</span><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="ml-4" /><span className="text-xs">Volunteer Event</span><input type="checkbox" checked={newEvent.openForAll} onChange={e => setNewEvent({...newEvent, openForAll: e.target.checked})} className="ml-4" /><span className="text-xs">Open For All</span></div></div>{newEvent.isVolunteer && <div className="bg-amber-50 p-3 rounded-xl"><h4 className="text-xs font-bold mb-2">Shifts</h4><div className="flex gap-2 mb-2"><input type="date" className="p-2 border rounded text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><input type="number" placeholder="Cap" className="p-2 border rounded text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button onClick={addShift} className="p-2 bg-[#3E2723] text-white rounded text-xs">Add</button></div><div className="space-y-1">{newEvent.shifts.map(s => (<div key={s.id} className="flex justify-between text-xs bg-white p-2 rounded border"><span>{s.date} - {s.session} (Cap: {s.capacity})</span><button onClick={() => removeShift(s.id)} className="text-red-500">x</button></div>))}</div></div>}<textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} /><input type="text" placeholder="Venue" className="w-full p-3 border rounded-xl text-xs" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} /><input type="text" placeholder="Evaluation Link (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleAddEvent} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></div></div></div>}
+      {showEventForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723] overflow-y-auto max-h-[90vh]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'New Event'}</h3><div className="space-y-4"><input type="text" placeholder="Event Name" className="w-full p-3 border rounded-xl text-xs font-bold" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} /><div className="grid grid-cols-2 gap-2"><input type="date" className="p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div><div className="flex gap-2 items-center"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} /><span className="text-xs">Reg Required</span><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="ml-4" /><span className="text-xs">Volunteer Event</span></div>{newEvent.isVolunteer && <div className="bg-amber-50 p-3 rounded-xl"><h4 className="text-xs font-bold mb-2">Shifts</h4><div className="flex gap-2 mb-2"><input type="date" className="p-2 border rounded text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><input type="number" placeholder="Cap" className="p-2 border rounded text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button onClick={addShift} className="p-2 bg-[#3E2723] text-white rounded text-xs">Add</button></div><div className="space-y-1">{newEvent.shifts.map(s => (<div key={s.id} className="flex justify-between text-xs bg-white p-2 rounded border"><span>{s.date} - {s.session} (Cap: {s.capacity})</span><button onClick={() => removeShift(s.id)} className="text-red-500">x</button></div>))}</div></div>}<div className="flex gap-3 pt-2"><button onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleAddEvent} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></div></div></div>}
       
       {showAnnounceForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Announcement</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} /><textarea placeholder="Content" className="w-full p-3 border rounded-xl text-xs h-32" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowAnnounceForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handlePostAnnouncement} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button></div></div></div></div>}
 
@@ -1485,17 +1579,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <div key={proj.id} className={`bg-white rounded-[32px] border transition-all ${isExpanded ? 'col-span-full border-[#3E2723] shadow-xl' : 'border-amber-100 shadow-sm hover:shadow-md'}`}>
                                     <div className="p-6 cursor-pointer" onClick={() => setExpandedProjectId(isExpanded ? null : proj.id)}><div className="flex justify-between items-start mb-4"><div><h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4><p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center gap-1"><UserCheck size={12}/> Head: {proj.projectHeadName || 'Unassigned'}</p></div><div className="text-right"><span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span><p className="text-[9px] text-gray-400 mt-1">{completedCount}/{totalCount} Tasks</p></div></div><div className="w-full bg-gray-100 rounded-full h-1.5 mb-4"><div className="bg-[#3E2723] h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div></div><div className="flex justify-between items-center"><span className="text-[10px] font-bold text-gray-500 flex items-center gap-1"><Clock size={12}/> Due: {new Date(proj.deadline).toLocaleDateString()}</span><button className="text-[10px] font-black uppercase text-amber-600 flex items-center gap-1 hover:underline">{isExpanded ? 'Close Board' : 'Open Board'} <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}/></button></div></div>
                                     {isExpanded && (
-                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn">
-                                            <div className="flex justify-between items-center mb-6">
-                                                <p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>
-                                                <div className="flex gap-2">
-                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingProject(proj); setNewProject({ title: proj.title, description: proj.description, deadline: proj.deadline, projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName }); setShowProjectForm(true); }} className="bg-gray-100 text-gray-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200">Edit Project</button>}
-                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(proj.id); }} className="bg-red-100 text-red-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-200">Delete</button>}
-                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id, assigneeId: '', assigneeName: '', outputLink: '', outputCaption: '' }); setShowTaskForm(true); }} className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50">+ Add Task</button>}
-                                                </div>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{['pending', 'brewing', 'served'].map(status => (<div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200"><h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle size={12}/>}{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5><div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">{projectTasks.filter(t => t.status === status).map(task => (<div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group"><div className="flex justify-between items-start mb-1"><div className="flex flex-col"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span>{task.assigneeName && <span className="text-[8px] text-gray-500 font-bold uppercase mt-0.5 flex items-center gap-1"><User size={8}/> {task.assigneeName}</span>}</div><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button><button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button></div></div>{task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Ref Link</a>}{task.outputLink && <a href={task.outputLink} target="_blank" className="text-[9px] text-green-600 hover:underline flex items-center gap-1 mb-1 font-bold"><Link size={8}/> Output Submitted</a>}{task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}<div className="flex gap-1 border-t border-gray-50 pt-1">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}</div></div>))}</div></div>))}</div>
-                                        </div>
+                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn"><div className="flex justify-between items-center mb-6"><p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>{(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id, assigneeId: '', assigneeName: '', outputLink: '', outputCaption: '' }); setShowTaskForm(true); }} className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50">+ Add Task</button>}</div><div className="grid grid-cols-1 md:grid-cols-3 gap-4">{['pending', 'brewing', 'served'].map(status => (<div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200"><h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle size={12}/>}{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5><div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">{projectTasks.filter(t => t.status === status).map(task => (<div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group"><div className="flex justify-between items-start mb-1"><div className="flex flex-col"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span>{task.assigneeName && <span className="text-[8px] text-gray-500 font-bold uppercase mt-0.5 flex items-center gap-1"><User size={8}/> {task.assigneeName}</span>}</div><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button><button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button></div></div>{task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Ref Link</a>}{task.outputLink && <a href={task.outputLink} target="_blank" className="text-[9px] text-green-600 hover:underline flex items-center gap-1 mb-1 font-bold"><Link size={8}/> Output Submitted</a>}{task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}<div className="flex gap-1 border-t border-gray-50 pt-1">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}</div></div>))}</div></div>))}</div></div>
                                     )}
                                 </div>
                             );
@@ -1503,41 +1587,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                  </div>
             )}
-
-            {view === 'settings' && (
-                  <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
-                      <div className="flex items-center gap-4 mb-8">
-                          <div className="p-4 bg-amber-100 text-amber-700 rounded-2xl"><Settings2 size={32} /></div>
-                          <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Settings</h3><p className="text-gray-500 font-bold text-xs uppercase">Manage your barista profile</p></div>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                          <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
-                              <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2"><User size={20} className="text-amber-500"/> Personal Details</h4>
-                              <form onSubmit={handleUpdateProfile} className="space-y-4">
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase" value={settingsForm.name || ''} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} placeholder="LAST, FIRST MI." /></div>
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nickname / Display Name</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.nickname || ''} onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})} placeholder="How should we call you?" /></div>
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address</label><input type="email" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.email || ''} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} placeholder="email@example.com" /></div>
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Profile Photo URL</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.photoUrl || ''} onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})} placeholder="https://..." /><p className="text-[9px] text-gray-400 mt-1 ml-1">Paste a direct link to an image (Google Drive/Photos links supported).</p></div>
-                                  <div className="grid grid-cols-2 gap-4">
-                                      <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Month</label><select className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.birthMonth || ''} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}><option value="">Month</option>{MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select></div>
-                                      <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Day</label><input type="number" min="1" max="31" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.birthDay || ''} onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})} /></div>
-                                  </div>
-                                  <div className="pt-4"><button type="submit" disabled={savingSettings} className="w-full py-4 bg-[#3E2723] text-[#FDB813] rounded-2xl font-black uppercase text-xs hover:bg-black transition-colors disabled:opacity-50">{savingSettings ? "Saving..." : "Update Profile"}</button></div>
-                              </form>
-                          </div>
-                          <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
-                              <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2"><Lock size={20} className="text-red-500"/> Security</h4>
-                              <form onSubmit={handleChangePassword} className="space-y-4">
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Current Password</label><input type="password" required className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={passwordForm.current} onChange={e => setPasswordForm({...passwordForm, current: e.target.value})} /></div>
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">New Password</label><input type="password" required className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={passwordForm.new} onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} /></div>
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Confirm New Password</label><input type="password" required className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={passwordForm.confirm} onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})} /></div>
-                                  <div className="pt-4"><button type="submit" className="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase text-xs hover:bg-red-600 transition-colors">Change Password</button></div>
-                              </form>
-                          </div>
-                      </div>
-                      <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs"><p>Member ID: <span className="font-mono text-white font-bold">{profile.memberId}</span></p><p className="mt-2">Need help with your account? Contact the PR Committee.</p></div>
-                  </div>
-              )}
 
              <div className="mt-auto pt-8"><DataPrivacyFooter /></div>
           </main>
