@@ -50,11 +50,11 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// FIX: Sanitize appId to ensure it is a valid Firestore document ID
+// Sanitize appId to ensure it is a valid Firestore document ID
 const rawAppId = typeof __app_id !== 'undefined' ? __app_id : 'lba-portal-v13';
 const appId = rawAppId.replace(/[\/.]/g, '_'); 
 
-// --- Global Constants ---
+// --- Global Constants & Assets ---
 const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
 const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMPvN_dIM3fIwY";
 
@@ -79,25 +79,46 @@ const DEFAULT_MASTERCLASS_MODULES = [
 
 const COMMITTEES_INFO = [
   { 
-    id: "Arts Committee", 
+    id: "Arts", 
     title: "Arts & Design", 
     image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80",
     description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction for major events.",
     roles: ["Create event pubmats & posters", "Design merchandise & t-shirts", "Execute venue styling & decoration"]
   },
   { 
-    id: "PR Committee", 
+    id: "PR", 
     title: "Public Relations", 
     image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", 
     description: "The voice of the association. We manage social media presence, student engagement, and external communications.",
     roles: ["Manage social media pages", "Write engaging captions & copies", "Coordinate with external partners"]
   },
   { 
-    id: "Events Committee", 
+    id: "Events", 
     title: "Events & Logistics", 
     image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80",
     description: "The backbone of operations. We plan flows, manage logistics, and ensure every LBA gathering runs smoothly.",
     roles: ["Plan detailed event programs", "Coordinate with venues & suppliers", "Manage on-the-day flow & crowd control"]
+  },
+  {
+      id: "Secretariat",
+      title: "Secretariat",
+      image: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=800&q=80",
+      description: "Keepers of the records. We handle registration, attendance, documentation, and the official member database.",
+      roles: ["Manage registration desk", "Record meeting minutes", "Maintain member database"]
+  },
+  {
+      id: "Finance",
+      title: "Finance & Audit",
+      image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80",
+      description: "Guardians of the treasury. We ensure funds are managed transparently and resources are allocated efficiently.",
+      roles: ["Collect fees & payments", "Audit financial reports", "Manage budget allocation"]
+  },
+  {
+      id: "Academics",
+      title: "Academics",
+      image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80",
+      description: "The brain trust. We develop the Masterclass curriculum, organize workshops, and ensure coffee excellence.",
+      roles: ["Develop training modules", "Facilitate workshops", "Research coffee trends"]
   }
 ];
 
@@ -117,6 +138,12 @@ const getDirectLink = (url) => {
     if (idMatch) return `https://lh3.googleusercontent.com/d/${idMatch[0]}`;
   }
   return url;
+};
+
+const ensureAbsoluteUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  return 'https://' + url;
 };
 
 const generateCSV = (headers, rows, filename) => {
@@ -208,18 +235,13 @@ const MaintenanceBanner = () => (
     </div>
 );
 
-const StatIcon = ({ icon: Icon, variant = 'default' }) => {
-  if (variant === 'amber') return <div className="p-3 rounded-2xl bg-amber-100 text-amber-600"><Icon size={24} /></div>;
-  if (variant === 'indigo') return <div className="p-3 rounded-2xl bg-indigo-100 text-indigo-600"><Icon size={24} /></div>;
-  if (variant === 'green') return <div className="p-3 rounded-2xl bg-green-100 text-green-600"><Icon size={24} /></div>;
-  if (variant === 'blue') return <div className="p-3 rounded-2xl bg-blue-100 text-blue-600"><Icon size={24} /></div>;
-  if (variant === 'red') return <div className="p-3 rounded-2xl bg-red-100 text-red-600"><Icon size={24} /></div>;
-  return <div className="p-3 rounded-2xl bg-gray-100 text-gray-600"><Icon size={24} /></div>;
-};
-
 const MemberCard = ({ m }) => (
     <div key={m.memberId || m.name} className="bg-white p-6 rounded-[32px] border border-amber-100 flex flex-col items-center text-center shadow-sm w-full sm:w-64 transform hover:scale-105 transition-transform duration-300">
-       <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover shadow-lg"/>
+       <img 
+         src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} 
+         onError={(e) => { e.currentTarget.src = `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`; }}
+         className="w-20 h-20 rounded-full border-4 border-[#3E2723] mb-4 object-cover shadow-lg"
+       />
        <h4 className="font-black text-xs uppercase mb-1 text-[#3E2723]">{m.name}</h4>
        {m.nickname && <p className="text-[10px] text-gray-500 mb-2 italic">"{m.nickname}"</p>}
        <span className="bg-amber-100 text-amber-800 px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-wider">{m.specificTitle}</span>
@@ -232,12 +254,14 @@ const DataPrivacyFooter = () => (
       <ShieldCheck size={12} /> Data Privacy Statement
     </div>
     <p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">
-      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance.
+      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance. We do not share your information with unauthorized third parties.
     </p>
     <div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider">
       <span>© {new Date().getFullYear()} LBA</span>
       <span>•</span>
       <a href="#" className="hover:text-[#3E2723] hover:underline" onClick={(e) => e.preventDefault()}>Privacy Policy</a>
+      <span>•</span>
+      <a href="#" className="hover:text-[#3E2723] hover:underline" onClick={(e) => e.preventDefault()}>Terms of Use</a>
     </div>
   </div>
 );
@@ -325,23 +349,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
                     const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
                     
-                    let fallbackCount = 0;
-                    try {
-                        const allDocs = await getDocs(registryRef);
-                        if (!allDocs.empty) {
-                             let maxIdNum = 0;
-                             allDocs.forEach(d => {
-                                 const mId = d.data().memberId;
-                                 const match = mId.match(/-(\d)(\d{4,})C?$/); 
-                                 if (match && match[2]) {
-                                     const num = parseInt(match[2], 10);
-                                     if (num > maxIdNum) maxIdNum = num;
-                                 }
-                             });
-                             fallbackCount = maxIdNum;
-                        }
-                    } catch(e) { console.warn("Fallback count fetch failed", e); }
-
+                    // Transaction logic for safe ID generation
                     const newProfile = await runTransaction(db, async (transaction) => {
                          const counterSnap = await transaction.get(counterRef);
                          let nextCount;
@@ -483,7 +491,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723] relative">
       {hubSettings.maintenanceMode && (
-          <div className="absolute top-0 left-0 right-0 z-[101]">
+          <div className="absolute top-0 left-0 right-0 z-[101] w-full">
               <MaintenanceBanner />
           </div>
       )}
@@ -581,10 +589,8 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 };
 
 // --- Dashboard Component ---
-
 const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [view, setView] = useState('home');
-  // ... (Other states)
   const [members, setMembers] = useState([]);
   const [events, setEvents] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -702,9 +708,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const [tempShift, setTempShift] = useState({ date: '', type: 'WHOLE_DAY', name: '', capacity: 5 });
   const [savingSettings, setSavingSettings] = useState(false);
-  const [expandedCommittee, setExpandedCommittee] = useState(null);
   const [financialFilter, setFinancialFilter] = useState('all');
-  const [expandedEventId, setExpandedEventId] = useState(null); 
   
   const [isEditingLegacy, setIsEditingLegacy] = useState(false);
   const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
@@ -767,11 +771,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const sortedMembers = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
     const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
+    
+    // Dynamically filter committees based on COMMITTEES_INFO
+    const committeeGroups = {};
+    COMMITTEES_INFO.forEach(comm => {
+        committeeGroups[comm.id] = {
+            heads: sortedMembers.filter(m => isCat(m, "Committee") && hasTitle(m, "Head") && (m.specificTitle.includes(comm.id) || m.specificTitle.includes(comm.title))),
+            members: sortedMembers.filter(m => isCat(m, "Committee") && !hasTitle(m, "Head") && (m.specificTitle.includes(comm.id) || m.specificTitle.includes(comm.title)))
+        };
+    });
+
     return {
         tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")),
         tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")),
         tier3: sortedMembers.filter(m => !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")),
-        committees: { heads: sortedMembers.filter(m => isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => isCat(m, "Committee") && !hasTitle(m, "Head")) }
+        committees: committeeGroups 
     };
   }, [members]);
 
@@ -800,7 +814,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     let unsubProjects = () => {};
     if (isOfficer || isCommitteeHead) { unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); setProjects(data); }); }
     let unsubTasks = () => {};
-    if (isOfficer || isCommitteeHead) { unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); setTasks(data); }); }
+    // Fetch all tasks for officers/committee heads, or tasks assigned to the current user
+    const taskQuery = (isOfficer || isCommitteeHead) 
+        ? query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'))
+        : query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), where('assigneeId', '==', profile.memberId));
+
+    const unsubTasksListener = onSnapshot(taskQuery, (s) => { 
+        const data = s.docs.map(d => ({ id: d.id, ...d.data() })); 
+        setTasks(data); 
+    });
+
     let unsubLogs = () => {};
     if (isAdmin) { unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); setLogs(data); }); }
     const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); setPolls(data); });
@@ -810,7 +833,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
     const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => { if(s.exists()) { setLegacyContent(s.data()); const data = s.data(); setLegacyForm({ ...data, achievements: data.achievements || [], imageUrl: data.imageUrl || '', galleryUrl: data.galleryUrl || '', imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' } }); if (data.establishedDate) { const today = new Date(); const est = new Date(data.establishedDate); if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) { setIsAnniversary(true); } } } });
     const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => { if(s.exists()) { setMasterclassData(s.data()); } else { const initData = { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }; setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), initData); } });
-    return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); unsubProjects(); unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries(); if (unsubApps) unsubApps(); unsubUserApps(); };
+    return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); unsubProjects(); unsubTasksListener(); unsubLogs(); unsubPolls(); unsubSeries(); if (unsubApps) unsubApps(); unsubUserApps(); };
   }, [user, isAdmin, isOfficer, isCommitteeHead, profile.memberId]);
 
   const logAction = async (action, details) => { if (!profile) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), { action, details, actor: profile.name, actorId: profile.memberId, timestamp: serverTimestamp() }); } catch (err) { console.error("Logging failed:", err); } };
@@ -850,7 +873,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleUpdateGcashNumber = async () => { if (!newGcashNumber.trim()) return; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, gcashNumber: newGcashNumber }); logAction("Update GCash", newGcashNumber); setNewGcashNumber(''); alert("Updated"); } catch (err) {} };
   const handleApplyCommittee = async (e, targetCommittee) => { e.preventDefault(); if (isExpired) return alert("Renew membership to apply."); setSubmittingApp(true); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)); const snap = await getDocs(q); if(!snap.empty) { alert("Already applied."); setSubmittingApp(false); return; } await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), { memberId: profile.memberId, name: profile.name, email: profile.email, committee: targetCommittee, role: committeeForm.role, status: 'pending', createdAt: serverTimestamp(), statusUpdatedAt: serverTimestamp() }); alert("Submitted!"); } catch(err) {} finally { setSubmittingApp(false); } };
   
-  // --- PROJECT ACTIONS (Now includes Committee Heads) ---
   const handleCreateProject = async (e) => { 
       e.preventDefault(); 
       try { 
@@ -893,49 +915,29 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleDeleteProject = async (id) => {
       if(!confirm("Delete project and all tasks?")) return;
       try {
-          // Delete tasks first
           const tasksQuery = query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), where('projectId', '==', id));
           const tasksSnap = await getDocs(tasksQuery);
           const batch = writeBatch(db);
           tasksSnap.forEach(t => batch.delete(t.ref));
           await batch.commit();
-
           await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', id));
           logAction("Delete Project", id);
       } catch(e) {}
   };
 
-  // --- TASK ACTIONS (Updated with Assignment & Output) ---
   const handleAddTask = async (e) => { 
       e.preventDefault(); 
       if (!newTask.projectId) return alert("Task must belong to a project"); 
-      
       const assigneeData = members.find(m => m.memberId === newTask.assigneeId);
       const assigneeName = assigneeData ? assigneeData.name : '';
-
-      const taskPayload = { 
-        ...newTask, 
-        assigneeId: newTask.assigneeId || '',
-        assigneeName: assigneeName,
-        outputLink: newTask.outputLink || '',
-        outputCaption: newTask.outputCaption || ''
-      };
-
+      const taskPayload = { ...newTask, assigneeId: newTask.assigneeId || '', assigneeName: assigneeName, outputLink: newTask.outputLink || '', outputCaption: newTask.outputCaption || '' };
       try { 
           if (editingTask) { 
-              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTask.id), { 
-                  ...taskPayload, 
-                  lastEdited: serverTimestamp() 
-              }); 
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTask.id), { ...taskPayload, lastEdited: serverTimestamp() }); 
               logAction("Update Task", newTask.title); 
               setEditingTask(null); 
           } else { 
-              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), { 
-                  ...taskPayload, 
-                  createdBy: profile.memberId, 
-                  creatorName: profile.name, 
-                  createdAt: serverTimestamp() 
-              }); 
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), { ...taskPayload, createdBy: profile.memberId, creatorName: profile.name, createdAt: serverTimestamp() }); 
               logAction("Create Task", newTask.title); 
           } 
           setShowTaskForm(false); 
@@ -947,19 +949,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleDeleteTask = async (id) => { if(!confirm("Delete task?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', id)); logAction("Delete Task", id); } catch(err) {} };
   
   const handleEditTask = (task) => { 
-      setNewTask({ 
-          title: task.title, 
-          description: task.description, 
-          deadline: task.deadline, 
-          link: task.link, 
-          status: task.status, 
-          notes: task.notes || '', 
-          projectId: task.projectId,
-          assigneeId: task.assigneeId || '',
-          assigneeName: task.assigneeName || '',
-          outputLink: task.outputLink || '',
-          outputCaption: task.outputCaption || ''
-      }); 
+      setNewTask({ title: task.title, description: task.description, deadline: task.deadline, link: task.link, status: task.status, notes: task.notes || '', projectId: task.projectId, assigneeId: task.assigneeId || '', assigneeName: task.assigneeName || '', outputLink: task.outputLink || '', outputCaption: task.outputCaption || '' }); 
       setEditingTask(task); 
       setShowTaskForm(true); 
   };
@@ -1115,6 +1105,28 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              {/* Mobile Header */}
              <div className="md:hidden flex items-center justify-between mb-6"><button onClick={() => setMobileMenuOpen(true)} className="p-2 bg-[#3E2723] text-[#FDB813] rounded-xl"><Menu size={24}/></button><img src={getDirectLink(ORG_LOGO_URL)} className="w-8 h-8 object-contain" /></div>
 
+             {/* Header with Settings Access */}
+             <header className="flex justify-between items-center mb-10">
+                <div className="hidden md:block">
+                     <h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2>
+                     <p className="text-xs text-amber-600 font-bold uppercase tracking-widest">Official Member Portal</p>
+                </div>
+                
+                {/* Profile Widget linking to Settings */}
+                <div 
+                    onClick={() => setView('settings')}
+                    className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors ml-auto"
+                    title="Edit Profile"
+                >
+                    <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover" />
+                    <div className="hidden sm:block text-right">
+                        <p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || profile.name.split(' ')[0]}</p>
+                        <p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p>
+                    </div>
+                    <Settings2 size={16} className="text-gray-400"/>
+                </div>
+             </header>
+
              {view === 'home' && (
                 <div className="space-y-10 animate-fadeIn flex-1">
                     {/* UPDATED PROFILE CARD (Digital ID) */}
@@ -1261,15 +1273,23 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                          {teamStructure.tier3.map(m => (<div key={m.id} className="flex flex-col items-center"><div className="w-24 h-24 rounded-full bg-white mb-3 flex items-center justify-center text-2xl font-black text-amber-200 border-2 border-amber-100 overflow-hidden"><img src={getDirectLink(m.photoUrl)} className="w-full h-full object-cover"/></div><h4 className="font-bold text-sm text-gray-800 uppercase text-center leading-tight">{m.name}</h4><p className="text-[10px] text-gray-500 font-black uppercase mt-1">{m.specificTitle}</p></div>))}
                      </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
-                         {['Ways and Means', 'Membership', 'Secretariat', 'Finance', 'Audit', 'External Affairs', 'Academics', 'Logistics', 'Creative'].map(comm => {
-                             const heads = teamStructure.committees.heads.filter(m => m.specificTitle.includes(comm));
-                             const members = teamStructure.committees.members.filter(m => m.specificTitle.includes(comm));
-                             if (heads.length === 0 && members.length === 0) return null;
+                         {/* Corrected Committee List Rendering based on COMMITTEES_INFO */}
+                         {COMMITTEES_INFO.map(comm => {
+                             // Match members whose specific title includes the committee name (e.g., "Committee Member - Arts")
+                             // This is a simple string match. Ensure your data follows this convention.
+                             const heads = teamStructure.committees[comm.id].heads;
+                             const members = teamStructure.committees[comm.id].members;
+                             
+                             // Show committee card even if empty to show structure, or hide if preferred. Showing for now.
                              return (
-                                 <div key={comm} className="bg-white p-6 rounded-[32px] border border-amber-50">
-                                     <h5 className="font-black text-[#3E2723] uppercase mb-4 border-b pb-2 border-amber-100">{comm} Committee</h5>
-                                     {heads.map(h => (<div key={h.id} className="flex items-center gap-3 mb-4"><img src={getDirectLink(h.photoUrl) || `https://ui-avatars.com/api/?name=${h.name}`} className="w-10 h-10 rounded-full object-cover border-2 border-[#FDB813]"/><div><p className="font-bold text-xs uppercase">{h.name}</p><span className="text-[9px] bg-[#3E2723] text-white px-2 py-0.5 rounded-full">HEAD</span></div></div>))}
-                                     <ul className="space-y-2">{members.map(m => (<li key={m.id} className="text-xs text-gray-600 pl-2 border-l-2 border-gray-100">{m.name}</li>))}</ul>
+                                 <div key={comm.id} className="bg-white p-6 rounded-[32px] border border-amber-50">
+                                     <h5 className="font-black text-[#3E2723] uppercase mb-4 border-b pb-2 border-amber-100">{comm.title}</h5>
+                                     {heads.length > 0 && heads.map(h => (<div key={h.id} className="flex items-center gap-3 mb-4"><img src={getDirectLink(h.photoUrl) || `https://ui-avatars.com/api/?name=${h.name}`} className="w-10 h-10 rounded-full object-cover border-2 border-[#FDB813]"/><div><p className="font-bold text-xs uppercase">{h.name}</p><span className="text-[9px] bg-[#3E2723] text-white px-2 py-0.5 rounded-full">HEAD</span></div></div>))}
+                                     {members.length > 0 ? (
+                                        <ul className="space-y-2">{members.map(m => (<li key={m.id} className="text-xs text-gray-600 pl-2 border-l-2 border-gray-100">{m.name}</li>))}</ul>
+                                     ) : (
+                                        <p className="text-[10px] text-gray-400 italic">Recruiting members...</p>
+                                     )}
                                  </div>
                              );
                          })}
@@ -1422,6 +1442,19 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Head Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span></div>
                             <div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Comm Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span></div>
                             <div className="flex justify-between p-4 bg-white/5 rounded-2xl"><span className="text-[10px] font-black uppercase">Exempt Key</span><span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.exemptKey || "N/A"}</span></div>
+                        </div>
+                     </div>
+                     
+                     <div className="bg-white p-8 rounded-[40px] border-2 border-orange-100 shadow-sm">
+                        <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><RefreshCcw size={16}/> Manual Renewal</h4>
+                        <div className="grid grid-cols-2 gap-4 items-center">
+                             <div className="text-xs text-gray-500">
+                                 <p className="mb-2">Force renew current user (Debugging)</p>
+                                 <p className="font-mono bg-gray-100 p-1 rounded inline-block">{currentDailyKey}</p>
+                             </div>
+                             <div className="flex flex-col gap-2">
+                                <button onClick={handleMigrateToRenewal} className="p-3 bg-orange-100 text-orange-800 rounded-xl text-xs font-bold uppercase hover:bg-orange-200">Set All To Renewal</button>
+                             </div>
                         </div>
                      </div>
                  </div>
