@@ -2661,6 +2661,104 @@ ${window.location.origin}`;
           </div>
       )}
 
+      {/* Event Form Modal */}
+      {showEventForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-2xl w-full border-b-[8px] border-[#3E2723] h-[80vh] overflow-y-auto custom-scrollbar">
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'Create Event'}</h3>
+                <form onSubmit={handleAddEvent} className="space-y-4">
+                    <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} />
+                    <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">Start</label>
+                            <div className="flex gap-2">
+                                    <input type="date" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} />
+                                    <input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[10px] font-bold text-gray-500 uppercase">End</label>
+                            <div className="flex gap-2">
+                                    <input type="date" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} />
+                                    <input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs h-24" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} />
+                    
+                    {/* Toggles */}
+                    <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
+                            <input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/>
+                            Registration Required
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
+                            <input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/>
+                            Volunteer Event
+                        </label>
+                            <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer">
+                            <input type="checkbox" checked={newEvent.attendanceRequired} onChange={e => setNewEvent({...newEvent, attendanceRequired: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/>
+                            Attendance Check
+                        </label>
+                    </div>
+                    
+                    {/* Volunteer Specifics */}
+                    {newEvent.isVolunteer && (
+                        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                            <h4 className="text-xs font-black uppercase text-amber-800 mb-2">Volunteer Shifts</h4>
+                                <div className="flex gap-2 mb-2">
+                                <input type="date" className="p-2 border rounded-lg text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
+                                <select className="p-2 border rounded-lg text-xs" value={tempShift.type} onChange={e => setTempShift({...tempShift, type: e.target.value})}>
+                                    <option value="WHOLE_DAY">Whole Day</option>
+                                    <option value="SHIFT">Specific Time</option>
+                                </select>
+                                {tempShift.type === 'SHIFT' && <input type="text" placeholder="e.g. AM Shift" className="p-2 border rounded-lg text-xs w-20" value={tempShift.name} onChange={e => setTempShift({...tempShift, name: e.target.value})} />}
+                                <input type="number" placeholder="Cap" className="p-2 border rounded-lg text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} />
+                                <button type="button" onClick={addShift} className="bg-amber-600 text-white px-3 rounded-lg text-xs font-bold">+</button>
+                                </div>
+                                <div className="space-y-1">
+                                {newEvent.shifts.map((s, i) => (
+                                    <div key={i} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-amber-200">
+                                        <span>{s.date} - {s.session} (Max: {s.capacity})</span>
+                                        <button type="button" onClick={() => removeShift(s.id)} className="text-red-500 font-bold">x</button>
+                                    </div>
+                                ))}
+                                </div>
+                        </div>
+                    )}
+
+                    <input type="text" placeholder="Evaluation Link (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} />
+
+                    <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={() => { setShowEventForm(false); setEditingEvent(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                        <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">{editingEvent ? 'Update' : 'Create'}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* Announcement Form Modal */}
+      {showAnnounceForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]">
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingAnnouncement ? 'Edit Notice' : 'Post Notice'}</h3>
+                <form onSubmit={handlePostAnnouncement} className="space-y-4">
+                    <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} />
+                    <textarea placeholder="Content" required className="w-full p-3 border rounded-xl text-xs h-32" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} />
+                    
+                    <div className="flex gap-3 pt-2">
+                        <button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                        <button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">{editingAnnouncement ? 'Update' : 'Post'}</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
       {/* FIXED STRUCTURE: Flex column for the page, then nested flex row for layout */}
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden relative">
           <aside className={`
@@ -3389,10 +3487,16 @@ ${window.location.origin}`;
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
                         {isAdmin && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
                     </div>
-                    {/* ... (Announce Form and List) ... */}
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {announcements.map(ann => (
                             <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-100 shadow-sm relative group">
+                                {isAdmin && (
+                                    <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => handleEditAnnouncement(ann)} className="bg-white/50 p-2 rounded-full text-amber-600 hover:bg-white hover:text-amber-800 transition-colors"><Pen size={14}/></button>
+                                        <button onClick={() => handleDeleteAnnouncement(ann.id)} className="bg-white/50 p-2 rounded-full text-red-400 hover:bg-white hover:text-red-600 transition-colors"><Trash2 size={14}/></button>
+                                    </div>
+                                )}
                                 <span className="inline-block bg-[#FDB813] px-3 py-1 rounded-full text-[10px] font-black uppercase text-[#3E2723] mb-4">{formatDate(ann.date)}</span>
                                 <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3">{ann.title}</h4>
                                 <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
@@ -3522,16 +3626,31 @@ ${window.location.origin}`;
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {COMMITTEES_INFO.map(c => (
-                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
-                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
+                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full">
+                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden shrink-0">
                                      {/* CHANGED: Removed filters entirely for original color */}
                                     <img src={c.image} className="w-full h-full object-cover" alt={c.title} />
                                 </div>
                                 <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
-                                <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                <div className="flex gap-2">
-                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="flex-1 py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Count Me In</button>
-                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Head' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="px-4 py-3 bg-white border border-[#3E2723] text-[#3E2723] rounded-xl font-black uppercase text-xs hover:bg-amber-50 disabled:opacity-50">Apply Head</button>
+                                <p className="text-xs text-gray-600 mb-6 leading-relaxed">{c.description}</p>
+                                
+                                {/* Roles & Responsibilities Section */}
+                                <div className="mb-6 bg-amber-50 p-4 rounded-2xl border border-amber-100 flex-1">
+                                    <p className="text-[10px] font-black uppercase text-amber-800 mb-3 flex items-center gap-2">
+                                        <Briefcase size={12}/> Roles & Responsibilities
+                                    </p>
+                                    <ul className="space-y-2">
+                                        {c.roles.map((role, idx) => (
+                                            <li key={idx} className="text-[10px] text-gray-700 font-medium flex items-start gap-2">
+                                                <span className="text-amber-500 mt-0.5">•</span> {role}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                <div className="flex gap-2 mt-auto">
+                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="flex-1 py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Apply as Member</button>
+                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Head' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="px-4 py-3 bg-white border border-[#3E2723] text-[#3E2723] rounded-xl font-black uppercase text-xs hover:bg-amber-50 disabled:opacity-50">Apply as Head</button>
                                 </div>
                             </div>
                         ))}
@@ -3718,10 +3837,15 @@ ${window.location.origin}`;
                                         <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
                                         <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                                         
-                                        {/* COMMITTEE SUB-TOGGLE */}
+                                        {/* COMMITTEE SUB-TOGGLE - Allows assigning specific committee to members marked as 'Committee' */}
                                         {m.positionCategory === 'Committee' && (
-                                            <select className="bg-indigo-50 text-indigo-900 text-[8px] font-black p-1 rounded outline-none w-32" value={m.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}>
-                                                <option value="">Select Committee</option>
+                                            <select 
+                                                className="bg-indigo-50 border border-indigo-100 text-indigo-900 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-2 focus:ring-indigo-200" 
+                                                value={m.committee || ""} 
+                                                onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} 
+                                                disabled={!isAdmin}
+                                            >
+                                                <option value="">Select Team...</option>
                                                 {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                                             </select>
                                         )}
