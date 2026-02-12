@@ -80,25 +80,32 @@ const DEFAULT_MASTERCLASS_MODULES = [
 
 const COMMITTEES_INFO = [
   { 
-    id: "Arts Committee", 
+    id: "Arts", 
     title: "Arts & Design", 
     image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80",
-    description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction for major events.",
-    roles: ["Create event pubmats & posters", "Design merchandise & t-shirts", "Execute venue styling & decoration"]
+    description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.",
+    roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"]
   },
   { 
-    id: "PR Committee", 
-    title: "Public Relations", 
-    image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", 
-    description: "The voice of the association. We manage social media presence, student engagement, and external communications.",
-    roles: ["Manage social media pages", "Write engaging captions & copies", "Coordinate with external partners"]
+    id: "Media", 
+    title: "Media & Documentation", 
+    image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80", 
+    description: "Capturing the moments. We handle photography, videography, and highlights of every event.",
+    roles: ["Photography", "Videography", "Editing"]
   },
   { 
-    id: "Events Committee", 
+    id: "Events", 
     title: "Events & Logistics", 
     image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80",
-    description: "The backbone of operations. We plan flows, manage logistics, and ensure every LBA gathering runs smoothly.",
-    roles: ["Plan detailed event programs", "Coordinate with venues & suppliers", "Manage on-the-day flow & crowd control"]
+    description: "The backbone of operations. We plan flows, manage logistics, and ensure smooth gatherings.",
+    roles: ["Program Flow", "Logistics", "Crowd Control"]
+  },
+  {
+    id: "PR",
+    title: "Public Relations",
+    image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80",
+    description: "The voice of the association. We manage social media, engagement, and external partners.",
+    roles: ["Social Media", "Copywriting", "External Partnerships"]
   }
 ];
 
@@ -277,6 +284,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   const [birthMonth, setBirthMonth] = useState('');
   const [birthDay, setBirthDay] = useState('');
   const [inputKey, setInputKey] = useState('');
+  const [registerCommittee, setRegisterCommittee] = useState(''); // New state for committee selection during registration
   const [paymentMethod, setPaymentMethod] = useState(''); 
   const [refNo, setRefNo] = useState('');
   const [cashOfficerKey, setCashOfficerKey] = useState('');
@@ -408,6 +416,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                             birthDay: parseInt(birthDay),
                             positionCategory: pc, 
                             specificTitle: st, 
+                            committee: registerCommittee, // Save selected committee
                             memberId: assignedId, 
                             role, 
                             status: 'active', 
@@ -601,7 +610,16 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 
               <input type="password" required placeholder="Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={password} onChange={(e) => setPassword(e.target.value)} />
               <input type="password" required placeholder="Confirm Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-              <input type="text" placeholder="Leader Key (Optional)" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold uppercase" value={inputKey} onChange={(e) => setInputKey(e.target.value.toUpperCase())} />
+              
+              <div className="space-y-2">
+                  <input type="text" placeholder="Leader Key (Optional)" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold uppercase" value={inputKey} onChange={(e) => setInputKey(e.target.value.toUpperCase())} />
+                  {inputKey && (
+                      <select className="w-full p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={registerCommittee} onChange={(e) => setRegisterCommittee(e.target.value)}>
+                          <option value="">Select Committee (If Applicable)</option>
+                          {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                      </select>
+                  )}
+              </div>
             </div>
           )}
           {authMode === 'payment' && (
@@ -878,7 +896,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Team Hierarchy Filtering
   const teamStructure = useMemo(() => {
-    if (!members) return { tier1: [], tier2: [], tier3: [], committees: { heads: [], members: [] } };
+    if (!members) return { tier1: [], tier2: [], tier3: [], committees: {} };
     
     const sortedMembers = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
     
@@ -886,16 +904,27 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
     const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
 
+    const committeesMap = {};
+    COMMITTEES_INFO.forEach(c => {
+        committeesMap[c.id] = {
+            heads: sortedMembers.filter(m => m.committee === c.id && isCat(m, "Committee") && hasTitle(m, "Head")),
+            members: sortedMembers.filter(m => m.committee === c.id && isCat(m, "Committee") && !hasTitle(m, "Head"))
+        };
+    });
+
+    // Catch-all for those with "Committee" category but no specific committee assigned
+    committeesMap['Unassigned'] = {
+        heads: sortedMembers.filter(m => !m.committee && isCat(m, "Committee") && hasTitle(m, "Head")),
+        members: sortedMembers.filter(m => !m.committee && isCat(m, "Committee") && !hasTitle(m, "Head"))
+    };
+
     return {
         tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")),
         tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")),
         tier3: sortedMembers.filter(m => 
             !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")
         ),
-        committees: {
-            heads: sortedMembers.filter(m => isCat(m, "Committee") && hasTitle(m, "Head")),
-            members: sortedMembers.filter(m => isCat(m, "Committee") && !hasTitle(m, "Head"))
-        }
+        committees: committeesMap
     };
   }, [members]);
 
@@ -1775,7 +1804,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
           if (type === 'accepted') {
               const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId);
+              // Automagically update the member's profile
               batch.update(memberRef, {
+                  positionCategory: 'Committee',
+                  specificTitle: app.role, // e.g. "Committee Head" or "Committee Member"
+                  committee: app.committee, // e.g. "Arts"
                   accolades: arrayUnion(`${app.committee} - ${app.role}`)
               });
           }
@@ -2190,16 +2223,7 @@ ${window.location.origin}`;
   }, [members, searchQuery, sortConfig]);
 
   // Pagination Logic
-  const totalPages = Math.ceil(filteredRegistry.length / itemsPerPage);
-  const paginatedRegistry = filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const nextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
-  const prevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
-
-
-  const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
-  const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
-
-  const handleUpdatePosition = async (targetId, cat, specific = "") => {
+  const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => {
     if (!isAdmin) return; // RESTRICTED: Only Admins (Officer/Execomm) can update positions
     const target = members.find(m => m.memberId === targetId);
     if (!target) return;
@@ -2208,7 +2232,16 @@ ${window.location.origin}`;
     const isL = ['Officer', 'Execomm', 'Committee'].includes(cat);
     const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId;
     newId = baseId + (isL ? 'C' : '');
-    const updates = { positionCategory: cat, specificTitle: specific || cat, memberId: newId, role: ['Officer', 'Execomm'].includes(cat) ? 'admin' : 'member', paymentStatus: isL ? 'exempt' : target.paymentStatus };
+    
+    const updates = { 
+        positionCategory: cat, 
+        specificTitle: specific || cat, 
+        committee: committee, // Update committee field
+        memberId: newId, 
+        role: ['Officer', 'Execomm'].includes(cat) ? 'admin' : 'member', 
+        paymentStatus: isL ? 'exempt' : target.paymentStatus 
+    };
+    
     if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId));
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates });
   };
@@ -2955,7 +2988,7 @@ ${window.location.origin}`;
                                 <div className="flex flex-col items-center gap-1">
                                     <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
                                         <div className="text-2xl mb-1">☕</div>
-                                        <span className="text-[6px] font-black uppercase text-amber-900/60 leading-tight">Member</span>
+                                        <span className="text-[8px] font-black uppercase text-amber-900/60 leading-none">Member</span>
                                     </div>
                                 </div>
                                 
@@ -2964,7 +2997,7 @@ ${window.location.origin}`;
                                     <div className="flex flex-col items-center gap-1">
                                         <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
                                             <div className="text-2xl mb-1">🛡️</div>
-                                            <span className="text-[6px] font-black uppercase text-indigo-900/60 leading-tight">Officer</span>
+                                            <span className="text-[8px] font-black uppercase text-indigo-900/60 leading-none">Officer</span>
                                         </div>
                                     </div>
                                 )}
@@ -2974,7 +3007,7 @@ ${window.location.origin}`;
                                     <div className="flex flex-col items-center gap-1">
                                         <div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
                                             <div className="text-2xl mb-1">🎗️</div>
-                                            <span className="text-[6px] font-black uppercase text-pink-900/60 leading-tight">Comm.</span>
+                                            <span className="text-[8px] font-black uppercase text-pink-900/60 leading-none">Comm.</span>
                                         </div>
                                     </div>
                                 )}
@@ -2984,7 +3017,7 @@ ${window.location.origin}`;
                                     <div className="flex flex-col items-center gap-1">
                                         <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
                                             <div className="text-2xl mb-1">🏅</div>
-                                            <span className="text-[6px] font-black uppercase text-yellow-900/60 leading-tight">Veteran</span>
+                                            <span className="text-[8px] font-black uppercase text-yellow-900/60 leading-none">Veteran</span>
                                         </div>
                                     </div>
                                 )}
@@ -3002,9 +3035,9 @@ ${window.location.origin}`;
                                             const bgColor = tier.color.split(' ')[0] || 'bg-gray-100';
 
                                             return (
-                                                <div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square ${bgColor} rounded-2xl flex flex-col items-center justify-center text-center p-1`}>
-                                                    <div className="text-2xl mb-1">{tier.icon}</div>
-                                                    <span className={`text-[6px] font-black uppercase ${textColor} leading-tight`}>{tier.label}</span>
+                                                <div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square ${bgColor} rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2`}>
+                                                    <div className="text-2xl md:text-3xl mb-1">{tier.icon}</div>
+                                                    <span className={`text-[8px] md:text-[10px] font-black uppercase ${textColor} leading-none tracking-tight`}>{tier.label}</span>
                                                 </div>
                                             );
                                         })()}
@@ -3025,9 +3058,9 @@ ${window.location.origin}`;
                                             
                                             myBadges.push(
                                                 <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
-                                                    <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 border border-green-100">
-                                                        <div className="text-2xl mb-1">{iconToUse}</div>
-                                                        <span className="text-[6px] font-black uppercase text-green-800 text-center leading-tight">{short}</span>
+                                                    <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 border border-green-100">
+                                                        <div className="text-2xl md:text-3xl mb-1">{iconToUse}</div>
+                                                        <span className="text-[8px] md:text-[10px] font-black uppercase text-green-800 text-center leading-none tracking-tighter line-clamp-2">{short}</span>
                                                     </div>
                                                 </div>
                                             );
@@ -3036,9 +3069,9 @@ ${window.location.origin}`;
                                     if (completedCount === 5) {
                                         myBadges.unshift(
                                             <div key="mc-master" className="flex flex-col items-center gap-1">
-                                                <div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 shadow-lg border-2 border-white">
-                                                    <div className="text-2xl mb-1">🎓</div>
-                                                    <span className="text-[6px] font-black uppercase text-amber-900 leading-tight">Master</span>
+                                                <div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 shadow-lg border-2 border-white">
+                                                    <div className="text-2xl md:text-3xl mb-1">🎓</div>
+                                                    <span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900 leading-none">Master</span>
                                                 </div>
                                             </div>
                                         );
@@ -3049,9 +3082,9 @@ ${window.location.origin}`;
                                 {/* Added Custom Accolades */}
                                 {profile.accolades?.map((acc, i) => (
                                     <div key={i} className="flex flex-col items-center gap-1">
-                                        <div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
-                                            <div className="text-2xl mb-1">🏆</div>
-                                            <span className="text-[6px] font-black uppercase text-purple-900/60 leading-tight line-clamp-2">{acc}</span>
+                                        <div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🏆</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-purple-900/60 leading-none line-clamp-2 tracking-tight">{acc}</span>
                                         </div>
                                     </div>
                                 ))}
@@ -3272,21 +3305,47 @@ ${window.location.origin}`;
                         </div>
                     )}
 
-                    <div className="border-t border-amber-100 pt-12">
-                        <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Heads</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
-                            {teamStructure.committees.heads.map(m => <MemberCard key={m.id} m={m} />)}
-                        </div>
-                    </div>
+                    <div className="border-t border-amber-100 pt-12 space-y-16">
+                        {COMMITTEES_INFO.map(c => {
+                            const group = teamStructure.committees[c.id];
+                            if (!group || (group.heads.length === 0 && group.members.length === 0)) return null;
 
-                    {teamStructure.committees.members.length > 0 && (
-                        <div className="border-t border-amber-100 pt-12">
-                            <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Members</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
-                                {teamStructure.committees.members.map(m => <MemberCard key={m.id} m={m} />)}
+                            return (
+                                <div key={c.id}>
+                                    <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h3>
+                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-8">{c.description}</p>
+                                    
+                                    {group.heads.length > 0 && (
+                                        <div className="mb-8">
+                                            <span className="bg-amber-100 text-amber-800 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Heads</span>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center mt-6">
+                                                {group.heads.map(m => <MemberCard key={m.id} m={m} />)}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {group.members.length > 0 && (
+                                        <div>
+                                            <span className="bg-gray-100 text-gray-600 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Members</span>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center mt-6">
+                                                {group.members.map(m => <MemberCard key={m.id} m={m} />)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Unassigned Section */}
+                        {(teamStructure.committees['Unassigned']?.heads.length > 0 || teamStructure.committees['Unassigned']?.members.length > 0) && (
+                             <div>
+                                <h3 className="font-serif text-2xl font-black uppercase text-gray-400 mb-8">General Committee</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+                                    {[...teamStructure.committees['Unassigned'].heads, ...teamStructure.committees['Unassigned'].members].map(m => <MemberCard key={m.id} m={m} />)}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -3461,7 +3520,7 @@ ${window.location.origin}`;
                         </div>
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {COMMITTEES_INFO.map(c => (
                             <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
                                 <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
@@ -3470,7 +3529,10 @@ ${window.location.origin}`;
                                 </div>
                                 <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
                                 <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Apply Now</button>
+                                <div className="flex gap-2">
+                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="flex-1 py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Count Me In</button>
+                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Head' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="px-4 py-3 bg-white border border-[#3E2723] text-[#3E2723] rounded-xl font-black uppercase text-xs hover:bg-amber-50 disabled:opacity-50">Apply Head</button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -3653,8 +3715,16 @@ ${window.location.origin}`;
                                 </td>
                                 <td className="text-center">
                                     <div className="flex flex-col gap-1 items-center">
-                                        <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                        <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                        <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                        <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                        
+                                        {/* COMMITTEE SUB-TOGGLE */}
+                                        {m.positionCategory === 'Committee' && (
+                                            <select className="bg-indigo-50 text-indigo-900 text-[8px] font-black p-1 rounded outline-none w-32" value={m.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}>
+                                                <option value="">Select Committee</option>
+                                                {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                            </select>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="text-right p-4">
@@ -3819,7 +3889,143 @@ ${window.location.origin}`;
                       </div>
                   </div>
             
-                  <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs hidden">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Profile Details Form */}
+                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
+                          <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2">
+                              <User size={20} className="text-amber-500"/> Personal Details
+                          </h4>
+                          <form onSubmit={handleUpdateProfile} className="space-y-4">
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
+                                  <input 
+                                      type="text" 
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase"
+                                      value={settingsForm.name || ''}
+                                      onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})}
+                                      placeholder="LAST, FIRST MI."
+                                  />
+                              </div>
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nickname / Display Name</label>
+                                  <input 
+                                      type="text" 
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                      value={settingsForm.nickname || ''}
+                                      onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})}
+                                      placeholder="How should we call you?"
+                                  />
+                              </div>
+
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address</label>
+                                  <input 
+                                      type="email" 
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                      value={settingsForm.email || ''}
+                                      onChange={e => setSettingsForm({...settingsForm, email: e.target.value})}
+                                      placeholder="email@example.com"
+                                  />
+                              </div>
+                              
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Profile Photo URL</label>
+                                  <input 
+                                      type="text" 
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                      value={settingsForm.photoUrl || ''}
+                                      onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})}
+                                      placeholder="https://..."
+                                  />
+                                  <p className="text-[9px] text-gray-400 mt-1 ml-1">Paste a direct link to an image (Google Drive/Photos links supported).</p>
+                              </div>
+            
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Month</label>
+                                      <select 
+                                          className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                          value={settingsForm.birthMonth || ''}
+                                          onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}
+                                      >
+                                          <option value="">Month</option>
+                                          {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                      </select>
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Day</label>
+                                      <input 
+                                          type="number" 
+                                          min="1" max="31"
+                                          className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                          value={settingsForm.birthDay || ''}
+                                          onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})}
+                                      />
+                                  </div>
+                              </div>
+            
+                              <div className="pt-4">
+                                  <button 
+                                      type="submit" 
+                                      disabled={savingSettings}
+                                      className="w-full py-4 bg-[#3E2723] text-[#FDB813] rounded-2xl font-black uppercase text-xs hover:bg-black transition-colors disabled:opacity-50"
+                                  >
+                                      {savingSettings ? "Saving..." : "Update Profile"}
+                                  </button>
+                              </div>
+                          </form>
+                      </div>
+                      
+                       {/* Security Form */}
+                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
+                          <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2">
+                              <Lock size={20} className="text-red-500"/> Security
+                          </h4>
+                          <form onSubmit={handleChangePassword} className="space-y-4">
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Current Password</label>
+                                  <input 
+                                      type="password" 
+                                      required
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                      value={passwordForm.current}
+                                      onChange={e => setPasswordForm({...passwordForm, current: e.target.value})}
+                                  />
+                              </div>
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">New Password</label>
+                                  <input 
+                                      type="password" 
+                                      required
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                      value={passwordForm.new}
+                                      onChange={e => setPasswordForm({...passwordForm, new: e.target.value})}
+                                  />
+                              </div>
+                              <div>
+                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Confirm New Password</label>
+                                  <input 
+                                      type="password" 
+                                      required
+                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
+                                      value={passwordForm.confirm}
+                                      onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})}
+                                  />
+                              </div>
+            
+                              <div className="pt-4">
+                                  <button 
+                                      type="submit" 
+                                      className="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase text-xs hover:bg-red-600 transition-colors"
+                                  >
+                                      Change Password
+                                  </button>
+                              </div>
+                          </form>
+                      </div>
+                  </div>
+
+                  <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs">
                       <p>Member ID: <span className="font-mono text-white font-bold">{profile.memberId}</span></p>
                       <p className="mt-2">Need help with your account? Contact the PR Committee.</p>
                   </div>
