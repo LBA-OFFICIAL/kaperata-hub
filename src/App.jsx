@@ -71,11 +71,11 @@ const MONTHS = [
 ];
 
 const DEFAULT_MASTERCLASS_MODULES = [
-    { id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" },
-    { id: 2, title: "Equipment Familiarization", short: "Equipment" },
-    { id: 3, title: "Manual Brewing", short: "Brewing" },
+    { id: 1, title: "Basic Coffee Knowledge & History", short: "Bean-ginnings" },
+    { id: 2, title: "Equipment Familiarization", short: "Tools & Trades" },
+    { id: 3, title: "Manual Brewing", short: "Brew-ology" },
     { id: 4, title: "Espresso Machine", short: "Espresso" },
-    { id: 5, title: "Signature Beverage (Advanced)", short: "Sig Bev" }
+    { id: 5, title: "Signature Beverage (Advanced)", short: "Innovation" }
 ];
 
 const COMMITTEES_INFO = [
@@ -2890,12 +2890,12 @@ ${window.location.origin}`;
                                     return (
                                         <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
                                             <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
-                                            <span className="text-xs font-black">{day}</span>
-                                            <span className="text-[8px] uppercase">{month}</span>
+                                                <span className="text-xs font-black">{day}</span>
+                                                <span className="text-[8px] uppercase">{month}</span>
                                             </div>
                                             <div className="min-w-0">
-                                            <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
-                                            <p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p>
+                                                <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
+                                                <p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p>
                                             </div>
                                         </div>
                                     );
@@ -2994,7 +2994,7 @@ ${window.location.origin}`;
                                     if (completedCount === 5) {
                                         myBadges.unshift(
                                             <div key="mc-master" className="flex flex-col items-center gap-1">
-                                                <div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-500 rounded-2xl flex flex-col items-center justify-center text-center p-1 shadow-lg border-2 border-white">
+                                                <div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 shadow-lg border-2 border-white">
                                                     <div className="text-2xl mb-1">🎓</div>
                                                     <span className="text-[6px] font-black uppercase text-amber-900 leading-tight">Master</span>
                                                 </div>
@@ -3727,70 +3727,6 @@ ${window.location.origin}`;
                             </div>
                         </div>
                     </div>
-
-                    {/* FINANCIAL SETTINGS */}
-                    <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                        <h4 className="font-black uppercase text-sm mb-4">Financial Settings</h4>
-                        <div className="flex gap-2 items-center">
-                            <input 
-                                type="text" 
-                                placeholder="Update GCash Number (e.g. 09xxxxxxxxx)" 
-                                className="flex-1 p-3 border rounded-xl text-xs font-bold"
-                                value={newGcashNumber}
-                                onChange={(e) => setNewGcashNumber(e.target.value)}
-                            />
-                            <button onClick={handleUpdateGcashNumber} className="bg-[#3E2723] text-white px-4 py-3 rounded-xl font-black uppercase text-xs">Update</button>
-                        </div>
-                        <p className="text-[9px] text-gray-400 mt-2">Current System Number: +63{hubSettings.gcashNumber || '9063751402'}</p>
-                    </div>
-
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                            <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
-                            {/* ... Financial Reports UI ... */}
-                            <div className="flex gap-2 mb-4">
-                                <select className="flex-1 p-3 bg-gray-50 rounded-xl text-xs font-bold outline-none" value={financialFilter} onChange={e => setFinancialFilter(e.target.value)}>
-                                    <option value="all">All Semesters</option>
-                                    {semesterOptions.map(s => <option key={s} value={s}>{s}</option>)}
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 mb-4">
-                                <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase">Cash</p>
-                                    <p className="text-lg font-black text-gray-700">{financialStats.cashCount}</p>
-                                </div>
-                                <div className="p-3 bg-gray-50 rounded-xl text-center">
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase">GCash</p>
-                                    <p className="text-lg font-black text-gray-700">{financialStats.gcashCount}</p>
-                                </div>
-                            </div>
-                            <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2">
-                                <FileBarChart size={14}/> Download Report
-                            </button>
-                        </div>
-                        <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
-                            {/* ... Security Vault ... */}
-                            <h4 className="font-serif text-2xl font-black uppercase mb-6 text-[#FDB813]">Security Vault</h4>
-                            <div className="space-y-2">
-                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                    <span className="text-[10px] font-black uppercase">Officer Key</span>
-                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.officerKey || "N/A"}</span>
-                                </div>
-                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                    <span className="text-[10px] font-black uppercase">Head Key</span>
-                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.headKey || "N/A"}</span>
-                                </div>
-                                <div className="flex justify-between p-4 bg-white/5 rounded-2xl">
-                                    <span className="text-[10px] font-black uppercase">Comm Key</span>
-                                    <span className="font-mono text-xl font-black text-[#FDB813]">{secureKeys?.commKey || "N/A"}</span>
-                                </div>
-                            </div>
-                            <button onClick={handleRotateSecurityKeys} className="w-full mt-4 bg-red-500 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Rotate Keys</button>
-                            <button onClick={handleSanitizeDatabase} className="w-full mt-4 bg-yellow-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2"><Database size={14}/> Sanitize Database</button>
-                            <button onClick={handleMigrateToRenewal} className="w-full mt-4 bg-orange-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Migrate: Set All to Renewal</button>
-                            <button onClick={handleRecoverLostData} className="w-full mt-4 bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] flex items-center justify-center gap-2">Recover Lost Members (Collision Fix)</button>
-                        </div>
-                    </div>
                     {/* ... Committee Apps ... */}
                     <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
                         <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
@@ -3841,147 +3777,44 @@ ${window.location.origin}`;
                       </div>
                   </div>
             
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      {/* Profile Details Form */}
-                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
-                          <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2">
-                              <User size={20} className="text-amber-500"/> Personal Details
-                          </h4>
-                          <form onSubmit={handleUpdateProfile} className="space-y-4">
-                              {/* ... (Name fields) ... */}
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label>
-                                  <input 
-                                      type="text" 
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase"
-                                      value={settingsForm.name || ''}
-                                      onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})}
-                                      placeholder="LAST, FIRST MI."
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nickname / Display Name</label>
-                                  <input 
-                                      type="text" 
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={settingsForm.nickname || ''}
-                                      onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})}
-                                      placeholder="How should we call you?"
-                                  />
-                              </div>
-
-                              {/* NEW: Email Field */}
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address</label>
-                                  <input 
-                                      type="email" 
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={settingsForm.email || ''}
-                                      onChange={e => setSettingsForm({...settingsForm, email: e.target.value})}
-                                      placeholder="email@example.com"
-                                  />
-                              </div>
-                              
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Profile Photo URL</label>
-                                  <input 
-                                      type="text" 
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={settingsForm.photoUrl || ''}
-                                      onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})}
-                                      placeholder="https://..."
-                                  />
-                                  <p className="text-[9px] text-gray-400 mt-1 ml-1">Paste a direct link to an image (Google Drive/Photos links supported).</p>
-                              </div>
-            
-                              <div className="grid grid-cols-2 gap-4">
-                                  <div>
-                                      <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Month</label>
-                                      <select 
-                                          className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                          value={settingsForm.birthMonth || ''}
-                                          onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}
-                                      >
-                                          <option value="">Month</option>
-                                          {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                                      </select>
-                                  </div>
-                                  <div>
-                                      <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Day</label>
-                                      <input 
-                                          type="number" 
-                                          min="1" max="31"
-                                          className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                          value={settingsForm.birthDay || ''}
-                                          onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})}
-                                      />
-                                  </div>
-                              </div>
-            
-                              <div className="pt-4">
-                                  <button 
-                                      type="submit" 
-                                      disabled={savingSettings}
-                                      className="w-full py-4 bg-[#3E2723] text-[#FDB813] rounded-2xl font-black uppercase text-xs hover:bg-black transition-colors disabled:opacity-50"
-                                  >
-                                      {savingSettings ? "Saving..." : "Update Profile"}
-                                  </button>
-                              </div>
-                          </form>
-                      </div>
-                      
-                       {/* Security Form */}
-                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
-                          <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2">
-                              <Lock size={20} className="text-red-500"/> Security
-                          </h4>
-                          <form onSubmit={handleChangePassword} className="space-y-4">
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Current Password</label>
-                                  <input 
-                                      type="password" 
-                                      required
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={passwordForm.current}
-                                      onChange={e => setPasswordForm({...passwordForm, current: e.target.value})}
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">New Password</label>
-                                  <input 
-                                      type="password" 
-                                      required
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={passwordForm.new}
-                                      onChange={e => setPasswordForm({...passwordForm, new: e.target.value})}
-                                  />
-                              </div>
-                              <div>
-                                  <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Confirm New Password</label>
-                                  <input 
-                                      type="password" 
-                                      required
-                                      className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm"
-                                      value={passwordForm.confirm}
-                                      onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})}
-                                  />
-                              </div>
-            
-                              <div className="pt-4">
-                                  <button 
-                                      type="submit" 
-                                      className="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase text-xs hover:bg-red-600 transition-colors"
-                                  >
-                                      Change Password
-                                  </button>
-                              </div>
-                          </form>
-                      </div>
-                  </div>
-            
-                  <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs">
+                  <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs hidden">
                       <p>Member ID: <span className="font-mono text-white font-bold">{profile.memberId}</span></p>
                       <p className="mt-2">Need help with your account? Contact the PR Committee.</p>
+                  </div>
+
+                  {/* Digital ID Card */}
+                  <div className="mt-8 relative overflow-hidden rounded-[32px] bg-[#3E2723] text-[#FDB813] p-8 shadow-2xl border-4 border-[#FDB813] max-w-md mx-auto transform transition-all hover:scale-[1.02]">
+                    <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                    
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                        <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA Logo" className="w-24 h-24 object-contain mb-4 drop-shadow-md" />
+                        <h2 className="font-serif text-3xl font-black uppercase tracking-widest mb-1">LPU Baristas</h2>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-80 mb-6">Official Membership ID</p>
+                        
+                        <div className="w-full bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 mb-6">
+                            <h3 className="font-black text-2xl uppercase text-white mb-1">{profile.name}</h3>
+                            <p className="font-mono text-lg text-[#FDB813] tracking-wider">{profile.memberId}</p>
+                            <p className="text-[10px] font-bold uppercase text-white/60 mt-2">{profile.specificTitle}</p>
+                        </div>
+
+                        <div className="flex items-center gap-4 w-full">
+                            <div className={`flex-1 py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 ${
+                                profile.status === 'active' ? 'bg-green-500/20 border-green-500 text-green-400' : 
+                                profile.status === 'expired' ? 'bg-red-500/20 border-red-500 text-red-400' :
+                                'bg-gray-500/20 border-gray-500 text-gray-400'
+                            }`}>
+                                {profile.status === 'active' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
+                                {profile.status === 'active' ? 'Active Status' : profile.status}
+                            </div>
+                            {profile.status === 'active' && (
+                                <div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg">
+                                    <Coffee size={14}/> 10% Off B'Cafe
+                                </div>
+                            )}
+                        </div>
+                        
+                        <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} • Non-Transferable</p>
+                    </div>
                   </div>
               </div>
             )}
@@ -4024,5 +3857,3 @@ export default function App() {
 
     return <Dashboard user={user} profile={profile} setProfile={setProfile} logout={logout} />;
 }
-
-
