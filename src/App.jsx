@@ -6,7 +6,7 @@ import {
 import { 
   getFirestore, collection, query, where, onSnapshot, doc, setDoc, 
   updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, 
-  orderBy, writeBatch, arrayUnion, arrayRemove, runTransaction
+  orderBy, writeBatch, arrayUnion, arrayRemove, runTransaction, deleteField
 } from 'firebase/firestore'; 
 import { 
   Users, Calendar, Award, Bell, LogOut, Home, Plus, 
@@ -70,11 +70,46 @@ const MONTHS = [
 ];
 
 const DEFAULT_MASTERCLASS_MODULES = [
-    { id: 1, title: "Foundation: Coffee History & Knowledge", short: "Basics" },
-    { id: 2, title: "Hardware: Equipment Familiarization", short: "Equipment" },
-    { id: 3, title: "Brewing: Manual Methods", short: "Brewing" },
-    { id: 4, title: "Barista: Espresso Machine", short: "Espresso" },
-    { id: 5, title: "Mastery: Signature Beverage", short: "Sig Bev" }
+    { 
+        id: 1, 
+        title: "BEAN-GINNINGS: A Journey Through Coffee's Roots", 
+        short: "Bean-ginnings",
+        icon: "🌱",
+        objective: "To introduce participants to the origins, characteristics, and evolution of coffee — enabling them to understand its agricultural, cultural, and scientific foundations essential to professional barista practice.",
+        topics: "Coffee History\nThe Coffee Belt and Altitude Impact\nCoffee Tree & Cherry Anatomy\nCoffee Processing and Roasting\nCoffee Varieties and Grind Sizes\nEnemies of Coffee\nCoffee Waves"
+    },
+    { 
+        id: 2, 
+        title: "TOOLS & TRADE: Understanding the Barista's Arsenal", 
+        short: "Tools & Trade",
+        icon: "⚙️",
+        objective: "To familiarize participants with the various coffee brewing equipment and their uses, ensuring proper handling and maintenance for consistent quality. Additionally, the cupping session will introduce members to the sensory evaluation of coffee, helping them identify differences in aroma, body, and flavor among brewing methods.",
+        topics: "Parts of Espresso Machine\nMoka Pot, Pour Over, AeroPress, Siphon, Chemex, French Press, and Cold Brew\nIntroduction to Coffee Cupping Session"
+    },
+    { 
+        id: 3, 
+        title: "ESPRESSO EXPRESS: The Art of Extraction and Latte Art", 
+        short: "Espresso Express",
+        icon: "☕",
+        objective: "To provide hands-on training in espresso extraction and milk texturing, developing the participants' skills in achieving balance, precision, and creativity in espresso-based beverages.",
+        topics: "Espresso Machine Calibration (Hands-On)\nDosing, Extraction Techniques, and Troubleshooting\nMilk Texturing and Steaming\nLatte Art Pouring Basics"
+    },
+    { 
+        id: 4, 
+        title: "THE PERFECT POUR: Manual Brewing and Sensory Mastery", 
+        short: "Perfect Pour",
+        icon: "🫗",
+        objective: "To teach participants the craft of manual brewing through pour-over methods, focusing on flavor clarity, brewing variables, and sensory evaluation to enhance palate development and brewing accuracy.",
+        topics: "Pour-Over Brewing Technique\nEquipment Familiarization and Setup\nBrewing Variables and the Coffee Flavor Wheel\nSensory Testing and Evaluation\nHands-On Pour-Over Practice"
+    },
+    { 
+        id: 5, 
+        title: "BREW YOUR IDENTITY: Crafting Your Signature Beverage", 
+        short: "Signature Bev",
+        icon: "🍹",
+        objective: "To empower participants to create their own signature coffee beverages, integrating the principles of creativity, flavor profiling, and presentation to express individuality and innovation in the art of coffee making.",
+        topics: "Definition and Purpose of Signature Beverages\nFlavor, Balance, and Presentation Elements\nRecipe Development and Execution\nSignature Beverage Presentation"
+    }
 ];
 
 const COMMITTEES_INFO = [
@@ -86,11 +121,11 @@ const COMMITTEES_INFO = [
     roles: ["Create event pubmats & posters", "Design merchandise & t-shirts", "Execute venue styling & decoration"]
   },
   { 
-    id: "PR", 
-    title: "Public Relations", 
-    image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", 
-    description: "The voice of the association. We manage social media presence, student engagement, and external communications.",
-    roles: ["Manage social media pages", "Write engaging captions & copies", "Coordinate with external partners"]
+    id: "Media", 
+    title: "Media & Documentation", 
+    image: "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?auto=format&fit=crop&w=800&q=80", 
+    description: "The eyes of the organization. We capture moments, produce video content, and manage the visual archives.",
+    roles: ["Event photography", "Video editing & production", "Manage digital archives"]
   },
   { 
     id: "Events", 
@@ -99,26 +134,12 @@ const COMMITTEES_INFO = [
     description: "The backbone of operations. We plan flows, manage logistics, and ensure every LBA gathering runs smoothly.",
     roles: ["Plan detailed event programs", "Coordinate with venues & suppliers", "Manage on-the-day flow & crowd control"]
   },
-  {
-      id: "Secretariat",
-      title: "Secretariat",
-      image: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=800&q=80",
-      description: "Keepers of the records. We handle registration, attendance, documentation, and the official member database.",
-      roles: ["Manage registration desk", "Record meeting minutes", "Maintain member database"]
-  },
-  {
-      id: "Finance",
-      title: "Finance & Audit",
-      image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=800&q=80",
-      description: "Guardians of the treasury. We ensure funds are managed transparently and resources are allocated efficiently.",
-      roles: ["Collect fees & payments", "Audit financial reports", "Manage budget allocation"]
-  },
-  {
-      id: "Academics",
-      title: "Academics",
-      image: "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80",
-      description: "The brain trust. We develop the Masterclass curriculum, organize workshops, and ensure coffee excellence.",
-      roles: ["Develop training modules", "Facilitate workshops", "Research coffee trends"]
+  { 
+    id: "PR", 
+    title: "Public Relations", 
+    image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", 
+    description: "The voice of the association. We manage social media presence, student engagement, and external communications.",
+    roles: ["Manage social media pages", "Write engaging captions & copies", "Coordinate with external partners"]
   }
 ];
 
@@ -195,18 +216,6 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const getEventDay = (dateStr) => {
-    if (!dateStr) return "?";
-    const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? "?" : d.getDate();
-};
-
-const getEventMonth = (dateStr) => {
-    if (!dateStr) return "???";
-    const d = new Date(dateStr);
-    return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
-};
-
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
     const start = new Date(startStr);
@@ -226,7 +235,6 @@ const getEventDateParts = (startStr, endStr) => {
 };
 
 // --- Components ---
-
 const MaintenanceBanner = () => (
     <div className="w-full bg-[#3E2723] text-[#FDB813] text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse border-b-2 border-[#FDB813]">
         <Coffee size={14} />
@@ -240,7 +248,7 @@ const DataPrivacyFooter = () => (
       <ShieldCheck size={12} /> Data Privacy Statement
     </div>
     <p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">
-      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance.
+      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance. We do not share your information with unauthorized third parties.
     </p>
     <div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider">
       <span>© {new Date().getFullYear()} LBA</span>
@@ -335,23 +343,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
                     const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
                     
-                    let fallbackCount = 0;
-                    try {
-                        const allDocs = await getDocs(registryRef);
-                        if (!allDocs.empty) {
-                             let maxIdNum = 0;
-                             allDocs.forEach(d => {
-                                 const mId = d.data().memberId;
-                                 const match = mId.match(/-(\d)(\d{4,})C?$/); 
-                                 if (match && match[2]) {
-                                     const num = parseInt(match[2], 10);
-                                     if (num > maxIdNum) maxIdNum = num;
-                                 }
-                             });
-                             fallbackCount = maxIdNum;
-                        }
-                    } catch(e) { console.warn("Fallback count fetch failed", e); }
-
                     const newProfile = await runTransaction(db, async (transaction) => {
                          const counterSnap = await transaction.get(counterRef);
                          let nextCount;
@@ -776,7 +767,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
     const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
     
-    // Dynamically filter committees based on COMMITTEES_INFO
     const committeeGroups = {};
     COMMITTEES_INFO.forEach(comm => {
         committeeGroups[comm.id] = {
@@ -818,7 +808,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     let unsubProjects = () => {};
     if (isOfficer || isCommitteeHead) { unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); setProjects(data); }); }
     let unsubTasks = () => {};
-    // Fetch all tasks for officers/committee heads, or tasks assigned to the current user
     const taskQuery = (isOfficer || isCommitteeHead) 
         ? query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'))
         : query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), where('assigneeId', '==', profile.memberId));
@@ -840,6 +829,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); unsubProjects(); unsubTasksListener(); unsubLogs(); unsubPolls(); unsubSeries(); if (unsubApps) unsubApps(); unsubUserApps(); };
   }, [user, isAdmin, isOfficer, isCommitteeHead, profile.memberId]);
 
+  useEffect(() => {
+    if (isAdmin) {
+        const m = DEFAULT_MASTERCLASS_MODULES.find(mod => mod.id === adminMcModule);
+        if (m) {
+            setTempMcDetails({
+                icon: masterclassData.moduleDetails?.[adminMcModule]?.icon || m.icon,
+                objectives: masterclassData.moduleDetails?.[adminMcModule]?.objectives || m.objective,
+                topics: masterclassData.moduleDetails?.[adminMcModule]?.topics || m.topics,
+                title: masterclassData.moduleDetails?.[adminMcModule]?.title || m.title
+            });
+        }
+    }
+  }, [adminMcModule, masterclassData, isAdmin]);
+
   const logAction = async (action, details) => { if (!profile) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), { action, details, actor: profile.name, actorId: profile.memberId, timestamp: serverTimestamp() }); } catch (err) { console.error("Logging failed:", err); } };
 
   const handleUpdateProfile = async (e) => { e.preventDefault(); setSavingSettings(true); try { const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) }; if (settingsForm.email !== profile.email) { updated.email = settingsForm.email.toLowerCase(); } await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated); setProfile(updated); localStorage.setItem('lba_profile', JSON.stringify(updated)); alert("Profile updated successfully!"); } catch(err) { alert("Failed to update profile."); } finally { setSavingSettings(false); } };
@@ -854,18 +857,50 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleEditSeries = (post) => { setNewSeriesPost({ title: post.title, imageUrl: post.imageUrl || post.images?.join(','), caption: post.caption }); setEditingSeries(post); setShowSeriesForm(true); };
   const handlePostSeries = async (e) => { e.preventDefault(); try { const payload = { title: newSeriesPost.title, caption: newSeriesPost.caption, images: newSeriesPost.imageUrl.split(',').map(s => s.trim()).filter(s => s), imageUrl: newSeriesPost.imageUrl.split(',')[0].trim() }; if (editingSeries) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', editingSeries.id), { ...payload, lastEdited: serverTimestamp() }); setEditingSeries(null); logAction("Edit Series", newSeriesPost.title); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), { ...payload, author: profile.name, authorId: profile.memberId, createdAt: serverTimestamp() }); logAction("Post Series", newSeriesPost.title); } setShowSeriesForm(false); setNewSeriesPost({ title: '', imageUrl: '', caption: '' }); } catch (e) {} };
   const handleDeleteSeries = async (id) => { if(!confirm("Delete post?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', id)); } catch (e) {} };
-  const addShift = () => { if (!tempShift.date) return; const sessionName = tempShift.type === 'WHOLE_DAY' ? 'Whole Day' : (tempShift.name || 'Shift'); setNewEvent(prev => ({ ...prev, shifts: [...prev.shifts, { id: crypto.randomUUID(), date: tempShift.date, session: sessionName, capacity: tempShift.capacity, volunteers: [] }] })); setTempShift(prev => ({ ...prev, name: '' })); };
+  
+  const addShift = () => { if (!tempShift.date) return; const sessionName = tempShift.name || 'Session'; setNewEvent(prev => ({ ...prev, shifts: [...prev.shifts, { id: crypto.randomUUID(), date: tempShift.date, session: sessionName, capacity: tempShift.capacity, volunteers: [] }] })); setTempShift(prev => ({ ...prev, name: '' })); };
   const removeShift = (id) => setNewEvent(prev => ({ ...prev, shifts: prev.shifts.filter(s => s.id !== id) }));
+  
   const handleAddAchievement = () => { if (!tempAchievement.text.trim()) return; const newAch = { text: tempAchievement.text.trim(), date: tempAchievement.date || new Date().toISOString().split('T')[0] }; const updatedList = [...(legacyForm.achievements || []), newAch].sort((a,b) => new Date(a.date) - new Date(b.date)); setLegacyForm(prev => ({ ...prev, achievements: updatedList })); setTempAchievement({ date: '', text: '' }); };
   const handleUpdateAchievement = (index, field, value) => { const updated = [...legacyForm.achievements]; updated[index] = { ...updated[index], [field]: value }; updated.sort((a,b) => new Date(a.date || '1970-01-01') - new Date(b.date || '1970-01-01')); setLegacyForm(prev => ({ ...prev, achievements: updated })); };
   const handleRemoveAchievement = (index) => setLegacyForm(prev => ({ ...prev, achievements: prev.achievements.filter((_, i) => i !== index) }));
+  
   const handleAddEvent = async (e) => { e.preventDefault(); try { const eventPayload = { ...newEvent, name: newEvent.name.toUpperCase(), venue: newEvent.venue.toUpperCase(), createdAt: serverTimestamp(), attendees: [], registered: [] }; if (editingEvent) { delete eventPayload.createdAt; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), eventPayload); logAction("Update Event", newEvent.name); setEditingEvent(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventPayload); logAction("Create Event", newEvent.name); } setShowEventForm(false); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); } catch (err) {} };
-  const handleEditEvent = (ev) => { setNewEvent({ name: ev.name, startDate: ev.startDate, endDate: ev.endDate, startTime: ev.startTime, endTime: ev.endTime, venue: ev.venue, description: ev.description, attendanceRequired: ev.attendanceRequired || false, evaluationLink: ev.evaluationLink || '', isVolunteer: ev.isVolunteer || false, registrationRequired: ev.registrationRequired !== undefined ? ev.registrationRequired : true, openForAll: ev.openForAll !== undefined ? ev.openForAll : true, volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 }, shifts: ev.shifts || [], masterclassModuleIds: ev.masterclassModuleIds || (ev.masterclassModuleId ? [ev.masterclassModuleId] : []), scheduleType: ev.scheduleType || 'WHOLE_DAY' }); setEditingEvent(ev); setShowEventForm(true); };
+  const handleEditEvent = (ev) => { setNewEvent({ name: ev.name, startDate: ev.startDate, endDate: ev.endDate || '', startTime: ev.startTime || '', endTime: ev.endTime || '', venue: ev.venue, description: ev.description, attendanceRequired: ev.attendanceRequired || false, evaluationLink: ev.evaluationLink || '', isVolunteer: ev.isVolunteer || false, registrationRequired: ev.registrationRequired !== undefined ? ev.registrationRequired : true, openForAll: ev.openForAll !== undefined ? ev.openForAll : true, volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 }, shifts: ev.shifts || [], masterclassModuleIds: ev.masterclassModuleIds || (ev.masterclassModuleId ? [ev.masterclassModuleId] : []), scheduleType: ev.scheduleType || 'WHOLE_DAY' }); setEditingEvent(ev); setShowEventForm(true); };
   const handleDeleteEvent = async (id) => { if(!confirm("Delete event?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id)); logAction("Delete Event", id); } catch(err) {} };
-  const handleToggleAttendance = async (memberId) => { if (!attendanceEvent || !memberId) return; const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', attendanceEvent.id); const isPresent = attendanceEvent.attendees?.includes(memberId); try { if (isPresent) { await updateDoc(eventRef, { attendees: arrayRemove(memberId) }); } else { await updateDoc(eventRef, { attendees: arrayUnion(memberId) }); } if (attendanceEvent.masterclassModuleIds && attendanceEvent.masterclassModuleIds.length > 0) { const trackerRef = doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'); const updates = {}; attendanceEvent.masterclassModuleIds.forEach(modId => { const fieldPath = `moduleAttendees.${modId}`; updates[fieldPath] = isPresent ? arrayRemove(memberId) : arrayUnion(memberId); }); await updateDoc(trackerRef, updates); } setAttendanceEvent(prev => ({ ...prev, attendees: isPresent ? prev.attendees.filter(id => id !== memberId) : [...(prev.attendees || []), memberId] })); } catch(err) {} };
-  const handleDownloadAttendance = () => { if (!attendanceEvent) return; const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId)); const headers = ["Name", "ID", "Position"]; const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle]); generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`); };
+  
+  const handleToggleAttendance = async (memberId) => { 
+      if (!attendanceEvent || !memberId) return; 
+      const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', attendanceEvent.id); 
+      const isPresent = attendanceEvent.attendees?.includes(memberId); 
+      try { 
+          const timestamp = new Date().toISOString(); 
+          if (isPresent) { 
+              await updateDoc(eventRef, { attendees: arrayRemove(memberId), [`attendanceTimestamps.${memberId}`]: deleteField() }); 
+          } else { 
+              await updateDoc(eventRef, { attendees: arrayUnion(memberId), [`attendanceTimestamps.${memberId}`]: timestamp }); 
+          } 
+          if (attendanceEvent.masterclassModuleIds && attendanceEvent.masterclassModuleIds.length > 0) { 
+              const trackerRef = doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'); 
+              const updates = {}; 
+              attendanceEvent.masterclassModuleIds.forEach(modId => { 
+                  const fieldPath = `moduleAttendees.${modId}`; 
+                  updates[fieldPath] = isPresent ? arrayRemove(memberId) : arrayUnion(memberId); 
+              }); 
+              await updateDoc(trackerRef, updates); 
+          } 
+          setAttendanceEvent(prev => { 
+              const newTimestamps = { ...(prev.attendanceTimestamps || {}) }; 
+              if (isPresent) delete newTimestamps[memberId]; 
+              else newTimestamps[memberId] = timestamp; 
+              return { ...prev, attendees: isPresent ? prev.attendees.filter(id => id !== memberId) : [...(prev.attendees || []), memberId], attendanceTimestamps: newTimestamps }; 
+          }); 
+      } catch(err) {} 
+  };
+  
+  const handleDownloadAttendance = () => { if (!attendanceEvent) return; const presentMembers = members.filter(m => attendanceEvent.attendees?.includes(m.memberId)); const headers = ["Name", "ID", "Position", "Timestamp"]; const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle, attendanceEvent.attendanceTimestamps?.[m.memberId] ? new Date(attendanceEvent.attendanceTimestamps[m.memberId]).toLocaleString() : 'N/A']); generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`); };
   const handleRegisterEvent = async (ev) => { if (isExpired) return alert("Renew membership to join."); const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id); const isRegistered = ev.registered?.includes(profile.memberId); try { if (isRegistered) { await updateDoc(eventRef, { registered: arrayRemove(profile.memberId) }); } else { await updateDoc(eventRef, { registered: arrayUnion(profile.memberId) }); } } catch (err) {} };
-  const handleVolunteerSignup = async (ev, shiftId) => { if (isExpired) return alert("Renew membership to volunteer."); const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id); const updatedShifts = ev.shifts.map(shift => { if (shift.id === shiftId) { const isVolunteered = shift.volunteers.includes(profile.memberId); if (isVolunteered) { return { ...shift, volunteers: shift.volunteers.filter(id => id !== profile.memberId) }; } else { if (shift.volunteers.length >= shift.capacity) { alert("Shift full!"); return shift; } return { ...shift, volunteers: [...shift.volunteers, profile.memberId] }; } } return shift; }); try { await updateDoc(eventRef, { shifts: updatedShifts }); } catch(err) {} };
+  const handleVolunteerSignup = async (ev, shiftId) => { if (isExpired) return alert("Renew membership to join a session."); const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id); const updatedShifts = ev.shifts.map(shift => { if (shift.id === shiftId) { const isVolunteered = shift.volunteers.includes(profile.memberId); if (isVolunteered) { return { ...shift, volunteers: shift.volunteers.filter(id => id !== profile.memberId) }; } else { if (shift.volunteers.length >= shift.capacity) { alert("Session full!"); return shift; } return { ...shift, volunteers: [...shift.volunteers, profile.memberId] }; } } return shift; }); try { await updateDoc(eventRef, { shifts: updatedShifts }); } catch(err) {} };
   const handlePostAnnouncement = async (e) => { e.preventDefault(); try { if (editingAnnouncement) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', editingAnnouncement.id), { ...newAnnouncement, lastEdited: serverTimestamp() }); logAction("Update Announcement", newAnnouncement.title); setEditingAnnouncement(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), { ...newAnnouncement, date: new Date().toISOString(), createdAt: serverTimestamp() }); logAction("Post Announcement", newAnnouncement.title); } setShowAnnounceForm(false); setNewAnnouncement({ title: '', content: '' }); } catch (err) {} };
   const handleDeleteAnnouncement = async (id) => { if(!confirm("Delete announcement?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', id)); logAction("Delete Announcement", id); } catch(err) {} };
   const handleEditAnnouncement = (ann) => { setNewAnnouncement({ title: ann.title, content: ann.content }); setEditingAnnouncement(ann); setShowAnnounceForm(true); };
@@ -999,7 +1034,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           
           if (type === 'accepted') { 
               const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId); 
-              // Automatically update member to Committee status and specific title
               batch.update(memberRef, { 
                   positionCategory: 'Committee',
                   specificTitle: `Committee Member - ${app.committee}`,
@@ -1047,7 +1081,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleBulkImportCSV = async (e) => { const file = e.target.files[0]; if (!file) return; setIsImporting(true); const reader = new FileReader(); reader.onload = async (evt) => { try { const rows = evt.target.result.split('\n').filter(r => r.trim().length > 0); const batch = writeBatch(db); let count = members.length; for (let i = 1; i < rows.length; i++) { const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim()); if (!name || !email) continue; const mid = generateLBAId(pos, count++); const meta = getMemberIdMeta(); const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'expired', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() }; batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data); } await batch.commit(); logAction("Bulk Import", `Count: ${rows.length - 1}`); } catch (err) {} finally { setIsImporting(false); e.target.value = ""; } }; reader.readAsText(file); };
   const downloadImportTemplate = () => generateCSV(["Name", "Email", "Program", "PositionCategory", "SpecificTitle"], [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]], "LBA_Import_Template.csv");
   const handleRotateSecurityKeys = async () => { const newKeys = { officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(), headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(), commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase() }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys); };
-  const handleDownloadSuggestions = () => { const filtered = suggestions.filter(s => { if (!s.createdAt) return true; const d = s.createdAt.toDate ? s.createdAt.toDate() : new Date(s.createdAt); const w = new Date(); w.setDate(w.getDate() - 7); return d > w; }); generateCSV(["Date", "Suggestion"], filtered.map(s => [s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now", s.text]), `LBA_Suggestions_${new Date().toISOString().split('T')[0]}.csv`); };
 
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: Home },
@@ -1061,11 +1094,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
     ...(isOfficer || isCommitteeHead ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList } ] : []),
     ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
-    ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : []),
-    { id: 'settings', label: 'Settings', icon: Settings2 }
+    ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
-  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
+  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#3E2723] text-[#3E2723] shadow-lg font-black relative";
   const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative";
 
   return (
@@ -1073,45 +1105,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       {hubSettings.maintenanceMode && <div className="absolute top-0 left-0 right-0 z-[101] w-full"><MaintenanceBanner /></div>}
       {confirmDelete && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm</h3><p className="text-sm text-gray-600 mb-8">Remove <span className="font-bold">{confirmDelete.name}</span>?</p><div className="flex gap-3"><button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs">Delete</button></div></div></div>}
       {emailModal.isOpen && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Send Email</h3><div className="space-y-4"><input type="text" className="w-full p-3 border rounded-xl text-xs font-bold" value={emailModal.subject} onChange={e => setEmailModal({...emailModal, subject: e.target.value})} /><textarea className="w-full p-3 border rounded-xl text-xs h-32" value={emailModal.body} onChange={e => setEmailModal({...emailModal, body: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' })} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={confirmAppAction} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Send</button></div></div></div></div>}
-      {editingMember && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Edit Details</h3><form onSubmit={handleUpdateMemberDetails} className="space-y-4">
-            <div><label className="text-[10px] font-bold text-gray-400 uppercase">Joined Date</label><input type="date" className="w-full p-3 border rounded-xl text-xs font-bold" value={editMemberForm.joinedDate} onChange={e => setEditMemberForm({...editMemberForm, joinedDate: e.target.value})} /></div>
-            
-            {/* COMMITTEE ASSIGNMENT TOGGLE */}
-            {['Officer', 'Committee', 'Execomm'].includes(editingMember.positionCategory) && (
-                <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
-                    <label className="text-[10px] font-black text-amber-800 uppercase mb-2 block">Committee Assignment</label>
-                    <select 
-                        className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold uppercase mb-2"
-                        value={editMemberForm.positionCategory || editingMember.positionCategory}
-                        onChange={e => setEditMemberForm({...editMemberForm, positionCategory: e.target.value})}
-                    >
-                        {POSITION_CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                    </select>
-                    
-                    {/* Show Committee Selector if Category is Committee */}
-                    {((editMemberForm.positionCategory || editingMember.positionCategory) === 'Committee') && (
-                        <select 
-                            className="w-full p-3 border border-amber-200 rounded-xl text-xs"
-                            value={editMemberForm.committee}
-                            onChange={e => setEditMemberForm({...editMemberForm, committee: e.target.value})}
-                        >
-                            <option value="">Select Committee...</option>
-                            {COMMITTEES_INFO.map(comm => (
-                                <option key={comm.id} value={comm.id}>{comm.title}</option>
-                            ))}
-                        </select>
-                    )}
-                    
-                    <div className="text-[9px] text-amber-600 mt-1 italic">
-                        Selecting a committee will auto-update the title to "Committee Member - [Name]".
-                    </div>
-                </div>
-            )}
-            
-            <div className="flex gap-3 pt-4"><button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div>
-        </form></div></div>}
+      {editingMember && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Edit Details</h3><form onSubmit={handleUpdateMemberDetails}><label>Joined Date</label><input type="date" className="w-full p-3 border rounded-xl text-xs font-bold" value={editMemberForm.joinedDate} onChange={e => setEditMemberForm({...editMemberForm, joinedDate: e.target.value})} /><div className="flex gap-3 pt-4"><button type="button" onClick={() => setEditingMember(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></form></div></div>}
       {showCertificate && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4"><div className="relative max-w-4xl w-full"><button onClick={() => setShowCertificate(false)} className="absolute -top-12 right-0 text-white"><X size={32}/></button>{masterclassData.certTemplate ? <div className="relative bg-white shadow-2xl rounded-lg overflow-hidden"><img src={getDirectLink(masterclassData.certTemplate)} className="w-full h-auto" /><div className="absolute inset-0 flex flex-col items-center justify-center pt-20"><h2 className="font-serif text-3xl md:text-5xl font-black text-[#3E2723] uppercase tracking-widest text-center px-4 mb-4">{profile.name}</h2><p className="font-serif text-lg md:text-2xl text-amber-700 font-bold uppercase">Certified Master Barista</p><p className="font-mono text-sm md:text-lg text-gray-500 mt-8">{new Date().toLocaleDateString()}</p></div></div> : <div className="bg-white p-8 rounded-2xl text-center"><AlertCircle size={48} className="mx-auto text-amber-500 mb-4"/><h3 className="font-bold text-xl mb-2">Missing Template</h3></div>}</div></div>}
-      {attendanceEvent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 w-full max-w-2xl h-[80vh] flex flex-col border-b-[8px] border-[#3E2723]"><div className="flex justify-between items-center mb-6 border-b pb-4 border-amber-100"><div><h3 className="text-xl font-black uppercase text-[#3E2723]">Attendance</h3><p className="text-xs text-amber-600 font-bold mt-1">{attendanceEvent.name}</p></div><div className="flex gap-2"><button onClick={handleDownloadAttendance} className="p-2 bg-green-100 text-green-700 rounded-full"><Download size={20}/></button><button onClick={() => setAttendanceEvent(null)} className="p-2 bg-gray-100 rounded-full"><X size={20}/></button></div></div><div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">{[...(attendanceEvent.registrationRequired ? members.filter(m => attendanceEvent.registered?.includes(m.memberId)) : members)].sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(m => { const isPresent = attendanceEvent.attendees?.includes(m.memberId); return (<div key={m.id} onClick={() => handleToggleAttendance(m.memberId)} className={`p-4 rounded-xl flex items-center justify-between cursor-pointer border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent'}`}><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>{m.name?.charAt(0)}</div><div><p className="text-xs font-bold uppercase">{m.name}</p><p className="text-[9px] text-gray-400">{m.memberId}</p></div></div>{isPresent && <CheckCircle size={14} className="text-green-500"/>}</div>); })}</div></div></div>}
+      {attendanceEvent && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 w-full max-w-2xl h-[80vh] flex flex-col border-b-[8px] border-[#3E2723]"><div className="flex justify-between items-center mb-6 border-b pb-4 border-amber-100"><div><h3 className="text-xl font-black uppercase text-[#3E2723]">Attendance</h3><p className="text-xs text-amber-600 font-bold mt-1">{attendanceEvent.name}</p></div><div className="flex gap-2"><button onClick={handleDownloadAttendance} className="p-2 bg-green-100 text-green-700 rounded-full"><Download size={20}/></button><button onClick={() => setAttendanceEvent(null)} className="p-2 bg-gray-100 rounded-full"><X size={20}/></button></div></div><div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">{[...(attendanceEvent.registrationRequired ? members.filter(m => attendanceEvent.registered?.includes(m.memberId)) : members)].sort((a,b)=>(a.name||"").localeCompare(b.name||"")).map(m => { const isPresent = attendanceEvent.attendees?.includes(m.memberId); return (<div key={m.id} onClick={() => handleToggleAttendance(m.memberId)} className={`p-4 rounded-xl flex items-center justify-between cursor-pointer border ${isPresent ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-transparent'}`}><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${isPresent ? 'bg-green-200 text-green-800' : 'bg-gray-200 text-gray-500'}`}>{m.name?.charAt(0)}</div><div><p className="text-xs font-bold uppercase">{m.name}</p><p className="text-[9px] text-gray-400">{m.memberId}</p></div></div>{isPresent && <div className="flex flex-col items-end"><CheckCircle size={14} className="text-green-500 mb-1"/>{attendanceEvent.isVolunteer && attendanceEvent.attendanceTimestamps?.[m.memberId] && <span className="text-[8px] text-gray-400 font-mono">{new Date(attendanceEvent.attendanceTimestamps[m.memberId]).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>}</div>}</div>); })}</div></div></div>}
       {showAccoladeModal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Accolade</h3><div className="mb-4 bg-gray-50 rounded-xl p-3 max-h-32 overflow-y-auto"><ul className="space-y-1">{(showAccoladeModal.currentAccolades || []).map((acc, idx) => (<li key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100"><span className="text-[10px] font-bold text-gray-700">{acc}</span><button onClick={() => handleRemoveAccolade(acc)} className="text-red-400"><X size={12}/></button></li>))}</ul></div><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} /><div className="flex gap-3"><button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Close</button><button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs">Award</button></div></div></div>}
       
       {/* Forms (Task, Project, Poll, Series) */}
@@ -1182,7 +1178,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
       {showSeriesForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"><div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Diary Post</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newSeriesPost.title} onChange={e => setNewSeriesPost({...newSeriesPost, title: e.target.value})} /><textarea placeholder="Image URLs (comma separated for album)" className="w-full p-3 border rounded-xl text-xs" value={newSeriesPost.imageUrl} onChange={e => setNewSeriesPost({...newSeriesPost, imageUrl: e.target.value})} /><textarea placeholder="Caption" className="w-full p-3 border rounded-xl text-xs h-24" value={newSeriesPost.caption} onChange={e => setNewSeriesPost({...newSeriesPost, caption: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowSeriesForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handlePostSeries} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button></div></div></div></div>}
       
-      {showEventForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723] overflow-y-auto max-h-[90vh]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'New Event'}</h3><div className="space-y-4"><input type="text" placeholder="Event Name" className="w-full p-3 border rounded-xl text-xs font-bold" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} /><div className="grid grid-cols-2 gap-2"><input type="date" className="p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div><div className="flex gap-2 items-center"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} /><span className="text-xs">Reg Required</span><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="ml-4" /><span className="text-xs">Volunteer Event</span></div>{newEvent.isVolunteer && <div className="bg-amber-50 p-3 rounded-xl"><h4 className="text-xs font-bold mb-2">Shifts</h4><div className="flex gap-2 mb-2"><input type="date" className="p-2 border rounded text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><input type="number" placeholder="Cap" className="p-2 border rounded text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button onClick={addShift} className="p-2 bg-[#3E2723] text-white rounded text-xs">Add</button></div><div className="space-y-1">{newEvent.shifts.map(s => (<div key={s.id} className="flex justify-between text-xs bg-white p-2 rounded border"><span>{s.date} - {s.session} (Cap: {s.capacity})</span><button onClick={() => removeShift(s.id)} className="text-red-500">x</button></div>))}</div></div>}<div className="flex gap-3 pt-2"><button onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleAddEvent} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></div></div></div>}
+      {showEventForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723] overflow-y-auto max-h-[90vh]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'New Event'}</h3><div className="space-y-4"><input type="text" placeholder="Event Name" className="w-full p-3 border rounded-xl text-xs font-bold" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} /><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Start Date & Time</label><div className="flex gap-2 mt-1"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div></div><div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">End Date & Time</label><div className="flex gap-2 mt-1"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} /><input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} /></div></div></div><div className="flex gap-2 items-center"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} /><span className="text-xs">Reg Required</span><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="ml-4" /><span className="text-xs">Volunteer Event</span></div><div className="bg-amber-50 p-3 rounded-xl"><h4 className="text-xs font-bold mb-2">Sessions / Shifts</h4><div className="flex gap-2 mb-2"><input type="date" className="p-2 border rounded text-xs w-28" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><input type="text" placeholder="Session Name" className="flex-1 p-2 border rounded text-xs" value={tempShift.name} onChange={e => setTempShift({...tempShift, name: e.target.value})} /><input type="number" placeholder="Cap" className="p-2 border rounded text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button onClick={addShift} className="p-2 bg-[#3E2723] text-white rounded text-xs font-bold">Add</button></div><div className="space-y-1">{newEvent.shifts.map(s => (<div key={s.id} className="flex justify-between items-center text-xs bg-white p-2 rounded border"><span>{s.date} - {s.session} (Cap: {s.capacity})</span><button onClick={() => removeShift(s.id)} className="text-red-500 font-bold px-2">X</button></div>))}</div></div><div className="flex gap-3 pt-2"><button onClick={() => setShowEventForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handleAddEvent} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Save</button></div></div></div></div>}
       
       {showAnnounceForm && <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn"><div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]"><h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Announcement</h3><div className="space-y-4"><input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} /><textarea placeholder="Content" className="w-full p-3 border rounded-xl text-xs h-32" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} /><div className="flex gap-3 pt-2"><button onClick={() => setShowAnnounceForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button><button onClick={handlePostAnnouncement} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs">Post</button></div></div></div></div>}
 
@@ -1234,6 +1230,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     <p className="text-white/90 font-bold text-lg uppercase tracking-wide">"{profile.nickname || 'Barista'}"</p>
                                 </div>
                                 <p className="text-[#FDB813] font-black text-sm uppercase mt-1">{profile.specificTitle || 'Member'}</p>
+                                <div className="mt-3">
+                                    {profile.status === 'active' ? (
+                                        <span className="inline-flex items-center gap-1.5 bg-[#FDB813]/20 text-[#FDB813] px-3 py-1 rounded-full text-[10px] font-black uppercase border border-[#FDB813]/50">
+                                            <BadgeCheck size={14} /> Active: 10% B'Cafe
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center gap-1.5 bg-red-500/20 text-red-300 px-3 py-1 rounded-full text-[10px] font-black uppercase border border-red-500/30">
+                                            <AlertCircle size={14} /> Inactive
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1272,7 +1279,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <div className="grid grid-cols-3 gap-3">
                                 {DEFAULT_MASTERCLASS_MODULES.map(mod => {
                                     if (masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId)) {
-                                        const iconToUse = masterclassData.moduleDetails?.[mod.id]?.icon || "☕";
+                                        const iconToUse = masterclassData.moduleDetails?.[mod.id]?.icon || mod.icon;
                                         // TITLE LOGIC: Split by colon and take first part
                                         const categoryTitle = mod.title.split(':')[0] || mod.title;
                                         
@@ -1280,7 +1287,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                             <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
                                                 <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 border border-green-100">
                                                     <div className="text-2xl mb-1">{iconToUse}</div>
-                                                    {/* INCREASED FONT SIZE */}
                                                     <span className="text-[9px] font-black uppercase text-green-800 text-center leading-tight line-clamp-2">{categoryTitle}</span>
                                                 </div>
                                             </div>
@@ -1319,16 +1325,32 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
              {view === 'masterclass' && (
                  <div className="space-y-8 animate-fadeIn">
                      <div className="flex justify-between items-end"><div className="space-y-2"><h2 className="text-4xl font-black uppercase text-[#3E2723]">Masterclass</h2><p className="text-amber-800 font-medium">Coffee Education Program</p></div><button onClick={() => setShowCertificate(true)} className="bg-[#FDB813] text-[#3E2723] px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-yellow-400 shadow-lg flex items-center gap-2"><Trophy size={18}/> My Certificate</button></div>
-                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                          {DEFAULT_MASTERCLASS_MODULES.map(mod => {
                              const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
-                             const title = mod.title.split(':')[0];
+                             const title = mod.title;
                              return (
-                                 <div key={mod.id} className={`p-6 rounded-[32px] border-2 flex flex-col items-center text-center transition-all ${isCompleted ? 'bg-[#3E2723] border-[#3E2723] text-white shadow-xl' : 'bg-white border-amber-100 text-gray-400'}`}>
-                                     <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl mb-4 ${isCompleted ? 'bg-[#FDB813] text-[#3E2723]' : 'bg-gray-100 grayscale'}`}>{masterclassData.moduleDetails?.[mod.id]?.icon || "☕"}</div>
-                                     <h4 className="font-black uppercase text-sm mb-2 h-10 flex items-center justify-center">{title}</h4>
-                                     <p className="text-[10px] opacity-80 line-clamp-3">{masterclassData.moduleDetails?.[mod.id]?.objectives || "Module objectives pending..."}</p>
-                                     {isCompleted ? <div className="mt-4 bg-white/20 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1"><CheckCircle size={10}/> Completed</div> : <div className="mt-4 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-gray-200">Locked</div>}
+                                 <div key={mod.id} className={`p-6 rounded-[32px] border-2 flex flex-col transition-all ${isCompleted ? 'bg-[#3E2723] border-[#3E2723] text-white shadow-xl' : 'bg-white border-amber-100 text-gray-600'}`}>
+                                     <div className="flex items-center gap-4 mb-4">
+                                         <div className={`w-16 h-16 shrink-0 rounded-full flex items-center justify-center text-3xl ${isCompleted ? 'bg-[#FDB813] text-[#3E2723]' : 'bg-amber-50 grayscale'}`}>{masterclassData.moduleDetails?.[mod.id]?.icon || mod.icon}</div>
+                                         <h4 className="font-black uppercase text-sm leading-tight text-left">{title}</h4>
+                                     </div>
+                                     <div className="mb-4 text-left">
+                                         <h5 className={`text-[10px] font-black uppercase mb-1 ${isCompleted ? 'text-[#FDB813]' : 'text-[#3E2723]'}`}>Objective</h5>
+                                         <p className={`text-[10px] leading-relaxed ${isCompleted ? 'text-amber-100' : 'text-gray-500'}`}>{masterclassData.moduleDetails?.[mod.id]?.objectives || mod.objective}</p>
+                                     </div>
+                                     <div className="flex-1 text-left">
+                                         <h5 className={`text-[10px] font-black uppercase mb-2 ${isCompleted ? 'text-[#FDB813]' : 'text-[#3E2723]'}`}>Topics Covered</h5>
+                                         <ul className="space-y-1">
+                                             {(masterclassData.moduleDetails?.[mod.id]?.topics || mod.topics).split('\n').map((topic, i) => (
+                                                 <li key={i} className={`text-[10px] flex items-start gap-2 ${isCompleted ? 'text-gray-300' : 'text-gray-600'}`}>
+                                                     <span className="text-[#FDB813] mt-0.5">•</span> 
+                                                     <span className="flex-1">{topic.replace('• ', '').replace('· ', '').trim()}</span>
+                                                 </li>
+                                             ))}
+                                         </ul>
+                                     </div>
+                                     {isCompleted ? <div className="mt-6 bg-white/20 px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2"><CheckCircle size={16}/> Completed</div> : <div className="mt-6 px-3 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest border border-gray-200 text-center text-gray-400">Locked</div>}
                                  </div>
                              );
                          })}
@@ -1347,8 +1369,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                      </div>
                                  </div>
                                  <div className="space-y-4">
-                                     <div><label className="text-xs font-bold uppercase text-gray-400">Module Icon (Emoji)</label><input type="text" className="w-full p-3 border rounded-xl mt-1" value={tempMcDetails.icon} onChange={e => setTempMcDetails({...tempMcDetails, icon: e.target.value})} /></div>
-                                     <div><label className="text-xs font-bold uppercase text-gray-400">Objectives</label><textarea className="w-full p-3 border rounded-xl mt-1" rows="3" value={tempMcDetails.objectives} onChange={e => setTempMcDetails({...tempMcDetails, objectives: e.target.value})} /></div>
+                                     <div><label className="text-xs font-bold uppercase text-gray-400">Module Icon (Emoji)</label><input type="text" className="w-full p-3 border rounded-xl mt-1" value={tempMcDetails.icon || ''} onChange={e => setTempMcDetails({...tempMcDetails, icon: e.target.value})} /></div>
+                                     <div><label className="text-xs font-bold uppercase text-gray-400">Objectives</label><textarea className="w-full p-3 border rounded-xl mt-1" rows="4" value={tempMcDetails.objectives || ''} onChange={e => setTempMcDetails({...tempMcDetails, objectives: e.target.value})} /></div>
+                                     <div><label className="text-xs font-bold uppercase text-gray-400">Topics Covered</label><textarea className="w-full p-3 border rounded-xl mt-1" rows="5" value={tempMcDetails.topics || ''} onChange={e => setTempMcDetails({...tempMcDetails, topics: e.target.value})} /></div>
                                      <button onClick={handleSaveMcCurriculum} className="w-full bg-[#3E2723] text-white py-3 rounded-xl font-bold uppercase text-xs">Update Curriculum</button>
                                  </div>
                              </div>
@@ -1367,14 +1390,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                          {teamStructure.tier3.map(m => (<div key={m.id} className="flex flex-col items-center"><div className="w-24 h-24 rounded-full bg-white mb-3 flex items-center justify-center text-2xl font-black text-amber-200 border-2 border-amber-100 overflow-hidden"><img src={getDirectLink(m.photoUrl)} className="w-full h-full object-cover"/></div><h4 className="font-bold text-sm text-gray-800 uppercase text-center leading-tight">{m.name}</h4><p className="text-[10px] text-gray-500 font-black uppercase mt-1">{m.specificTitle}</p></div>))}
                      </div>
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 text-left">
-                         {/* Corrected Committee List Rendering based on COMMITTEES_INFO */}
                          {COMMITTEES_INFO.map(comm => {
-                             // Match members whose specific title includes the committee name (e.g., "Committee Member - Arts")
-                             // This is a simple string match. Ensure your data follows this convention.
                              const heads = teamStructure.committees[comm.id].heads;
                              const members = teamStructure.committees[comm.id].members;
                              
-                             // Show committee card even if empty to show structure, or hide if preferred. Showing for now.
                              return (
                                  <div key={comm.id} className="bg-white p-6 rounded-[32px] border border-amber-50">
                                      <h5 className="font-black text-[#3E2723] uppercase mb-4 border-b pb-2 border-amber-100">{comm.title}</h5>
@@ -1395,15 +1414,19 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <div className="space-y-8 animate-fadeIn">
                      <div className="flex justify-between items-center"><h2 className="text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h2>{isAdmin && <button onClick={() => { setEditingEvent(null); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); setShowEventForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}</div>
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                         {events.length === 0 ? <p className="col-span-full text-center text-gray-400 py-10">No upcoming events.</p> : events.map(ev => (
+                         {events.length === 0 ? <p className="col-span-full text-center text-gray-400 py-10">No upcoming events.</p> : events.map(ev => {
+                             const startStr = `${formatDate(ev.startDate)}${ev.startTime ? ' @ ' + ev.startTime : ''}`;
+                             const endStr = `${ev.endDate && ev.endDate !== ev.startDate ? formatDate(ev.endDate) + ' ' : ''}${ev.endTime ? '@ ' + ev.endTime : ''}`.trim();
+                             const timeDisplay = endStr ? `${startStr} - ${endStr}` : startStr;
+                             return (
                              <div key={ev.id} className="bg-white rounded-[32px] overflow-hidden border border-amber-100 shadow-sm hover:shadow-lg transition-all group relative flex flex-col">
-                                 <div className="bg-[#3E2723] p-6 text-white relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Calendar size={100}/></div><span className="bg-[#FDB813] text-[#3E2723] text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest">{ev.venue}</span><h3 className="font-serif text-2xl font-black uppercase mt-2 leading-none mb-1">{ev.name}</h3><p className="text-amber-200 text-xs font-medium uppercase tracking-wide">{formatDate(ev.startDate)} • {ev.startTime}</p></div>
+                                 <div className="bg-[#3E2723] p-6 text-white relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Calendar size={100}/></div><span className="bg-[#FDB813] text-[#3E2723] text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest">{ev.venue}</span><h3 className="font-serif text-2xl font-black uppercase mt-2 leading-none mb-1">{ev.name}</h3><p className="text-amber-200 text-xs font-medium uppercase tracking-wide">{timeDisplay}</p></div>
                                  <div className="p-6 flex-1 flex flex-col">
                                      <p className="text-gray-500 text-xs leading-relaxed mb-6 line-clamp-3">{ev.description}</p>
-                                     {ev.isVolunteer ? (
+                                     {ev.shifts && ev.shifts.length > 0 ? (
                                          <div className="mt-auto space-y-2">
-                                             <p className="text-[10px] font-black uppercase text-amber-800">Volunteer Shifts</p>
-                                             {ev.shifts?.map(shift => {
+                                             <p className="text-[10px] font-black uppercase text-amber-800">{ev.isVolunteer ? 'Volunteer Shifts' : 'Event Sessions'}</p>
+                                             {ev.shifts.map(shift => {
                                                  const isVol = shift.volunteers?.includes(profile.memberId);
                                                  const isFull = (shift.volunteers?.length || 0) >= shift.capacity;
                                                  return (
@@ -1423,7 +1446,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                      )}
                                  </div>
                              </div>
-                         ))}
+                         )})}
                      </div>
                  </div>
              )}
@@ -1484,18 +1507,61 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              ))}
                          </div>
                      ) : (
-                         <div className="bg-white p-8 rounded-[48px] border-4 border-amber-50 text-center">
+                         <div className="w-full">
                              {userApplications.length > 0 ? (
-                                 <div className="space-y-4 max-w-md mx-auto"><h3 className="font-bold text-xl text-[#3E2723]">Application Status</h3>{userApplications.map(app => (<div key={app.id} className="p-6 bg-gray-50 rounded-3xl border border-gray-200"><p className="font-black text-amber-600 uppercase tracking-widest text-xs mb-2">{app.committee}</p><div className="text-2xl font-black uppercase mb-2">{app.status.replace('_', ' ')}</div><p className="text-xs text-gray-500">Last update: {formatDate(app.statusUpdatedAt?.toDate())}</p></div>))}</div>
+                                <div className="bg-white p-8 rounded-[48px] border-4 border-amber-50 text-center max-w-3xl mx-auto">
+                                    <div className="space-y-4 max-w-md mx-auto"><h3 className="font-bold text-xl text-[#3E2723]">Application Status</h3>{userApplications.map(app => (<div key={app.id} className="p-6 bg-gray-50 rounded-3xl border border-gray-200"><p className="font-black text-amber-600 uppercase tracking-widest text-xs mb-2">{app.committee}</p><div className="text-2xl font-black uppercase mb-2">{app.status.replace('_', ' ')}</div><p className="text-xs text-gray-500">Last update: {formatDate(app.statusUpdatedAt?.toDate())}</p></div>))}</div>
+                                </div>
                              ) : (
-                                 <div className="space-y-6">
-                                     <p className="text-gray-600 max-w-lg mx-auto">Select a committee to apply for. Please ensure your profile is up to date.</p>
-                                     <div className="flex justify-center gap-4 flex-wrap">
-                                         {COMMITTEES_INFO.map(comm => (
-                                             <button key={comm.id} onClick={(e) => { setCommitteeForm({role: 'Committee Member'}); handleApplyCommittee(e, comm.id); }} disabled={submittingApp} className="px-6 py-3 bg-[#3E2723] text-white rounded-xl font-bold uppercase text-xs hover:bg-amber-600 disabled:opacity-50">{comm.title}</button>
-                                         ))}
-                                     </div>
-                                 </div>
+                                <div className="space-y-8">
+                                    <div className="text-center max-w-2xl mx-auto mb-8">
+                                        <p className="text-gray-600 leading-relaxed">
+                                            Ready to serve? Choose the committee that best fits your skills and passion. 
+                                            Applications are open for the current academic year.
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {COMMITTEES_INFO.map(comm => (
+                                            <div key={comm.id} className="bg-white rounded-[32px] overflow-hidden border border-amber-100 shadow-sm hover:shadow-xl transition-all flex flex-col group">
+                                                <div className="h-48 overflow-hidden relative">
+                                                    <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors z-10"></div>
+                                                    <img src={getDirectLink(comm.image)} alt={comm.title} className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-700" />
+                                                    <div className="absolute bottom-4 left-4 z-20">
+                                                        <h3 className="text-white font-black text-xl uppercase drop-shadow-md">{comm.title}</h3>
+                                                    </div>
+                                                </div>
+                                                <div className="p-6 flex-1 flex flex-col">
+                                                    <p className="text-xs text-gray-600 mb-4 leading-relaxed">{comm.description}</p>
+                                                    
+                                                    <div className="mb-6 bg-amber-50/50 p-4 rounded-xl border border-amber-50">
+                                                        <h4 className="text-[10px] font-black uppercase text-amber-800 mb-2">Roles & Responsibilities</h4>
+                                                        <ul className="space-y-1">
+                                                            {comm.roles.map((role, idx) => (
+                                                                <li key={idx} className="text-[10px] text-gray-600 flex items-start gap-2">
+                                                                    <span className="text-amber-500 mt-0.5">•</span> {role}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+
+                                                    <button 
+                                                        onClick={(e) => { 
+                                                            if(confirm(`Apply for ${comm.title}?`)) {
+                                                                setCommitteeForm({role: 'Committee Member'}); 
+                                                                handleApplyCommittee(e, comm.id); 
+                                                            }
+                                                        }} 
+                                                        disabled={submittingApp || isExpired} 
+                                                        className="w-full py-4 mt-auto bg-[#3E2723] text-white rounded-xl font-black uppercase text-xs hover:bg-black transition-colors disabled:opacity-50 flex items-center justify-center gap-2 group-hover:bg-[#FDB813] group-hover:text-[#3E2723]"
+                                                    >
+                                                        {submittingApp ? <Loader2 className="animate-spin" size={16}/> : (isExpired ? "Renew to Apply" : "Apply Now")}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                              )}
                          </div>
                      )}
@@ -1558,7 +1624,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  <div className="space-y-6 animate-fadeIn text-[#3E2723] flex-1">
                       <div className="flex flex-col md:flex-row gap-4 justify-between items-center"><div className="relative w-full md:w-96"><Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18}/><input type="text" placeholder="Search members..." className="w-full pl-12 pr-4 py-3 rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-[#FDB813] outline-none text-sm font-bold bg-white" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}/></div><div className="flex gap-2"><button onClick={toggleSelectAll} className="bg-white p-3 rounded-xl text-gray-500 hover:text-[#3E2723] font-bold text-xs shadow-sm uppercase">{selectedBaristas.length === paginatedRegistry.length ? "Deselect All" : "Select Page"}</button><button onClick={handleBulkEmail} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs shadow-lg flex items-center gap-2"><Mail size={16}/> Email Selected</button></div></div>
                       <div className="bg-white p-6 rounded-[40px] border border-amber-100 overflow-hidden shadow-sm">
-                          <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead><tr className="border-b border-gray-100 text-gray-400 text-[10px] uppercase tracking-wider"><th className="p-4 w-10"></th><th className="p-4 cursor-pointer hover:text-[#3E2723]" onClick={() => setSortConfig({ key: 'name', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>Name</th><th className="p-4 cursor-pointer hover:text-[#3E2723]" onClick={() => setSortConfig({ key: 'memberId', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>ID</th><th className="p-4">Position</th><th className="p-4">Status</th><th className="p-4 text-center">ID Lace</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="text-xs font-bold text-gray-700">{paginatedRegistry.map(m => (<tr key={m.memberId} className="hover:bg-amber-50/50 transition-colors border-b border-gray-50 last:border-0"><td className="p-4"><input type="checkbox" checked={selectedBaristas.includes(m.memberId)} onChange={() => toggleSelectBarista(m.memberId)} className="rounded text-[#3E2723] focus:ring-[#FDB813]"/></td><td className="p-4">{m.name}</td><td className="p-4 font-mono text-gray-500">{m.memberId}</td><td className="p-4">{m.specificTitle}</td><td className="p-4"><span onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full text-[9px] uppercase tracking-widest cursor-pointer ${m.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{m.status}</span></td><td className="p-4 text-center"><button onClick={() => isAdmin && handleToggleIdLaceReceived(m.memberId, m.idLaceReceived)} className={`p-1 rounded-full ${m.idLaceReceived ? 'text-green-600 bg-green-100' : 'text-gray-300 bg-gray-100'}`} title={m.idLaceReceived ? "Received" : "Not Received"}><CheckCircle2 size={16}/></button></td><td className="p-4 text-right flex justify-end gap-2">{isAdmin && <><button onClick={() => { setEditMemberForm({ joinedDate: m.joinedDate ? new Date(m.joinedDate).toISOString().split('T')[0] : '' }); setEditingMember(m); }} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><Pen size={14}/></button><button onClick={() => setShowAccoladeModal({...m, currentAccolades: m.accolades || []})} className="p-2 bg-yellow-100 rounded-lg hover:bg-yellow-200 text-yellow-700"><Trophy size={14}/></button><button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="p-2 bg-blue-100 rounded-lg hover:bg-blue-200 text-blue-700"><RefreshCcw size={14}/></button><button onClick={() => initiateRemoveMember(m.memberId, m.name)} className="p-2 bg-red-100 rounded-lg hover:bg-red-200 text-red-700"><Trash2 size={14}/></button></>}</td></tr>))}</tbody></table></div>
+                          <div className="overflow-x-auto"><table className="w-full text-left border-collapse"><thead><tr className="border-b border-gray-100 text-gray-400 text-[10px] uppercase tracking-wider"><th className="p-4 w-10"></th><th className="p-4 cursor-pointer hover:text-[#3E2723]" onClick={() => setSortConfig({ key: 'name', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>Name</th><th className="p-4 cursor-pointer hover:text-[#3E2723]" onClick={() => setSortConfig({ key: 'memberId', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })}>ID</th><th className="p-4">Position</th><th className="p-4">Status</th><th className="p-4 text-center">ID Lace</th><th className="p-4 text-right">Actions</th></tr></thead><tbody className="text-xs font-bold text-gray-700">{paginatedRegistry.map(m => (<tr key={m.memberId} className="hover:bg-amber-50/50 transition-colors border-b border-gray-50 last:border-0"><td className="p-4"><input type="checkbox" checked={selectedBaristas.includes(m.memberId)} onChange={() => toggleSelectBarista(m.memberId)} className="rounded text-[#3E2723] focus:ring-[#FDB813]"/></td><td className="p-4">{m.name}</td><td className="p-4 font-mono text-gray-500">{m.memberId}</td><td className="p-4">{m.specificTitle}</td><td className="p-4"><span onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full text-[9px] uppercase tracking-widest cursor-pointer ${m.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{m.status}</span></td><td className="p-4 text-center"><button onClick={() => isAdmin && handleToggleIdLaceReceived(m.memberId, m.idLaceReceived)} className={`p-1 rounded-full ${m.idLaceReceived ? 'text-green-600 bg-green-100' : 'text-gray-300 bg-gray-100'}`} title={m.idLaceReceived ? "Received" : "Not Received"}><CheckCircle2 size={16}/></button></td><td className="p-4 text-right flex justify-end gap-2">{isAdmin && <><button onClick={() => { setEditMemberForm({ joinedDate: m.joinedDate ? new Date(m.joinedDate).toISOString().split('T')[0] : '', positionCategory: m.positionCategory, committee: '', specificTitle: m.specificTitle }); setEditingMember(m); }} className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-600"><Pen size={14}/></button><button onClick={() => setShowAccoladeModal({...m, currentAccolades: m.accolades || []})} className="p-2 bg-yellow-100 rounded-lg hover:bg-yellow-200 text-yellow-700"><Trophy size={14}/></button><button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="p-2 bg-blue-100 rounded-lg hover:bg-blue-200 text-blue-700"><RefreshCcw size={14}/></button><button onClick={() => initiateRemoveMember(m.memberId, m.name)} className="p-2 bg-red-100 rounded-lg hover:bg-red-200 text-red-700"><Trash2 size={14}/></button></>}</td></tr>))}</tbody></table></div>
                           <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-50"><span className="text-xs text-gray-400 font-bold uppercase">Page {currentPage} of {totalPages}</span><div className="flex gap-2"><button onClick={prevPage} disabled={currentPage === 1} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50">Prev</button><button onClick={nextPage} disabled={currentPage === totalPages} className="px-4 py-2 bg-gray-100 rounded-xl text-xs font-bold uppercase disabled:opacity-50">Next</button></div></div>
                           <div className="mt-6 flex justify-end gap-2 items-center text-[10px] font-bold text-gray-400 uppercase"><span>Import CSV:</span><input type="file" ref={fileInputRef} onChange={handleBulkImportCSV} accept=".csv" className="hidden"/><button onClick={() => fileInputRef.current?.click()} className="text-amber-600 hover:underline">{isImporting ? 'Importing...' : 'Select File'}</button><span>|</span><button onClick={downloadImportTemplate} className="hover:text-[#3E2723]">Template</button><button onClick={() => alert("Bulk Import Guide:\n1. CSV Headers: Name, Email, Program, PositionCategory, SpecificTitle\n2. Default Password: 'LBA' + Last 5 digits of generated Member ID.\n3. Example: LBA24-20001 -> Password: LBA20001")} className="text-gray-400 hover:text-amber-600"><Info size={14}/></button></div>
                       </div>
@@ -1579,7 +1645,17 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <div key={proj.id} className={`bg-white rounded-[32px] border transition-all ${isExpanded ? 'col-span-full border-[#3E2723] shadow-xl' : 'border-amber-100 shadow-sm hover:shadow-md'}`}>
                                     <div className="p-6 cursor-pointer" onClick={() => setExpandedProjectId(isExpanded ? null : proj.id)}><div className="flex justify-between items-start mb-4"><div><h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4><p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center gap-1"><UserCheck size={12}/> Head: {proj.projectHeadName || 'Unassigned'}</p></div><div className="text-right"><span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span><p className="text-[9px] text-gray-400 mt-1">{completedCount}/{totalCount} Tasks</p></div></div><div className="w-full bg-gray-100 rounded-full h-1.5 mb-4"><div className="bg-[#3E2723] h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div></div><div className="flex justify-between items-center"><span className="text-[10px] font-bold text-gray-500 flex items-center gap-1"><Clock size={12}/> Due: {new Date(proj.deadline).toLocaleDateString()}</span><button className="text-[10px] font-black uppercase text-amber-600 flex items-center gap-1 hover:underline">{isExpanded ? 'Close Board' : 'Open Board'} <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}/></button></div></div>
                                     {isExpanded && (
-                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn"><div className="flex justify-between items-center mb-6"><p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>{(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id, assigneeId: '', assigneeName: '', outputLink: '', outputCaption: '' }); setShowTaskForm(true); }} className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50">+ Add Task</button>}</div><div className="grid grid-cols-1 md:grid-cols-3 gap-4">{['pending', 'brewing', 'served'].map(status => (<div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200"><h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle size={12}/>}{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5><div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">{projectTasks.filter(t => t.status === status).map(task => (<div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group"><div className="flex justify-between items-start mb-1"><div className="flex flex-col"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span>{task.assigneeName && <span className="text-[8px] text-gray-500 font-bold uppercase mt-0.5 flex items-center gap-1"><User size={8}/> {task.assigneeName}</span>}</div><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button><button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button></div></div>{task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Ref Link</a>}{task.outputLink && <a href={task.outputLink} target="_blank" className="text-[9px] text-green-600 hover:underline flex items-center gap-1 mb-1 font-bold"><Link size={8}/> Output Submitted</a>}{task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}<div className="flex gap-1 border-t border-gray-50 pt-1">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}</div></div>))}</div></div>))}</div></div>
+                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn">
+                                            <div className="flex justify-between items-center mb-6">
+                                                <p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>
+                                                <div className="flex gap-2">
+                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingProject(proj); setNewProject({ title: proj.title, description: proj.description, deadline: proj.deadline, projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName }); setShowProjectForm(true); }} className="bg-gray-100 text-gray-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-gray-200">Edit Project</button>}
+                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); handleDeleteProject(proj.id); }} className="bg-red-100 text-red-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-200">Delete</button>}
+                                                    {(canManageProjects || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id, assigneeId: '', assigneeName: '', outputLink: '', outputCaption: '' }); setShowTaskForm(true); }} className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50">+ Add Task</button>}
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">{['pending', 'brewing', 'served'].map(status => (<div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200"><h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckCircle size={12}/>}{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5><div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">{projectTasks.filter(t => t.status === status).map(task => (<div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group"><div className="flex justify-between items-start mb-1"><div className="flex flex-col"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span>{task.assigneeName && <span className="text-[8px] text-gray-500 font-bold uppercase mt-0.5 flex items-center gap-1"><User size={8}/> {task.assigneeName}</span>}</div><div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button><button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button></div></div>{task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Ref Link</a>}{task.outputLink && <a href={task.outputLink} target="_blank" className="text-[9px] text-green-600 hover:underline flex items-center gap-1 mb-1 font-bold"><Link size={8}/> Output Submitted</a>}{task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}<div className="flex gap-1 border-t border-gray-50 pt-1">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}</div></div>))}</div></div>))}</div></div>
+                                        </div>
                                     )}
                                 </div>
                             );
@@ -1587,6 +1663,41 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                  </div>
             )}
+
+            {view === 'settings' && (
+                  <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
+                      <div className="flex items-center gap-4 mb-8">
+                          <div className="p-4 bg-amber-100 text-amber-700 rounded-2xl"><Settings2 size={32} /></div>
+                          <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Settings</h3><p className="text-gray-500 font-bold text-xs uppercase">Manage your barista profile</p></div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
+                              <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2"><User size={20} className="text-amber-500"/> Personal Details</h4>
+                              <form onSubmit={handleUpdateProfile} className="space-y-4">
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase" value={settingsForm.name || ''} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} placeholder="LAST, FIRST MI." /></div>
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nickname / Display Name</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.nickname || ''} onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})} placeholder="How should we call you?" /></div>
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address</label><input type="email" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.email || ''} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} placeholder="email@example.com" /></div>
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Profile Photo URL</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.photoUrl || ''} onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})} placeholder="https://..." /><p className="text-[9px] text-gray-400 mt-1 ml-1">Paste a direct link to an image (Google Drive/Photos links supported).</p></div>
+                                  <div className="grid grid-cols-2 gap-4">
+                                      <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Month</label><select className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.birthMonth || ''} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}><option value="">Month</option>{MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select></div>
+                                      <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Day</label><input type="number" min="1" max="31" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.birthDay || ''} onChange={e => setSettingsForm({...settingsForm, birthDay: e.target.value})} /></div>
+                                  </div>
+                                  <div className="pt-4"><button type="submit" disabled={savingSettings} className="w-full py-4 bg-[#3E2723] text-[#FDB813] rounded-2xl font-black uppercase text-xs hover:bg-black transition-colors disabled:opacity-50">{savingSettings ? "Saving..." : "Update Profile"}</button></div>
+                              </form>
+                          </div>
+                          <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
+                              <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2"><Lock size={20} className="text-red-500"/> Security</h4>
+                              <form onSubmit={handleChangePassword} className="space-y-4">
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Current Password</label><input type="password" required className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={passwordForm.current} onChange={e => setPasswordForm({...passwordForm, current: e.target.value})} /></div>
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">New Password</label><input type="password" required className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={passwordForm.new} onChange={e => setPasswordForm({...passwordForm, new: e.target.value})} /></div>
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Confirm New Password</label><input type="password" required className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={passwordForm.confirm} onChange={e => setPasswordForm({...passwordForm, confirm: e.target.value})} /></div>
+                                  <div className="pt-4"><button type="submit" className="w-full py-4 bg-red-500 text-white rounded-2xl font-black uppercase text-xs hover:bg-red-600 transition-colors">Change Password</button></div>
+                              </form>
+                          </div>
+                      </div>
+                      <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs"><p>Member ID: <span className="font-mono text-white font-bold">{profile.memberId}</span></p><p className="mt-2">Need help with your account? Contact the PR Committee.</p></div>
+                  </div>
+              )}
 
              <div className="mt-auto pt-8"><DataPrivacyFooter /></div>
           </main>
