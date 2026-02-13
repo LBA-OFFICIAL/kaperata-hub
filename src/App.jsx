@@ -183,13 +183,6 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-const formatJoinedDate = (dateStr) => {
-    if (!dateStr) return "Brewing with LBA";
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return "Brewing with LBA";
-    return `Brewing with LBA since ${d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`;
-};
-
 // Fixed Missing Helpers
 const getEventDay = (dateStr) => {
     if (!dateStr) return "?";
@@ -284,11 +277,11 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   const [birthMonth, setBirthMonth] = useState('');
   const [birthDay, setBirthDay] = useState('');
   const [inputKey, setInputKey] = useState('');
-  const [registerCommittee, setRegisterCommittee] = useState(''); // New state for committee selection during registration
+  const [registerCommittee, setRegisterCommittee] = useState('');
   const [paymentMethod, setPaymentMethod] = useState(''); 
   const [refNo, setRefNo] = useState('');
   const [cashOfficerKey, setCashOfficerKey] = useState('');
-  const [membershipType, setMembershipType] = useState('new'); // 'new' or 'renewal'
+  const [membershipType, setMembershipType] = useState('new');
   const [error, setError] = useState(initialError || '');
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState(''); 
@@ -337,26 +330,25 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     
                     setStatusMessage('Verifying details...');
                     let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid';
-                    let finalMembershipType = membershipType; // Default to selection
+                    let finalMembershipType = membershipType;
 
                     if (inputKey) {
                         const uk = inputKey.trim().toUpperCase();
                         if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; }
                         else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
                         else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
+                        else if (uk === (secureKeys?.bypassKey || "KAPERATA_BYPASS_2024").toUpperCase()) { pc = 'Member'; st = 'Member'; pay = 'exempt'; } // Bypass Key Logic
                         else throw new Error("Invalid key.");
                         
-                        // Officers/Committees are always Renewal
-                        finalMembershipType = 'renewal';
+                        // Officers/Committees are always Renewal, Bypass follows selection unless overridden
+                        if (pc !== 'Member') finalMembershipType = 'renewal';
                     }
 
-                    // --- TRANSACTION BLOCK FOR SAFE ID GENERATION ---
                     setStatusMessage('Finalizing registration...');
                     
                     const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
                     const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
                     
-                    // Pre-calculate fallback count by scanning for max ID in registry
                     let fallbackCount = 0;
                     try {
                         const allDocs = await getDocs(registryRef);
@@ -364,7 +356,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                              let maxIdNum = 0;
                              allDocs.forEach(d => {
                                  const mId = d.data().memberId;
-                                 // Robust regex to capture numeric part: LBAyy-sem[XXXX]suffix
                                  const match = mId.match(/-(\d)(\d{4,})C?$/); 
                                  if (match && match[2]) {
                                      const num = parseInt(match[2], 10);
@@ -375,22 +366,18 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         }
                     } catch(e) { console.warn("Fallback count fetch failed", e); }
 
-                    // Transaction
                     const newProfile = await runTransaction(db, async (transaction) => {
                          const counterSnap = await transaction.get(counterRef);
                          let nextCount;
                          
-                         // Determine start count: Max of (stored counter, actual registry max)
                          const storedCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0;
                          const baseCount = Math.max(storedCount, fallbackCount);
                          nextCount = baseCount + 1;
 
-                         // Generate ID and check for collision
                          let assignedId = generateLBAId(pc, nextCount - 1); 
                          let memberRef = doc(registryRef, assignedId);
                          let memberSnap = await transaction.get(memberRef);
                          
-                         // Retry loop for collisions (increased to 20 for safety)
                          let attempts = 0;
                          while(memberSnap.exists() && attempts < 20) {
                              nextCount++;
@@ -415,8 +402,8 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                             birthMonth: parseInt(birthMonth),
                             birthDay: parseInt(birthDay),
                             positionCategory: pc, 
-                            specificTitle: st, 
-                            committee: registerCommittee, // Save selected committee
+                            specificTitle: st,
+                            committee: registerCommittee,
                             memberId: assignedId, 
                             role, 
                             status: 'active', 
@@ -427,18 +414,18 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                             joinedDate: new Date().toISOString() 
                         };
 
-                        // Write
-                        if (pc !== 'Member') {
+                        // Check if Member is exempt (Bypass Key) to save immediately
+                        if (pc !== 'Member' || pay === 'exempt') {
                              transaction.set(memberRef, profileData);
                              transaction.set(counterRef, { memberCount: nextCount }, { merge: true });
-                             return profileData; // Return fully created profile
+                             return profileData; 
                         } else {
                              return profileData;
                         }
                     });
 
                     // Post-Transaction Handling
-                    if (pc !== 'Member') {
+                    if (pc !== 'Member' || newProfile.paymentStatus === 'exempt') {
                         localStorage.setItem('lba_profile', JSON.stringify(newProfile));
                         onLoginSuccess(newProfile);
                     } else { 
@@ -453,7 +440,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                     const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
                     const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
                     
-                    // Fallback count again (Robust Max Finding)
                     let fallbackCount = 0;
                     try {
                         const allDocs = await getDocs(registryRef);
@@ -495,7 +481,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 
                          const finalData = { 
                              ...pendingProfile, 
-                             memberId: assignedId, // Update ID to the safely generated one
+                             memberId: assignedId, 
                              paymentStatus: 'paid', 
                              paymentDetails: { method: paymentMethod, refNo } 
                          };
@@ -742,6 +728,31 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [renewalCashKey, setRenewalCashKey] = useState('');
   const [newGcashNumber, setNewGcashNumber] = useState('');
 
+  // Event & Announcement Management
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [newEvent, setNewEvent] = useState({ 
+    name: '', 
+    startDate: '', 
+    endDate: '', 
+    startTime: '', 
+    endTime: '', 
+    venue: '', 
+    description: '', 
+    attendanceRequired: false, 
+    evaluationLink: '',
+    isVolunteer: false,
+    registrationRequired: true, 
+    openForAll: true,
+    volunteerTarget: { officer: 0, committee: 0, member: 0 },
+    shifts: [],
+    masterclassModuleIds: [], 
+    scheduleType: 'WHOLE_DAY' 
+  });
+  const [editingEvent, setEditingEvent] = useState(null); 
+  const [showAnnounceForm, setShowAnnounceForm] = useState(false);
+  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
+  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
+
   // Last visited state for notifications
   const [lastVisited, setLastVisited] = useState(() => {
       try {
@@ -789,30 +800,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Interactive Feature States
   const [suggestionText, setSuggestionText] = useState("");
-  const [showEventForm, setShowEventForm] = useState(false);
-  // Updated newEvent state to include volunteer-specific fields
-  const [newEvent, setNewEvent] = useState({ 
-    name: '', 
-    startDate: '', 
-    endDate: '', 
-    startTime: '', 
-    endTime: '', 
-    venue: '', 
-    description: '', 
-    attendanceRequired: false, 
-    evaluationLink: '',
-    isVolunteer: false,
-    registrationRequired: true, 
-    openForAll: true,
-    volunteerTarget: { officer: 0, committee: 0, member: 0 },
-    shifts: [],
-    masterclassModuleIds: [], 
-    scheduleType: 'WHOLE_DAY' 
-  });
-  const [editingEvent, setEditingEvent] = useState(null); 
-  const [showAnnounceForm, setShowAnnounceForm] = useState(false);
-  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
-  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   
   // Committee Hunt State
   const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' });
@@ -1804,7 +1791,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
           if (type === 'accepted') {
               const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId);
-              // Automagically update the member's profile
               batch.update(memberRef, {
                   positionCategory: 'Committee',
                   specificTitle: app.role, // e.g. "Committee Head" or "Committee Member"
@@ -1969,260 +1955,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch(e) { console.error(e); }
   };
 
-  // Handle Renewal Payment for Expired Members
-  const handleRenewalPayment = async (e) => {
-      e.preventDefault();
-      if (renewalMethod === 'gcash' && !renewalRef) return;
-      if (renewalMethod === 'cash' && !renewalCashKey) return;
-      
-      if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) {
-          return alert("Invalid Cash Key.");
-      }
-
-      try {
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId);
-          const meta = getMemberIdMeta();
-          
-          await updateDoc(memberRef, {
-              status: 'active',
-              paymentStatus: 'paid',
-              lastRenewedSY: meta.sy,
-              lastRenewedSem: meta.sem,
-              membershipType: 'renewal',
-              paymentDetails: {
-                  method: renewalMethod,
-                  refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH',
-                  date: new Date().toISOString()
-              }
-          });
-          
-          setRenewalRef('');
-          setRenewalCashKey('');
-          alert("Membership renewed successfully! Welcome back.");
-      } catch (err) {
-          console.error("Renewal failed:", err);
-          alert("Renewal failed. Please try again.");
-      }
-  };
-
-  // User Acknowledgment
-  const handleAcknowledgeApp = async (appId) => {
-      try {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', appId), {
-              acknowledged: true
-          });
-      } catch (err) { console.error(err); }
-  };
-
-  // Special Recovery Function for specific incident
-  const handleRecoverLostData = async () => {
-      if(!confirm("This will restore David (Fixed ID), Geremiah & Cassandra (New Sequential IDs). Continue?")) return;
-      
-      try {
-          // 1. Get the current highest count to determine new IDs for G & C
-          const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
-          const allDocs = await getDocs(registryRef);
-          let maxCount = 0;
-          
-          allDocs.forEach(doc => {
-              const mid = doc.data().memberId;
-              const match = mid.match(/-(\d)(\d{4,})C?$/);
-              if (match) {
-                  const num = parseInt(match[2], 10);
-                  if (num > maxCount) maxCount = num;
-              }
-          });
-
-          // 2. Prepare Data
-          const batch = writeBatch(db);
-          const meta = getMemberIdMeta(); // Use current semester for G & C new IDs
-          
-          // David: Fixed ID
-          const davidId = "LBA2526-20007C";
-          const davidRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', davidId);
-          batch.set(davidRef, {
-             name: "DAVID MATTHEW ADRIAS",
-             memberId: davidId,
-             email: "david.adrias@lpu.edu.ph", 
-             program: "BSIT", 
-             positionCategory: "Committee", 
-             specificTitle: "Committee Member", 
-             role: "member", 
-             status: "active",
-             paymentStatus: "exempt",
-             joinedDate: new Date().toISOString(),
-             password: "LBA" + davidId.slice(-5),
-             uid: "recovered_david_" + Date.now(),
-             membershipType: "renewal"
-          });
-
-          // Geremiah: New ID
-          const geremiahCount = maxCount + 1;
-          const geremiahId = generateLBAId("Committee", geremiahCount - 1);
-          const geremiahRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', geremiahId);
-          batch.set(geremiahRef, {
-             name: "GEREMIAH HERNANI",
-             memberId: geremiahId,
-             email: "geremiah.hernani@lpu.edu.ph",
-             program: "BSIT",
-             positionCategory: "Committee",
-             specificTitle: "Committee Member",
-             role: "member",
-             status: "active",
-             paymentStatus: "exempt",
-             joinedDate: new Date().toISOString(),
-             password: "LBA" + geremiahId.slice(-5),
-             uid: "recovered_geremiah_" + Date.now(),
-             membershipType: "renewal"
-          });
-
-          // Cassandra: New ID
-          const cassandraCount = maxCount + 2;
-          const cassandraId = generateLBAId("Committee", cassandraCount - 1);
-          const cassandraRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', cassandraId);
-          batch.set(cassandraRef, {
-             name: "CASSANDRA CASIPIT",
-             memberId: cassandraId,
-             email: "cassandra.casipit@lpu.edu.ph",
-             program: "BSIT",
-             positionCategory: "Committee",
-             specificTitle: "Committee Member",
-             role: "member",
-             status: "active",
-             paymentStatus: "exempt",
-             joinedDate: new Date().toISOString(),
-             password: "LBA" + cassandraId.slice(-5),
-             uid: "recovered_cassandra_" + Date.now(),
-             membershipType: "renewal"
-          });
-
-          // Update counter
-          const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
-          batch.set(counterRef, { memberCount: cassandraCount }, { merge: true });
-
-          await batch.commit();
-          alert(`Recovery successful!\nDavid: ${davidId}\nGeremiah: ${geremiahId}\nCassandra: ${cassandraId}`);
-      } catch (err) {
-          console.error(err);
-          alert("Recovery failed: " + err.message);
-      }
-  };
-
-  // --- NEW FEATURES ---
-  const handleExportCSV = () => {
-      let dataToExport = [...members];
-      if (exportFilter === 'active') dataToExport = dataToExport.filter(m => m.status === 'active');
-      else if (exportFilter === 'inactive') dataToExport = dataToExport.filter(m => m.status !== 'active');
-      else if (exportFilter === 'officers') dataToExport = dataToExport.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
-      else if (exportFilter === 'committee') dataToExport = dataToExport.filter(m => m.positionCategory === 'Committee');
-      
-      const headers = ["Name", "ID", "Email", "Program", "Position", "Status"];
-      const rows = dataToExport.map(e => [e.name, e.memberId, e.email, e.program, e.specificTitle, e.status]);
-
-      generateCSV(headers, rows, `LBA_Registry_${exportFilter}.csv`);
-      logAction("Export CSV", `Exported ${exportFilter} registry`);
-  };
-
-  const handleBulkEmail = () => {
-    const recipients = selectedBaristas.length > 0 
-        ? members.filter(m => selectedBaristas.includes(m.memberId))
-        : filteredRegistry;
-    
-    const emails = recipients
-        .map(m => m.email)
-        .filter(e => e)
-        .join(',');
-        
-    if (!emails) return alert("No valid emails found.");
-    window.location.href = `mailto:?bcc=${emails}`;
-  };
-
-  const handleGiveAccolade = async () => {
-      if (!accoladeText.trim() || !showAccoladeModal) return;
-      try {
-          // FIX: Use .id (document key) instead of .memberId (field)
-          const docId = showAccoladeModal.id || showAccoladeModal.memberId;
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
-          await updateDoc(memberRef, {
-              accolades: arrayUnion(accoladeText)
-          });
-          setAccoladeText("");
-          // Refetch updated accolades for modal
-          const updated = [...(showAccoladeModal.currentAccolades || []), accoladeText];
-          setShowAccoladeModal(prev => ({...prev, currentAccolades: updated}));
-          logAction("Award Accolade", `Awarded '${accoladeText}' to ${docId}`);
-          alert("Accolade awarded!");
-      } catch (err) {
-          console.error("Error giving accolade:", err);
-          alert("Failed to award accolade: " + err.message);
-      }
-  };
-
-  const handleRemoveAccolade = async (accoladeToRemove) => {
-      if(!confirm("Remove this accolade?")) return;
-      try {
-          const docId = showAccoladeModal.id || showAccoladeModal.memberId;
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId);
-          await updateDoc(memberRef, {
-              accolades: arrayRemove(accoladeToRemove)
-          });
-          // Update local modal state
-          const updated = showAccoladeModal.currentAccolades.filter(a => a !== accoladeToRemove);
-          setShowAccoladeModal(prev => ({...prev, currentAccolades: updated}));
-          logAction("Remove Accolade", `Removed '${accoladeToRemove}' from ${docId}`);
-      } catch(e) { console.error(e); alert("Failed to remove accolade"); }
-  };
-
-  const handleResetPassword = async (memberId, email, name) => {
-    if (!confirm(`Reset password for ${name}?`)) return;
-    const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
-    
-    const subject = "LBA Password Reset Request";
-    const body = `Dear ${name},
-
-We received a request to reset the password associated with your membership account at LPU Baristas' Association.
-To regain access to your account, please use the following credentials. For security purposes, we recommend you copy and paste these details directly to avoid errors.
-
-Member ID: ${memberId}
-Temporary Password: ${tempPassword}
-
-How to Access Your Account:
-Click the link below to access the secure login portal:
-${window.location.origin}
-
-Enter your Member ID and the Temporary Password provided above.
-Once logged in, you will be prompted to create a new, permanent password immediately.
-
-Please Note:
-This temporary password will expire in 1 hour (manual enforcement required).
-If you did not request this password reset, please contact our support team immediately at lbaofficial.pr@gmail.com and do not click the link above.
-
-Thank you,
-The LPU Baristas' Association Support Team
-${window.location.origin}`;
-
-    try {
-        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), {
-            password: tempPassword
-        });
-        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-        logAction("Reset Password", `Reset password for ${memberId}`);
-        alert("Password reset! Opening email client...");
-    } catch (err) {
-        console.error(err);
-        alert("Failed to reset password.");
-    }
-  };
-
-  // Registry Helpers
-  const filteredRegistry = useMemo(() => {
-    let res = [...members];
-    if (searchQuery) res = res.filter(m => (m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase())) || (m.memberId && m.memberId.toLowerCase().includes(searchQuery.toLowerCase())));
-    res.sort((a, b) => (a[sortConfig.key] || "").localeCompare(b[sortConfig.key] || "") * (sortConfig.direction === 'asc' ? 1 : -1));
-    return res;
-  }, [members, searchQuery, sortConfig]);
-
-  // Pagination Logic
   const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => {
     if (!isAdmin) return; // RESTRICTED: Only Admins (Officer/Execomm) can update positions
     const target = members.find(m => m.memberId === targetId);
@@ -2295,7 +2027,8 @@ ${window.location.origin}`;
     const newKeys = {
         officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(),
         headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(),
-        commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase()
+        commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase(),
+        bypassKey: "SKIP" + Math.random().toString(36).slice(-6).toUpperCase() // New Bypass Key
     };
     await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys);
     logAction("Rotate Keys", "Security keys rotated");
@@ -3084,18 +2817,18 @@ ${window.location.origin}`;
                             <div className="grid grid-cols-3 gap-3">
                                 {/* Dynamic Badges */}
                                 <div className="flex flex-col items-center gap-1">
-                                    <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
-                                        <div className="text-2xl mb-1">☕</div>
-                                        <span className="text-[8px] font-black uppercase text-amber-900/60 leading-none">Member</span>
+                                    <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                        <div className="text-2xl md:text-3xl mb-1">☕</div>
+                                        <span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900/60 leading-none">Member</span>
                                     </div>
                                 </div>
                                 
                                 {/* Officer Badge - Specific */}
                                 {['Officer', 'Execomm'].includes(profile.positionCategory) && (
                                     <div className="flex flex-col items-center gap-1">
-                                        <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
-                                            <div className="text-2xl mb-1">🛡️</div>
-                                            <span className="text-[8px] font-black uppercase text-indigo-900/60 leading-none">Officer</span>
+                                        <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🛡️</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-indigo-900/60 leading-none">Officer</span>
                                         </div>
                                     </div>
                                 )}
@@ -3103,9 +2836,9 @@ ${window.location.origin}`;
                                 {/* Committee Badge - New */}
                                 {profile.positionCategory === 'Committee' && (
                                     <div className="flex flex-col items-center gap-1">
-                                        <div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
-                                            <div className="text-2xl mb-1">🎗️</div>
-                                            <span className="text-[8px] font-black uppercase text-pink-900/60 leading-none">Comm.</span>
+                                        <div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🎗️</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-pink-900/60 leading-none">Comm.</span>
                                         </div>
                                     </div>
                                 )}
@@ -3113,9 +2846,9 @@ ${window.location.origin}`;
                                 {/* Safe check for memberId before calculation */}
                                 {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && (
                                     <div className="flex flex-col items-center gap-1">
-                                        <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex flex-col items-center justify-center text-center p-1">
-                                            <div className="text-2xl mb-1">🏅</div>
-                                            <span className="text-[8px] font-black uppercase text-yellow-900/60 leading-none">Veteran</span>
+                                        <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🏅</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-yellow-900/60 leading-none">Veteran</span>
                                         </div>
                                     </div>
                                 )}
@@ -3149,16 +2882,17 @@ ${window.location.origin}`;
                                     DEFAULT_MASTERCLASS_MODULES.forEach(mod => {
                                         if (masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId)) {
                                             completedCount++;
+                                            const details = masterclassData.moduleDetails?.[mod.id] || {};
                                             const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
-                                            const customIcon = masterclassData.moduleDetails?.[mod.id]?.icon;
-                                            const iconToUse = customIcon || defaultIcons[mod.id-1];
-                                            const short = mod.short; 
+                                            const iconToUse = details.icon || defaultIcons[mod.id-1];
+                                            // Display dynamic title from curriculum (details.title) or fallback to default title
+                                            const displayTitle = details.title || mod.title; 
                                             
                                             myBadges.push(
                                                 <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
                                                     <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 border border-green-100">
                                                         <div className="text-2xl md:text-3xl mb-1">{iconToUse}</div>
-                                                        <span className="text-[8px] md:text-[10px] font-black uppercase text-green-800 text-center leading-none tracking-tighter line-clamp-2">{short}</span>
+                                                        <span className="text-[8px] md:text-[10px] font-black uppercase text-green-800 text-center leading-none tracking-tighter line-clamp-2">{displayTitle}</span>
                                                     </div>
                                                 </div>
                                             );
@@ -3258,7 +2992,7 @@ ${window.location.origin}`;
                             const icon = details.icon || defaultIcons[mod.id-1];
 
                             return (
-                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
+                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all flex flex-col ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
                                     <div className="flex justify-between items-start mb-4">
                                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>
                                             {icon}
@@ -3268,18 +3002,36 @@ ${window.location.origin}`;
                                     <h4 className="font-black uppercase text-sm text-[#3E2723] mb-1">{details.title || mod.title}</h4>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Module 0{mod.id}</p>
                                     
-                                    {details.objectives && <p className="text-xs text-gray-600 mt-2 line-clamp-2">{details.objectives}</p>}
+                                    <div className="flex-1 space-y-4 mt-4">
+                                        {details.objectives && (
+                                            <div>
+                                                <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Objectives</p>
+                                                <p className="text-xs text-gray-700 leading-relaxed">{details.objectives}</p>
+                                            </div>
+                                        )}
+                                        
+                                        {details.topics && (
+                                            <div>
+                                                <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Topics Covered</p>
+                                                <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{details.topics}</p>
+                                            </div>
+                                        )}
+                                        
+                                        {!details.objectives && !details.topics && (
+                                            <p className="text-xs text-gray-400 italic">Curriculum details coming soon.</p>
+                                        )}
+                                    </div>
 
                                     {isCompleted ? (
-                                        <div className="mt-4 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block">Completed</div>
+                                        <div className="mt-6 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block self-start">Completed</div>
                                     ) : (
-                                        <div className="mt-4 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block">Locked</div>
+                                        <div className="mt-6 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block self-start">Locked</div>
                                     )}
                                 </div>
                             );
                         })}
                     </div>
-                    {/* ... (Admin Masterclass Controls kept same) ... */}
+                    {/* ... (Admin Masterclass Controls) ... */}
                     {isAdmin && (
                         <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-200 mt-8 space-y-4">
                             <h4 className="font-black text-sm uppercase text-amber-800 mb-4 flex items-center gap-2"><Settings2 size={16}/> Admin Controls</h4>
@@ -3292,7 +3044,11 @@ ${window.location.origin}`;
                                         setTempMcDetails(details);
                                         setSelectedMcMembers([]); // Reset selections on module change
                                     }}>
-                                        {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.short}</option>)}
+                                        {DEFAULT_MASTERCLASS_MODULES.map(m => {
+                                            const details = masterclassData.moduleDetails?.[m.id] || {};
+                                            const displayTitle = details.title || m.title;
+                                            return <option key={m.id} value={m.id}>Module {m.id}: {displayTitle}</option>
+                                        })}
                                     </select>
                                     
                                     <button onClick={handleBulkAddMasterclass} disabled={selectedMcMembers.length === 0} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700 disabled:opacity-50">
@@ -3453,13 +3209,12 @@ ${window.location.origin}`;
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
                         {isAdmin && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
                     </div>
-                    {/* ... (Event Form and List rendering kept same) ... */}
+                    
                     <div className="space-y-4">
                         {events.map(ev => {
                             const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
                             return (
                                 <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                                     {/* ... (Event Card Content) ... */}
                                       <div className="flex flex-col sm:flex-row gap-6">
                                         <div className="bg-[#3E2723] text-[#FDB813] w-20 h-20 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0">
                                             <span className="text-2xl">{day}</span>
@@ -3470,8 +3225,67 @@ ${window.location.origin}`;
                                             <p className="text-xs font-bold text-gray-500 uppercase mt-1 flex items-center gap-2"><MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
                                             </p>
                                             <p className="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
-                                             {/* ... (Buttons logic) ... */}
+                                             
+                                             {/* Evaluation Link */}
                                              {ev.evaluationLink && <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">📝 Post-Event Evaluation</a>}
+                                             
+                                             {/* Admin Actions */}
+                                             {isAdmin && (
+                                                <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
+                                                    <button onClick={() => handleEditEvent(ev)} className="flex items-center gap-1 text-[10px] font-bold uppercase text-amber-600 bg-amber-50 px-3 py-2 rounded-lg hover:bg-amber-100 transition-colors"><Pen size={12}/> Edit</button>
+                                                    <button onClick={() => handleDeleteEvent(ev.id)} className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-600 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={12}/> Delete</button>
+                                                    {ev.attendanceRequired && (
+                                                        <button onClick={() => setAttendanceEvent(ev)} className="flex items-center gap-1 text-[10px] font-bold uppercase text-green-600 bg-green-50 px-3 py-2 rounded-lg hover:bg-green-100 transition-colors"><Users size={12}/> Attendance</button>
+                                                    )}
+                                                </div>
+                                             )}
+
+                                             {/* Registration Button (Visible to all active members or Admins for testing) */}
+                                             {(ev.registrationRequired && !isExpired) && (
+                                                 <button 
+                                                    onClick={() => handleRegisterEvent(ev)} 
+                                                    className={`mt-4 w-full py-3 rounded-xl font-black uppercase text-xs transition-colors flex items-center justify-center gap-2 ${
+                                                        (ev.registered || []).includes(profile.memberId) 
+                                                            ? 'bg-green-100 text-green-700' 
+                                                            : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'
+                                                    }`}
+                                                 >
+                                                     {(ev.registered || []).includes(profile.memberId) ? <><CheckCircle2 size={16}/> Registered</> : 'Register Now'}
+                                                 </button>
+                                             )}
+                                             
+                                             {/* Volunteer Shift Display */}
+                                             {ev.isVolunteer && ev.shifts && ev.shifts.length > 0 && (
+                                                 <div className="mt-4 bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                                                     <h5 className="font-black uppercase text-xs text-amber-800 mb-3 flex items-center gap-2"><Hand size={12}/> Volunteer Shifts</h5>
+                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                         {ev.shifts.map(shift => {
+                                                             const isFull = (shift.volunteers || []).length >= shift.capacity;
+                                                             const isSignedUp = (shift.volunteers || []).includes(profile.memberId);
+                                                             
+                                                             return (
+                                                                 <button 
+                                                                    key={shift.id}
+                                                                    onClick={() => handleVolunteerSignup(ev, shift.id)}
+                                                                    disabled={!isSignedUp && isFull}
+                                                                    className={`p-3 rounded-xl text-left border transition-all ${
+                                                                        isSignedUp ? 'bg-green-500 text-white border-green-500' : 
+                                                                        isFull ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 
+                                                                        'bg-white text-gray-600 border-amber-200 hover:border-amber-400'
+                                                                    }`}
+                                                                 >
+                                                                     <div className="flex justify-between items-center mb-1">
+                                                                         <span className="font-bold text-[10px] uppercase">{shift.session}</span>
+                                                                         <span className="text-[8px] font-black bg-black/10 px-1.5 py-0.5 rounded text-current">{(shift.volunteers || []).length}/{shift.capacity}</span>
+                                                                     </div>
+                                                                     <span className="text-[10px] opacity-80 block">{shift.date}</span>
+                                                                     {isSignedUp && <span className="text-[8px] font-bold uppercase mt-1 block">Signed Up ✓</span>}
+                                                                 </button>
+                                                             )
+                                                         })}
+                                                     </div>
+                                                 </div>
+                                             )}
                                         </div>
                                       </div>
                                 </div>
@@ -3487,7 +3301,7 @@ ${window.location.origin}`;
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
                         {isAdmin && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
                     </div>
-                    
+                    {/* ... (Announce Form and List) ... */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {announcements.map(ann => (
                             <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-100 shadow-sm relative group">
@@ -3781,6 +3595,74 @@ ${window.location.origin}`;
                         </div>
                     </div>
                     
+                    {/* Mobile Registry View (Cards) - Fix for blank page on mobile */}
+                    <div className="md:hidden space-y-4">
+                        {paginatedRegistry.map(m => (
+                            <div key={m.id || m.memberId} className={`bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm ${m.status !== 'active' ? 'opacity-70 grayscale' : ''}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
+                                        <div>
+                                            <p className="font-black text-xs uppercase">{m.name}</p>
+                                            <p className="text-[10px] font-mono text-gray-500">{m.memberId}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={20} className="text-[#FDB813]"/> : <div className="w-5 h-5 border-2 border-amber-100 rounded-full"></div>}</button>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[8px] font-bold text-gray-400 uppercase">Category</label>
+                                            <select className="w-full bg-amber-50 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>
+                                                {POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[8px] font-bold text-gray-400 uppercase">Title</label>
+                                            <select className="w-full bg-white border border-amber-100 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}>
+                                                <option value="Member">Member</option>
+                                                <option value="Org Adviser">Org Adviser</option>
+                                                {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                                {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    {m.positionCategory === 'Committee' && (
+                                        <div>
+                                            <label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Team</label>
+                                            <select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}>
+                                                <option value="">Select Team...</option>
+                                                {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <div className="mt-4 pt-4 border-t border-amber-50 flex justify-between items-center">
+                                    <button 
+                                        onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
+                                        className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
+                                        disabled={!isAdmin}
+                                    >
+                                        {m.status === 'active' ? m.membershipType : 'EXPIRED'}
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="bg-yellow-50 text-yellow-600 p-2 rounded-lg"><Trophy size={16}/></button>
+                                        {isAdmin && (
+                                            <>
+                                                <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: m.joinedDate ? m.joinedDate.split('T')[0] : '' }); }} className="bg-amber-50 text-amber-600 p-2 rounded-lg"><Pen size={16}/></button>
+                                                <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="bg-red-50 text-red-500 p-2 rounded-lg"><Trash2 size={16}/></button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* Desktop Table View */}
                     <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
                         {/* Table implementation */}
                          <table className="w-full text-left uppercase table-fixed">
@@ -3906,6 +3788,37 @@ ${window.location.origin}`;
                         <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
                         <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
                     </div>
+
+                    {/* SECURITY VAULT */}
+                    <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white shadow-xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-serif text-2xl font-black uppercase text-[#FDB813]">Security Vault</h4>
+                            <Lock size={24} className="text-[#FDB813]"/>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Officer Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.officerKey || "N/A"}</span>
+                            </div>
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Head Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.headKey || "N/A"}</span>
+                            </div>
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Comm Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.commKey || "N/A"}</span>
+                            </div>
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 bg-[#FDB813] text-[#3E2723] text-[8px] font-black px-2 py-0.5 rounded-bl-lg">PAYMENT BYPASS</div>
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Bypass Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.bypassKey || "N/A"}</span>
+                            </div>
+                        </div>
+                        <button onClick={handleRotateSecurityKeys} className="w-full mt-6 bg-red-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                            <RefreshCcw size={14}/> Rotate Security Keys
+                        </button>
+                    </div>
+
                      {/* OPERATIONS LOG SECTION */}
                     <div className="bg-white p-8 rounded-[40px] border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
                         <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><ClipboardList size={16}/> Operations Log</h4>
@@ -3929,40 +3842,58 @@ ${window.location.origin}`;
                         </div>
                     </div>
 
-                     {/* SYSTEM CONTROLS (RESTORED) */}
-                    <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                        <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
-                        
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                                <span className="text-xs font-bold text-gray-600">Maintenance Mode</span>
-                                <button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
-                                    {hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}
-                                </button>
-                            </div>
+                     {/* SYSTEM CONTROLS & DANGER ZONE */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+                            <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
                             
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                                <span className="text-xs font-bold text-gray-600">Registration</span>
-                                <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>
-                                    {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
-                                </button>
-                            </div>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Maintenance Mode</span>
+                                    <button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
+                                        {hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}
+                                    </button>
+                                </div>
+                                
+                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Registration</span>
+                                    <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>
+                                        {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
+                                    </button>
+                                </div>
 
-                            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                                <span className="text-xs font-bold text-gray-600">Renewal Season</span>
-                                <button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
-                                    {hubSettings.renewalMode ? "ACTIVE" : "OFF"}
-                                </button>
-                            </div>
+                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Renewal Season</span>
+                                    <button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
+                                        {hubSettings.renewalMode ? "ACTIVE" : "OFF"}
+                                    </button>
+                                </div>
 
-                             <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
-                                <span className="text-xs font-bold text-gray-600">Payment Methods</span>
-                                <button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">
-                                    {hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}
-                                </button>
+                                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Payment Methods</span>
+                                    <button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">
+                                        {hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        <div className="bg-white p-8 rounded-[40px] border-2 border-red-100 shadow-sm">
+                             <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-red-700"><AlertOctagon size={16}/> Danger Zone</h4>
+                             <div className="space-y-3">
+                                 <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100">
+                                     <Database size={14}/> Sanitize Database
+                                 </button>
+                                 <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100">
+                                     <RefreshCcw size={14}/> Migrate: Set All to Renewal
+                                 </button>
+                                 <button onClick={handleRecoverLostData} className="w-full bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100">
+                                     <LifeBuoy size={14}/> Recover Lost Data
+                                 </button>
+                             </div>
+                        </div>
                     </div>
+
                     {/* ... Committee Apps ... */}
                     <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
                         <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
