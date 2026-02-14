@@ -10,19 +10,16 @@ import {
 } from 'firebase/firestore'; 
 import { 
   Users, Calendar, Award, Bell, LogOut, Home, Plus, 
-  ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Star, 
-  Download, Lock, ShieldAlert, BadgeCheck, MapPin, Pen, Send, 
-  Megaphone, Ticket, MessageSquare, 
-  TrendingUp, Mail, Trash2, Search, ArrowUpDown, CheckCircle2, 
-  Settings2, ChevronLeft, ChevronRight, Facebook, Instagram, 
-  LifeBuoy, FileUp, Banknote, AlertTriangle, AlertCircle,
-  History, Cake, Camera, User, Trophy, Clock, 
-  Briefcase, ClipboardCheck, ChevronDown, ChevronUp, 
-  CheckSquare, Music, Database, ExternalLink, Hand, Image as ImageIcon, 
-  Link as LinkIcon, RefreshCcw, GraduationCap, PenTool, BookOpen, 
-  AlertOctagon, Power, FileText, FileBarChart, MoreVertical, CreditCard,
-  ClipboardList, CheckSquare2, ExternalLink as Link2, MessageCircle,
-  BarChart2, Smile, FolderKanban, UserCheck
+  ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, 
+  Download, Lock, BadgeCheck, MapPin, Pen, Send, 
+  MessageSquare, TrendingUp, Mail, Trash2, Search, CheckCircle2, 
+  Settings2, ChevronRight, Facebook, Instagram, 
+  LifeBuoy, Banknote, AlertTriangle, AlertCircle,
+  History, Cake, User, Trophy, Clock, 
+  Briefcase, Music, Database, Hand, Image as ImageIcon, 
+  RefreshCcw, GraduationCap, AlertOctagon, FileText, FileBarChart, 
+  ClipboardList, CheckSquare2, ExternalLink as Link2,
+  BarChart2, Smile, UserCheck
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -987,186 +984,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const emails = targets.map(m => m.email).filter(e => e).join(',');
       window.open(`mailto:?bcc=${emails}`);
   };
-
-  const toggleSelectAll = () => {
-      // Logic for selecting visible members or all members based on context
-      // Here we assume paginatedRegistry is available in scope or we calculate it
-      // Since paginatedRegistry is defined inside Dashboard render, we can't easily access it here
-      // But we can recreate filtering logic or just select all MEMBERS currently loaded
-      // Better to define this inside Dashboard component body.
-  };
-
-  // ... (Moved logic inside component body for scope access)
-
-  useEffect(() => {
-    if (!user) return;
-    
-    // 1. Separate Listener for CURRENT USER (Runs for everyone)
-    const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), (docSnap) => {
-        if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (JSON.stringify(data) !== JSON.stringify(profile)) {
-                console.log("Profile updated from server:", data);
-                setProfile(data);
-                localStorage.setItem('lba_profile', JSON.stringify(data));
-            }
-        }
-    }, (e) => console.error("Profile sync error:", e));
-
-    // 2. Registry Listener (ONLY for Officers)
-    let unsubReg = () => {};
-    if (isOfficer || isAdmin) {
-        unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
-            const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
-            setMembers(list);
-        }, (e) => console.error("Registry sync error:", e));
-    } else {
-        unsubReg = () => {};
-    }
-
-    const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Events sync error:", e));
-    const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))), (e) => console.error("Announcements sync error:", e));
-    const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => {
-        const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0));
-        setSuggestions(data);
-    }, (e) => console.error("Suggestions sync error:", e));
-    
-    // Fetch committee applications for officers
-    let unsubApps;
-    if (isAdmin) {
-        unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => {
-             const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-             setCommitteeApps(data);
-        }, (e) => console.error("Apps sync error:", e));
-    }
-
-    // Fetch user's own applications
-    const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => {
-        const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        setUserApplications(data);
-    });
-
-    // Fetch Projects
-    let unsubProjects = () => {};
-    if (isOfficer) {
-        unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => {
-             const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-             setProjects(data);
-        });
-    }
-
-    // Fetch Tasks
-    let unsubTasks = () => {};
-    if (isOfficer) {
-        unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => {
-             const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-             setTasks(data);
-        });
-    }
-
-    // Fetch Activity Logs
-    let unsubLogs = () => {};
-    if (isAdmin) {
-        unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => {
-            const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-            setLogs(data);
-        });
-    }
-
-    // Fetch Polls & Series
-    const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => {
-        const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        setPolls(data);
-    });
-
-    const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => {
-        const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
-        setSeriesPosts(data);
-    });
-
-    // --- ADDED: Set Icons in Head ---
-    const setIcons = () => {
-        const head = document.head;
-        let linkIcon = document.querySelector("link[rel~='icon']");
-        if (!linkIcon) {
-            linkIcon = document.createElement('link');
-            linkIcon.rel = 'icon';
-            head.appendChild(linkIcon);
-        }
-        linkIcon.href = APP_ICON_URL;
-
-        let linkApple = document.querySelector("link[rel='apple-touch-icon']");
-        if (!linkApple) {
-            linkApple = document.createElement('link');
-            linkApple.rel = 'apple-touch-icon';
-            head.appendChild(linkApple);
-        }
-        linkApple.href = APP_ICON_URL;
-    };
-    setIcons();
-
-    const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
-    const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
-    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => {
-         if(s.exists()) {
-             setLegacyContent(s.data());
-             const data = s.data();
-             setLegacyForm({ 
-                 ...data, 
-                 achievements: data.achievements || [], // Ensure array exists
-                 imageUrl: data.imageUrl || '',
-                 galleryUrl: data.galleryUrl || '',
-                 imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' }
-             });
-             
-             // Check Anniversary
-             if (data.establishedDate) {
-                 const today = new Date();
-                 const est = new Date(data.establishedDate);
-                 if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) {
-                     setIsAnniversary(true);
-                 }
-             }
-         }
-    }, (e) => {});
-    
-    // Masterclass Data
-    const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => {
-        if(s.exists()) {
-            setMasterclassData(s.data());
-        } else {
-            // Init if not exists
-            const initData = { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} };
-            setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), initData);
-        }
-    });
-
-    return () => { 
-        unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC();
-        unsubProjects(); unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries();
-        if (unsubApps) unsubApps();
-        unsubUserApps();
-    };
-  }, [user, isAdmin, isOfficer, profile.memberId]);
-
-  // --- MISSING REGISTRY LOGIC DEFINITIONS ---
-  const paginatedRegistry = useMemo(() => {
-      if (!members) return [];
-      let filtered = members.filter(m => 
-          (m.name?.includes(searchQuery.toUpperCase()) || 
-           m.memberId?.includes(searchQuery.toUpperCase()) || 
-           m.email?.includes(searchQuery.toLowerCase()))
-      );
-
-      if (exportFilter !== 'all') {
-          if (exportFilter === 'active') filtered = filtered.filter(m => m.status === 'active');
-          else if (exportFilter === 'inactive') filtered = filtered.filter(m => m.status !== 'active');
-          else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
-          else if (exportFilter === 'committee') filtered = filtered.filter(m => m.positionCategory === 'Committee');
-      }
-      return filtered; 
-  }, [members, searchQuery, exportFilter]);
 
   const toggleSelectAll = () => {
       if (selectedBaristas.length === paginatedRegistry.length) setSelectedBaristas([]);
@@ -2193,6 +2010,24 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
   const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative";
 
+  // --- MISSING REGISTRY LOGIC DEFINITIONS ---
+  const paginatedRegistry = useMemo(() => {
+      if (!members) return [];
+      let filtered = members.filter(m => 
+          (m.name?.includes(searchQuery.toUpperCase()) || 
+           m.memberId?.includes(searchQuery.toUpperCase()) || 
+           m.email?.includes(searchQuery.toLowerCase()))
+      );
+
+      if (exportFilter !== 'all') {
+          if (exportFilter === 'active') filtered = filtered.filter(m => m.status === 'active');
+          else if (exportFilter === 'inactive') filtered = filtered.filter(m => m.status !== 'active');
+          else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
+          else if (exportFilter === 'committee') filtered = filtered.filter(m => m.positionCategory === 'Committee');
+      }
+      return filtered; 
+  }, [members, searchQuery, exportFilter]);
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
       {hubSettings.maintenanceMode && (
@@ -2384,7 +2219,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
                 
                 {/* List Existing Accolades */}
-                {/* Fixed logic to read current member's accolades if available in members list */}
                 {(() => {
                     const currentMember = members.find(m => m.memberId === showAccoladeModal.memberId);
                     const badges = currentMember?.accolades || [];
