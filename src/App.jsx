@@ -101,8 +101,8 @@ const COMMITTEES_INFO = [
     roles: ["Program Flow", "Logistics", "Crowd Control"]
   },
   {
-    id: "PR",
-    title: "Public Relations",
+    id: "PR", 
+    title: "Public Relations", 
     image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80",
     description: "The voice of the association. We manage social media, engagement, and external partners.",
     roles: ["Social Media", "Copywriting", "External Partnerships"]
@@ -739,12 +739,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     venue: '', 
     description: '', 
     attendanceRequired: false, 
-    evaluationLink: '',
-    isVolunteer: false,
+    evaluationLink: '', 
+    isVolunteer: false, 
     registrationRequired: true, 
-    openForAll: true,
+    openForAll: true, 
     volunteerTarget: { officer: 0, committee: 0, member: 0 },
-    shifts: [],
+    shifts: [], 
     masterclassModuleIds: [], 
     scheduleType: 'WHOLE_DAY' 
   });
@@ -969,15 +969,42 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       };
   }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer]);
 
+  // --- Registry Helpers ---
+  // Ensure we can export CSV and use paginatedRegistry logic properly
+  const handleExportCSV = () => {
+      if (!members) return;
+      const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined"];
+      const rows = members.map(m => [
+          m.memberId, m.name, m.email, m.positionCategory, m.specificTitle, m.committee || '', m.status, m.joinedDate || ''
+      ]);
+      generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleBulkEmail = () => {
+      const targets = selectedBaristas.length > 0 
+          ? members.filter(m => selectedBaristas.includes(m.memberId))
+          : members; 
+      const emails = targets.map(m => m.email).filter(e => e).join(',');
+      window.open(`mailto:?bcc=${emails}`);
+  };
+
+  const toggleSelectAll = () => {
+      // Logic for selecting visible members or all members based on context
+      // Here we assume paginatedRegistry is available in scope or we calculate it
+      // Since paginatedRegistry is defined inside Dashboard render, we can't easily access it here
+      // But we can recreate filtering logic or just select all MEMBERS currently loaded
+      // Better to define this inside Dashboard component body.
+  };
+
+  // ... (Moved logic inside component body for scope access)
+
   useEffect(() => {
     if (!user) return;
     
     // 1. Separate Listener for CURRENT USER (Runs for everyone)
-    // This ensures real-time updates for the logged-in user without needing a refresh
     const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), (docSnap) => {
         if (docSnap.exists()) {
             const data = docSnap.data();
-            // Simple check to avoid unnecessary re-renders if nothing changed
             if (JSON.stringify(data) !== JSON.stringify(profile)) {
                 console.log("Profile updated from server:", data);
                 setProfile(data);
@@ -987,18 +1014,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     }, (e) => console.error("Profile sync error:", e));
 
     // 2. Registry Listener (ONLY for Officers)
-    // Normal members don't need to download the whole database
     let unsubReg = () => {};
-    // For masterclass selection, we DO need a list of members.
-    // If not officer, we might need a separate way to fetch, but for now assuming officers manage masterclass.
-    // To allow masterclass member selection, we keep this active for officers.
     if (isOfficer || isAdmin) {
         unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => {
             const list = s.docs.map(d => ({ id: d.id, ...d.data() }));
             setMembers(list);
         }, (e) => console.error("Registry sync error:", e));
     } else {
-        // Just empty subscription for members
         unsubReg = () => {};
     }
 
@@ -1025,7 +1047,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         setUserApplications(data);
     });
 
-    // Fetch Projects for "The Task Bar" (Officers + Committee)
+    // Fetch Projects
     let unsubProjects = () => {};
     if (isOfficer) {
         unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => {
@@ -1034,7 +1056,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         });
     }
 
-    // Fetch Tasks (Filtered by project ID client side for now as simpler)
+    // Fetch Tasks
     let unsubTasks = () => {};
     if (isOfficer) {
         unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => {
@@ -1043,7 +1065,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         });
     }
 
-    // Fetch Activity Logs for Terminal (Admins Only)
+    // Fetch Activity Logs
     let unsubLogs = () => {};
     if (isAdmin) {
         unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => {
@@ -1052,13 +1074,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         });
     }
 
-    // Fetch Polls
+    // Fetch Polls & Series
     const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         setPolls(data);
     });
 
-    // Fetch Series Posts (Barista Diaries)
     const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => {
         const data = s.docs.map(d => ({ id: d.id, ...d.data() }));
         setSeriesPosts(data);
@@ -1084,7 +1105,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         linkApple.href = APP_ICON_URL;
     };
     setIcons();
-    // --------------------------------
 
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {});
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {});
@@ -1129,6 +1149,104 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         unsubUserApps();
     };
   }, [user, isAdmin, isOfficer, profile.memberId]);
+
+  // --- MISSING REGISTRY LOGIC DEFINITIONS ---
+  const paginatedRegistry = useMemo(() => {
+      if (!members) return [];
+      let filtered = members.filter(m => 
+          (m.name?.includes(searchQuery.toUpperCase()) || 
+           m.memberId?.includes(searchQuery.toUpperCase()) || 
+           m.email?.includes(searchQuery.toLowerCase()))
+      );
+
+      if (exportFilter !== 'all') {
+          if (exportFilter === 'active') filtered = filtered.filter(m => m.status === 'active');
+          else if (exportFilter === 'inactive') filtered = filtered.filter(m => m.status !== 'active');
+          else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
+          else if (exportFilter === 'committee') filtered = filtered.filter(m => m.positionCategory === 'Committee');
+      }
+      return filtered; 
+  }, [members, searchQuery, exportFilter]);
+
+  const toggleSelectAll = () => {
+      if (selectedBaristas.length === paginatedRegistry.length) setSelectedBaristas([]);
+      else setSelectedBaristas(paginatedRegistry.map(m => m.memberId));
+  };
+
+  const toggleSelectBarista = (id) => {
+      if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id));
+      else setSelectedBaristas(prev => [...prev, id]);
+  };
+
+  const handleResetPassword = async (mid, email, name) => {
+      if (!confirm(`Reset password for ${name}? Default will be 'LBA' + last 5 of ID.`)) return;
+      const defaultPass = "LBA" + mid.slice(-5);
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), { password: defaultPass });
+          alert(`Password reset to: ${defaultPass}`);
+      } catch(e) { console.error(e); }
+  };
+
+  const handleRecoverLostData = async () => {
+      alert("This feature scans for orphaned records. (Placeholder implementation)");
+  };
+
+  const handleGiveAccolade = async () => {
+      if (!showAccoladeModal || !accoladeText.trim()) return;
+      try {
+          const mid = showAccoladeModal.memberId; 
+          if (!mid) return;
+          
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), {
+              accolades: arrayUnion(accoladeText.trim())
+          });
+          setShowAccoladeModal(null);
+          setAccoladeText("");
+      } catch(e) { console.error(e); }
+  };
+
+  const handleRemoveAccolade = async (accText) => {
+       const mid = showAccoladeModal.memberId;
+       if (!mid) return;
+       try {
+           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), {
+               accolades: arrayRemove(accText)
+           });
+       } catch(e) { console.error(e); }
+  };
+
+  const handleRenewalPayment = async (e) => {
+      e.preventDefault();
+      // Logic for renewal payment
+      if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) {
+          return alert("Invalid Cash Key.");
+      }
+      
+      try {
+          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId);
+          const meta = getMemberIdMeta();
+          
+          await updateDoc(memberRef, {
+              status: 'active',
+              paymentStatus: 'paid',
+              membershipType: 'renewal',
+              lastRenewedSem: meta.sem,
+              lastRenewedSY: meta.sy,
+              paymentDetails: { 
+                  method: renewalMethod, 
+                  refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH',
+                  date: new Date().toISOString()
+              }
+          });
+          
+          alert("Membership Renewed Successfully!");
+          setRenewalRef('');
+          setRenewalCashKey('');
+      } catch(err) {
+          console.error(err);
+          alert("Renewal failed.");
+      }
+  };
 
   // Helper for Logging Actions
   const logAction = async (action, details) => {
@@ -2266,19 +2384,28 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
                 
                 {/* List Existing Accolades */}
-                {showAccoladeModal.currentAccolades && showAccoladeModal.currentAccolades.length > 0 && (
-                    <div className="mb-4 bg-gray-50 rounded-xl p-3 max-h-32 overflow-y-auto">
-                        <p className="text-[9px] font-black uppercase text-gray-400 mb-2 text-left">Current Badges</p>
-                        <ul className="space-y-1">
-                            {showAccoladeModal.currentAccolades.map((acc, idx) => (
-                                <li key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100">
-                                    <span className="text-[10px] font-bold text-gray-700">{acc}</span>
-                                    <button onClick={() => handleRemoveAccolade(acc)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
-                                </li>
-                            ))}
-                        </ul>
-                    </div>
-                )}
+                {/* Fixed logic to read current member's accolades if available in members list */}
+                {(() => {
+                    const currentMember = members.find(m => m.memberId === showAccoladeModal.memberId);
+                    const badges = currentMember?.accolades || [];
+                    
+                    if (badges.length > 0) {
+                        return (
+                            <div className="mb-4 bg-gray-50 rounded-xl p-3 max-h-32 overflow-y-auto">
+                                <p className="text-[9px] font-black uppercase text-gray-400 mb-2 text-left">Current Badges</p>
+                                <ul className="space-y-1">
+                                    {badges.map((acc, idx) => (
+                                        <li key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100">
+                                            <span className="text-[10px] font-bold text-gray-700">{acc}</span>
+                                            <button onClick={() => handleRemoveAccolade(acc)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
 
                 <input type="text" placeholder="Achievement Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} />
                 <div className="flex gap-3">
@@ -3439,7 +3566,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {COMMITTEES_INFO.map(c => (
+                        {COMMITTEES_INFO.map(c => {
+                            const existingApp = userApplications.find(app => app.committee === c.id);
+                            
+                            return (
                             <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full">
                                 <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden shrink-0">
                                      {/* CHANGED: Removed filters entirely for original color */}
@@ -3462,12 +3592,34 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     </ul>
                                 </div>
 
-                                <div className="flex gap-2 mt-auto">
-                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="flex-1 py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Apply as Member</button>
-                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Head' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="px-4 py-3 bg-white border border-[#3E2723] text-[#3E2723] rounded-xl font-black uppercase text-xs hover:bg-amber-50 disabled:opacity-50">Apply as Head</button>
-                                </div>
+                                {existingApp ? (
+                                    <div className="mt-auto bg-gray-50 p-4 rounded-2xl border border-gray-200 text-center animate-fadeIn">
+                                        <div className="flex justify-center mb-2">
+                                            {existingApp.status === 'accepted' ? <CheckCircle2 className="text-green-600" size={24}/> :
+                                             existingApp.status === 'denied' ? <AlertCircle className="text-red-600" size={24}/> :
+                                             <Clock className="text-yellow-600" size={24}/>}
+                                        </div>
+                                        <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Application Submitted</p>
+                                        <p className="text-xs font-bold text-[#3E2723] mb-2">{existingApp.role}</p>
+                                        <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${
+                                            existingApp.status === 'accepted' ? 'bg-green-100 text-green-700' :
+                                            existingApp.status === 'denied' ? 'bg-red-100 text-red-700' :
+                                            existingApp.status === 'for_interview' ? 'bg-blue-100 text-blue-700' :
+                                            'bg-yellow-100 text-yellow-700'
+                                        }`}>
+                                            {existingApp.status === 'for_interview' ? 'Interview Scheduled' : existingApp.status}
+                                        </span>
+                                        <p className="text-[9px] text-gray-400 mt-3">Updated: {existingApp.statusUpdatedAt?.toDate ? formatDate(existingApp.statusUpdatedAt.toDate()) : formatDate(new Date())}</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-2 mt-auto">
+                                        <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="flex-1 py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Apply as Member</button>
+                                        <button onClick={(e) => { setCommitteeForm({ role: 'Committee Head' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="px-4 py-3 bg-white border border-[#3E2723] text-[#3E2723] rounded-xl font-black uppercase text-xs hover:bg-amber-50 disabled:opacity-50">Apply as Head</button>
+                                    </div>
+                                )}
                             </div>
-                        ))}
+                        );
+                        })}
                     </div>
                 </div>
             )}
