@@ -2028,6 +2028,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       return filtered; 
   }, [members, searchQuery, exportFilter]);
 
+  const toggleSelectAll = () => {
+      if (selectedBaristas.length === paginatedRegistry.length) setSelectedBaristas([]);
+      else setSelectedBaristas(paginatedRegistry.map(m => m.memberId));
+  };
+
+  const toggleSelectBarista = (id) => {
+      if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id));
+      else setSelectedBaristas(prev => [...prev, id]);
+  };
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
       {hubSettings.maintenanceMode && (
