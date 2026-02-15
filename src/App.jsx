@@ -985,6 +985,24 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       window.open(`mailto:?bcc=${emails}`);
   };
 
+  // --- MISSING REGISTRY LOGIC DEFINITIONS ---
+  const paginatedRegistry = useMemo(() => {
+      if (!members) return [];
+      let filtered = members.filter(m => 
+          (m.name?.includes(searchQuery.toUpperCase()) || 
+           m.memberId?.includes(searchQuery.toUpperCase()) || 
+           m.email?.includes(searchQuery.toLowerCase()))
+      );
+
+      if (exportFilter !== 'all') {
+          if (exportFilter === 'active') filtered = filtered.filter(m => m.status === 'active');
+          else if (exportFilter === 'inactive') filtered = filtered.filter(m => m.status !== 'active');
+          else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
+          else if (exportFilter === 'committee') filtered = filtered.filter(m => m.positionCategory === 'Committee');
+      }
+      return filtered; 
+  }, [members, searchQuery, exportFilter]);
+
   const toggleSelectAll = () => {
       if (selectedBaristas.length === paginatedRegistry.length) setSelectedBaristas([]);
       else setSelectedBaristas(paginatedRegistry.map(m => m.memberId));
@@ -3570,7 +3588,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  </div>
             )}
 
-            {/* ... (Registry and Reports Views) ... */}
+            {/* ... (Registry and Reports Views kept same) ... */}
             {view === 'members' && isOfficer && (
                 <div className="space-y-6 animate-fadeIn text-[#3E2723]">
                     {/* ... Registry UI ... */}
@@ -3586,6 +3604,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             </select>
                             <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                             <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
+                            {/* Updated: Added Download Template Button to remove unused variable warning */}
                             <button onClick={downloadImportTemplate} className="text-indigo-500 hover:underline text-[9px] font-bold uppercase mr-2">Template</button>
                             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                             <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
