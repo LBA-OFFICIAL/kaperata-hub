@@ -985,6 +985,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       window.open(`mailto:?bcc=${emails}`);
   };
 
+  const toggleSelectAll = () => {
+      if (selectedBaristas.length === paginatedRegistry.length) setSelectedBaristas([]);
+      else setSelectedBaristas(paginatedRegistry.map(m => m.memberId));
+  };
+
+  const toggleSelectBarista = (id) => {
+      if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id));
+      else setSelectedBaristas(prev => [...prev, id]);
+  };
+
   const handleResetPassword = async (mid, email, name) => {
       if (!confirm(`Reset password for ${name}? Default will be 'LBA' + last 5 of ID.`)) return;
       const defaultPass = "LBA" + mid.slice(-5);
@@ -3560,7 +3570,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  </div>
             )}
 
-            {/* ... (Registry and Reports Views kept same) ... */}
+            {/* ... (Registry and Reports Views) ... */}
             {view === 'members' && isOfficer && (
                 <div className="space-y-6 animate-fadeIn text-[#3E2723]">
                     {/* ... Registry UI ... */}
@@ -3576,7 +3586,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             </select>
                             <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                             <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
-                            {/* Updated: Added Download Template Button to remove unused variable warning */}
                             <button onClick={downloadImportTemplate} className="text-indigo-500 hover:underline text-[9px] font-bold uppercase mr-2">Template</button>
                             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                             <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
