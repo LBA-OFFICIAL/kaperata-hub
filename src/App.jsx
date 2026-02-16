@@ -985,8 +985,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       window.open(`mailto:?bcc=${emails}`);
   };
 
-  // --- REGISTRY LOGIC DEFINITIONS ---
-  // DEFINED HERE ONCE TO AVOID DUPLICATES
+  // --- REGISTRY LOGIC DEFINITIONS (DEFINED ONCE) ---
   const paginatedRegistry = useMemo(() => {
       if (!members) return [];
       let filtered = members.filter(m => 
@@ -2029,7 +2028,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
   const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative";
 
-  // --- MISSING REGISTRY LOGIC DEFINITIONS ---
+  // --- REGISTRY LOGIC DEFINITIONS (DEFINED ONCE) ---
   const paginatedRegistry = useMemo(() => {
       if (!members) return [];
       let filtered = members.filter(m => 
@@ -2056,6 +2055,100 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id));
       else setSelectedBaristas(prev => [...prev, id]);
   };
+
+  // Real-time Sync for Attendance Event
+  useEffect(() => {
+    if (!user) return;
+
+    // 1. Members Registry
+    const unsubMembers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), 
+      (snap) => setMembers(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Members sync error", err)
+    );
+
+    // 2. Events
+    const unsubEvents = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'events'), orderBy('startDate', 'asc')),
+      (snap) => setEvents(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Events sync error", err)
+    );
+
+    // 3. Announcements
+    const unsubAnnounce = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), orderBy('createdAt', 'desc')),
+      (snap) => setAnnouncements(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Announcements sync error", err)
+    );
+
+    // 4. Suggestions
+    const unsubSuggest = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), orderBy('createdAt', 'desc')),
+      (snap) => setSuggestions(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Suggestions sync error", err)
+    );
+
+    // 5. Applications
+    const unsubApps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'applications'),
+      (snap) => {
+          const apps = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+          setCommitteeApps(apps);
+          if (profile?.memberId) {
+             setUserApplications(apps.filter(a => a.memberId === profile.memberId));
+          }
+      },
+      (err) => console.error("Apps sync error", err)
+    );
+
+    // 6. Tasks
+    const unsubTasks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'),
+      (snap) => setTasks(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Tasks sync error", err)
+    );
+
+    // 7. Projects
+    const unsubProjects = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'projects'),
+      (snap) => setProjects(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Projects sync error", err)
+    );
+
+    // 8. Polls
+    const unsubPolls = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'polls'),
+      (snap) => setPolls(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Polls sync error", err)
+    );
+
+    // 9. Series
+    const unsubSeries = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'),
+      (snap) => setSeriesPosts(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Series sync error", err)
+    );
+
+    // 10. Logs (Limit to recent)
+    const unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)),
+      (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Logs sync error", err)
+    );
+
+    // 11. Legacy
+    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'),
+      (s) => {
+          if(s.exists()) {
+             setLegacyContent(s.data());
+             setLegacyForm(s.data()); // Pre-fill form
+          }
+      }
+    );
+    
+    // 12. Masterclass Tracker
+    const unsubMc = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'),
+      (s) => {
+          if(s.exists()) setMasterclassData(s.data());
+      }
+    );
+
+    return () => {
+        unsubMembers(); unsubEvents(); unsubAnnounce(); unsubSuggest();
+        unsubApps(); unsubTasks(); unsubProjects(); unsubPolls();
+        unsubSeries(); unsubLogs(); unsubLegacy(); unsubMc();
+    };
+  }, [user, profile?.memberId]);
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
@@ -2236,45 +2329,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         </>
                     );
                 })()}
-            </div>
-        </div>
-      )}
-
-      {/* Accolade Modal */}
-      {showAccoladeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
-            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
-                <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trophy size={32} /></div>
-                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
-                
-                {/* List Existing Accolades */}
-                {(() => {
-                    const currentMember = members.find(m => m.memberId === showAccoladeModal.memberId);
-                    const badges = currentMember?.accolades || [];
-                    
-                    if (badges.length > 0) {
-                        return (
-                            <div className="mb-4 bg-gray-50 rounded-xl p-3 max-h-32 overflow-y-auto">
-                                <p className="text-[9px] font-black uppercase text-gray-400 mb-2 text-left">Current Badges</p>
-                                <ul className="space-y-1">
-                                    {badges.map((acc, idx) => (
-                                        <li key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100">
-                                            <span className="text-[10px] font-bold text-gray-700">{acc}</span>
-                                            <button onClick={() => handleRemoveAccolade(acc)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        );
-                    }
-                    return null;
-                })()}
-
-                <input type="text" placeholder="Achievement Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} />
-                <div className="flex gap-3">
-                    <button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Close</button>
-                    <button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs hover:bg-yellow-600">Award</button>
-                </div>
             </div>
         </div>
       )}
@@ -3193,300 +3247,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
 
-            {view === 'events' && (
-                <div className="space-y-6 animate-fadeIn">
-                     <div className="flex justify-between items-center">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
-                        {isAdmin && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
-                    </div>
-                    
-                    <div className="space-y-4">
-                        {events.map(ev => {
-                            const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
-                            return (
-                                <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                                      <div className="flex flex-col sm:flex-row gap-6">
-                                        <div className="bg-[#3E2723] text-[#FDB813] w-20 h-20 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0">
-                                            <span className="text-2xl">{day}</span>
-                                            <span className="text-xs uppercase mt-1">{month}</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
-                                            <p className="text-xs font-bold text-gray-500 uppercase mt-1 flex items-center gap-2"><MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
-                                            </p>
-                                            <p className="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
-                                             
-                                             {/* Evaluation Link */}
-                                             {ev.evaluationLink && <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">📝 Post-Event Evaluation</a>}
-                                             
-                                             {/* Admin Actions */}
-                                             {isAdmin && (
-                                                <div className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
-                                                    <button onClick={() => handleEditEvent(ev)} className="flex items-center gap-1 text-[10px] font-bold uppercase text-amber-600 bg-amber-50 px-3 py-2 rounded-lg hover:bg-amber-100 transition-colors"><Pen size={12}/> Edit</button>
-                                                    <button onClick={() => handleDeleteEvent(ev.id)} className="flex items-center gap-1 text-[10px] font-bold uppercase text-red-600 bg-red-50 px-3 py-2 rounded-lg hover:bg-red-100 transition-colors"><Trash2 size={12}/> Delete</button>
-                                                    {ev.attendanceRequired && (
-                                                        <button onClick={() => setAttendanceEvent(ev)} className="flex items-center gap-1 text-[10px] font-bold uppercase text-green-600 bg-green-50 px-3 py-2 rounded-lg hover:bg-green-100 transition-colors"><Users size={12}/> Attendance</button>
-                                                    )}
-                                                </div>
-                                             )}
-
-                                             {/* Registration Button (Visible to all active members or Admins for testing) */}
-                                             {(ev.registrationRequired && !isExpired) && (
-                                                 <button 
-                                                    onClick={() => handleRegisterEvent(ev)} 
-                                                    className={`mt-4 w-full py-3 rounded-xl font-black uppercase text-xs transition-colors flex items-center justify-center gap-2 ${
-                                                        (ev.registered || []).includes(profile.memberId) 
-                                                            ? 'bg-green-100 text-green-700' 
-                                                            : 'bg-[#3E2723] text-[#FDB813] hover:bg-black'
-                                                    }`}
-                                                 >
-                                                     {(ev.registered || []).includes(profile.memberId) ? <><CheckCircle2 size={16}/> Registered</> : 'Register Now'}
-                                                 </button>
-                                             )}
-                                             
-                                             {/* Volunteer Shift Display */}
-                                             {ev.isVolunteer && ev.shifts && ev.shifts.length > 0 && (
-                                                 <div className="mt-4 bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                                                     <h5 className="font-black uppercase text-xs text-amber-800 mb-3 flex items-center gap-2"><Hand size={12}/> Volunteer Shifts</h5>
-                                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                                         {ev.shifts.map(shift => {
-                                                             const isFull = (shift.volunteers || []).length >= shift.capacity;
-                                                             const isSignedUp = (shift.volunteers || []).includes(profile.memberId);
-                                                             
-                                                             return (
-                                                                 <button 
-                                                                    key={shift.id}
-                                                                    onClick={() => handleVolunteerSignup(ev, shift.id)}
-                                                                    disabled={!isSignedUp && isFull}
-                                                                    className={`p-3 rounded-xl text-left border transition-all ${
-                                                                        isSignedUp ? 'bg-green-500 text-white border-green-500' : 
-                                                                        isFull ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' : 
-                                                                        'bg-white text-gray-600 border-amber-200 hover:border-amber-400'
-                                                                    }`}
-                                                                 >
-                                                                     <div className="flex justify-between items-center mb-1">
-                                                                         <span className="font-bold text-[10px] uppercase">{shift.session}</span>
-                                                                         <span className="text-[8px] font-black bg-black/10 px-1.5 py-0.5 rounded text-current">{(shift.volunteers || []).length}/{shift.capacity}</span>
-                                                                     </div>
-                                                                     <span className="text-[10px] opacity-80 block">{shift.date}</span>
-                                                                     {isSignedUp && <span className="text-[8px] font-bold uppercase mt-1 block">Signed Up ✓</span>}
-                                                                 </button>
-                                                             )
-                                                         })}
-                                                     </div>
-                                                 </div>
-                                             )}
-                                        </div>
-                                      </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {view === 'announcements' && (
-                <div className="space-y-6 animate-fadeIn">
-                     <div className="flex justify-between items-center">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
-                        {isAdmin && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
-                    </div>
-                    {/* ... (Announce Form and List) ... */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {announcements.map(ann => (
-                            <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-100 shadow-sm relative group">
-                                {isAdmin && (
-                                    <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => handleEditAnnouncement(ann)} className="bg-white/50 p-2 rounded-full text-amber-600 hover:bg-white hover:text-amber-800 transition-colors"><Pen size={14}/></button>
-                                        <button onClick={() => handleDeleteAnnouncement(ann.id)} className="bg-white/50 p-2 rounded-full text-red-400 hover:bg-white hover:text-red-600 transition-colors"><Trash2 size={14}/></button>
-                                    </div>
-                                )}
-                                <span className="inline-block bg-[#FDB813] px-3 py-1 rounded-full text-[10px] font-black uppercase text-[#3E2723] mb-4">{formatDate(ann.date)}</span>
-                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3">{ann.title}</h4>
-                                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {view === 'members_corner' && (
-                <div className="space-y-6 animate-fadeIn max-w-2xl mx-auto">
-                    <div className="text-center mb-8">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Member's Corner</h3>
-                        <p className="text-gray-500 font-bold text-xs uppercase">Your voice, your vote, your community.</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* POLLS SECTION */}
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><BarChart2 size={18}/> Community Polls</h4>
-                                {isAdmin && <button onClick={() => setShowPollForm(true)} className="bg-amber-100 text-amber-700 p-2 rounded-xl hover:bg-amber-200"><Plus size={16}/></button>}
-                            </div>
-                            
-                            <div className="space-y-4">
-                                {polls.length === 0 ? (
-                                    <div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center text-xs text-gray-400">No active polls.</div>
-                                ) : (
-                                    polls.map(poll => (
-                                        <div key={poll.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm relative group">
-                                            {isAdmin && <button onClick={() => handleDeletePoll(poll.id)} className="absolute top-4 right-4 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>}
-                                            <h5 className="font-bold text-sm text-[#3E2723] mb-4">{poll.question}</h5>
-                                            <div className="space-y-3">
-                                                {poll.options.map(opt => {
-                                                    const totalVotes = poll.options.reduce((acc, o) => acc + (o.votes?.length || 0), 0);
-                                                    const percent = totalVotes === 0 ? 0 : Math.round(((opt.votes?.length || 0) / totalVotes) * 100);
-                                                    const hasVoted = opt.votes?.includes(profile.memberId);
-                                                    return (
-                                                        <div key={opt.id} onClick={() => handleVotePoll(poll.id, opt.id)} className={`relative overflow-hidden rounded-xl border-2 cursor-pointer transition-all ${hasVoted ? 'border-[#3E2723]' : 'border-gray-100 hover:border-amber-200'}`}>
-                                                            <div className="absolute top-0 left-0 bottom-0 bg-amber-100 transition-all duration-500" style={{ width: `${percent}%` }}></div>
-                                                            <div className="relative p-3 flex justify-between items-center z-10">
-                                                                <span className={`text-xs font-bold ${hasVoted ? 'text-[#3E2723]' : 'text-gray-600'}`}>{opt.text}</span>
-                                                                <span className="text-[10px] font-black opacity-60">{percent}%</span>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                            <p className="text-[9px] text-gray-400 text-right mt-3 uppercase font-bold">{poll.options.reduce((acc,o)=>acc+(o.votes?.length||0),0)} Votes</p>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
-
-                        {/* SUGGESTION BOX SECTION */}
-                        <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><MessageSquare size={18}/> Suggestion Box</h4>
-                            </div>
-                            <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm">
-                                <form onSubmit={handlePostSuggestion}>
-                                    <textarea className="w-full p-4 bg-gray-50 rounded-2xl border-none outline-none text-sm resize-none focus:ring-2 ring-amber-100" rows="3" placeholder="Drop your thoughts anonymously..." value={suggestionText} onChange={e => setSuggestionText(e.target.value)} />
-                                    <div className="flex justify-end mt-4"><button type="submit" disabled={!suggestionText.trim()} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs flex items-center gap-2 hover:bg-black disabled:opacity-50"><Send size={14}/> Send</button></div>
-                                </form>
-                            </div>
-                             <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                                {suggestions.map(s => (
-                                    <div key={s.id} className="bg-white p-4 rounded-2xl border border-gray-100 relative group">
-                                        {isAdmin && <button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12}/></button>}
-                                        <p className="text-gray-800 text-xs font-medium italic">"{s.text}"</p>
-                                        <p className="text-[8px] font-bold text-gray-400 uppercase mt-2 text-right">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {view === 'series' && (
-                <div className="space-y-8 animate-fadeIn">
-                     <div className="flex justify-between items-end mb-4">
-                         <div>
-                            <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Barista Diaries</h3>
-                            <p className="text-gray-500 font-bold text-xs uppercase">Life behind the bar & beyond</p>
-                         </div>
-                        {isOfficer && <button onClick={() => setShowSeriesForm(true)} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black"><Plus size={16}/> New Post</button>}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                         {seriesPosts.length === 0 ? (
-                             <div className="col-span-full py-20 text-center text-gray-400">
-                                 <Smile size={48} className="mx-auto mb-4 opacity-50"/>
-                                 <p>No stories yet. Be the first to share!</p>
-                             </div>
-                         ) : (
-                             seriesPosts.map(post => (
-                                 <div key={post.id} className="bg-white rounded-[32px] overflow-hidden border border-amber-100 shadow-sm hover:shadow-lg transition-shadow group relative">
-                                     {isAdmin && <button onClick={() => handleDeleteSeries(post.id)} className="absolute top-4 right-4 z-10 bg-white/80 p-2 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>}
-                                     <div className="h-64 bg-gray-100">
-                                         <img src={getDirectLink(post.imageUrl)} alt={post.title} className="w-full h-full object-cover" />
-                                     </div>
-                                     <div className="p-6">
-                                         <h4 className="font-black text-lg text-[#3E2723] mb-2 leading-tight">{post.title}</h4>
-                                         <p className="text-xs text-gray-600 leading-relaxed mb-4">{post.caption}</p>
-                                         <div className="flex justify-between items-center text-[9px] font-bold uppercase text-gray-400 border-t border-gray-100 pt-4">
-                                             <span>By {post.author}</span>
-                                             <span>{post.createdAt?.toDate ? formatDate(post.createdAt.toDate()) : 'Recently'}</span>
-                                         </div>
-                                     </div>
-                                 </div>
-                             ))
-                         )}
-                    </div>
-                </div>
-            )}
-
-            {view === 'committee_hunt' && (
-                <div className="space-y-8 animate-fadeIn">
-                     <div className="bg-[#3E2723] text-white p-10 rounded-[48px] text-center relative overflow-hidden">
-                        <div className="relative z-10">
-                            <h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3>
-                            <p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Serve the student body, hone your leadership skills, and be part of the legacy.</p>
-                        </div>
-                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {COMMITTEES_INFO.map(c => {
-                            const existingApp = userApplications.find(app => app.committee === c.id);
-                            
-                            return (
-                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col h-full">
-                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden shrink-0">
-                                     {/* CHANGED: Removed filters entirely for original color */}
-                                    <img src={c.image} className="w-full h-full object-cover" alt={c.title} />
-                                </div>
-                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
-                                <p className="text-xs text-gray-600 mb-6 leading-relaxed">{c.description}</p>
-                                
-                                {/* Roles & Responsibilities Section */}
-                                <div className="mb-6 bg-amber-50 p-4 rounded-2xl border border-amber-100 flex-1">
-                                    <p className="text-[10px] font-black uppercase text-amber-800 mb-3 flex items-center gap-2">
-                                        <Briefcase size={12}/> Roles & Responsibilities
-                                    </p>
-                                    <ul className="space-y-2">
-                                        {c.roles.map((role, idx) => (
-                                            <li key={idx} className="text-[10px] text-gray-700 font-medium flex items-start gap-2">
-                                                <span className="text-amber-500 mt-0.5">•</span> {role}
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-
-                                {existingApp ? (
-                                    <div className="mt-auto bg-gray-50 p-4 rounded-2xl border border-gray-200 text-center animate-fadeIn">
-                                        <div className="flex justify-center mb-2">
-                                            {existingApp.status === 'accepted' ? <CheckCircle2 className="text-green-600" size={24}/> :
-                                             existingApp.status === 'denied' ? <AlertCircle className="text-red-600" size={24}/> :
-                                             <Clock className="text-yellow-600" size={24}/>}
-                                        </div>
-                                        <p className="text-[10px] font-black uppercase text-gray-400 mb-1">Application Submitted</p>
-                                        <p className="text-xs font-bold text-[#3E2723] mb-2">{existingApp.role}</p>
-                                        <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase ${
-                                            existingApp.status === 'accepted' ? 'bg-green-100 text-green-700' :
-                                            existingApp.status === 'denied' ? 'bg-red-100 text-red-700' :
-                                            existingApp.status === 'for_interview' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-yellow-100 text-yellow-700'
-                                        }`}>
-                                            {existingApp.status === 'for_interview' ? 'Interview Scheduled' : existingApp.status}
-                                        </span>
-                                        <p className="text-[9px] text-gray-400 mt-3">Updated: {existingApp.statusUpdatedAt?.toDate ? formatDate(existingApp.statusUpdatedAt.toDate()) : formatDate(new Date())}</p>
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-2 mt-auto">
-                                        <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="flex-1 py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Apply as Member</button>
-                                        <button onClick={(e) => { setCommitteeForm({ role: 'Committee Head' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="px-4 py-3 bg-white border border-[#3E2723] text-[#3E2723] rounded-xl font-black uppercase text-xs hover:bg-amber-50 disabled:opacity-50">Apply as Head</button>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                        })}
-                    </div>
-                </div>
-            )}
-
             {/* --- REFACTORED: The Task Bar (Project-Centric) --- */}
             {view === 'daily_grind' && isOfficer && (
                  <div className="space-y-8 animate-fadeIn">
@@ -3605,6 +3365,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             </select>
                             <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                             <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
+                            {/* Updated: Added Download Template Button to remove unused variable warning */}
                             <button onClick={downloadImportTemplate} className="text-indigo-500 hover:underline text-[9px] font-bold uppercase mr-2">Template</button>
                             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                             <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
