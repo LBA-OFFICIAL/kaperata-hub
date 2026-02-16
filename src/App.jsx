@@ -985,7 +985,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       window.open(`mailto:?bcc=${emails}`);
   };
 
-  // --- REGISTRY LOGIC DEFINITIONS (DEFINED ONCE) ---
+  // --- MISSING REGISTRY LOGIC DEFINITIONS ---
   const paginatedRegistry = useMemo(() => {
       if (!members) return [];
       let filtered = members.filter(m => 
@@ -2333,6 +2333,45 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         </div>
       )}
 
+      {/* Accolade Modal */}
+      {showAccoladeModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
+                <div className="w-16 h-16 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trophy size={32} /></div>
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Award Accolade</h3>
+                
+                {/* List Existing Accolades */}
+                {(() => {
+                    const currentMember = members.find(m => m.memberId === showAccoladeModal.memberId);
+                    const badges = currentMember?.accolades || [];
+                    
+                    if (badges.length > 0) {
+                        return (
+                            <div className="mb-4 bg-gray-50 rounded-xl p-3 max-h-32 overflow-y-auto">
+                                <p className="text-[9px] font-black uppercase text-gray-400 mb-2 text-left">Current Badges</p>
+                                <ul className="space-y-1">
+                                    {badges.map((acc, idx) => (
+                                        <li key={idx} className="flex justify-between items-center bg-white p-2 rounded-lg border border-gray-100">
+                                            <span className="text-[10px] font-bold text-gray-700">{acc}</span>
+                                            <button onClick={() => handleRemoveAccolade(acc)} className="text-red-400 hover:text-red-600"><X size={12}/></button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
+
+                <input type="text" placeholder="Achievement Title" className="w-full p-3 border rounded-xl text-xs mb-6" value={accoladeText} onChange={e => setAccoladeText(e.target.value)} />
+                <div className="flex gap-3">
+                    <button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Close</button>
+                    <button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs hover:bg-yellow-600">Award</button>
+                </div>
+            </div>
+        </div>
+      )}
+
       {/* Task Form Modal */}
       {showTaskForm && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
@@ -3538,7 +3577,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             
             {view === 'reports' && isAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-                    {/* ... (Existing Reports Content: Stats, Keys, Financials) ... */}
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
                         <StatIcon icon={TrendingUp} variant="amber" />
                         <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
