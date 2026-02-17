@@ -32,6 +32,7 @@ if (typeof __firebase_config !== 'undefined') {
     firebaseConfig = {};
   }
 } else {
+  // Fallback for development/preview if needed
   firebaseConfig = {
       apiKey: "AIzaSyByPoN0xDIfomiNHLQh2q4OS0tvhY9a_5w",
       authDomain: "kaperata-hub.firebaseapp.com",
@@ -53,7 +54,6 @@ const appId = rawAppId.replace(/[\/.]/g, '_');
 
 // --- Global Constants ---
 const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
-// Icon for homescreen shortcut / favicon
 const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMPvN_dIM3fIwY";
 
 const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Auditor", "Business Manager", "P.R.O.", "Overall Committee Head"];
@@ -124,13 +124,7 @@ const getDirectLink = (url) => {
   return url;
 };
 
-const ensureAbsoluteUrl = (url) => {
-  if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  return 'https://' + url;
-};
-
-// Robust CSV Generator using Blob
+// Robust CSV Generator
 const generateCSV = (headers, rows, filename) => {
     const csvContent = [
         headers.join(','),
@@ -180,7 +174,6 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
-// Fixed Missing Helpers
 const getEventDay = (dateStr) => {
     if (!dateStr) return "?";
     const d = new Date(dateStr);
@@ -193,22 +186,17 @@ const getEventMonth = (dateStr) => {
     return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
 };
 
-// Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
-    
     const start = new Date(startStr);
     const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase();
     const startDay = start.getDate();
-
     if (!endStr || startStr === endStr) {
         return { day: `${startDay}`, month: startMonth };
     }
-
     const end = new Date(endStr);
     const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase();
     const endDay = end.getDate();
-
     if (startMonth === endMonth) {
         return { day: `${startDay}-${endDay}`, month: startMonth };
     } else {
@@ -249,7 +237,7 @@ const DataPrivacyFooter = () => (
       <ShieldCheck size={12} /> Data Privacy Statement
     </div>
     <p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">
-      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance. We do not share your information with unauthorized third parties.
+      LPU Baristas' Association (LBA) is committed to protecting your personal data. All information collected within the Kaperata Hub is securely stored and processed in accordance with the Data Privacy Act of 2012 (RA 10173). Data is used strictly for membership management, event attendance, and certificate issuance.
     </p>
     <div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider">
       <span>© {new Date().getFullYear()} LBA</span>
@@ -334,10 +322,9 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; }
                         else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
                         else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
-                        else if (uk === (secureKeys?.bypassKey || "KAPERATA_BYPASS_2024").toUpperCase()) { pc = 'Member'; st = 'Member'; pay = 'exempt'; } // Bypass Key Logic
+                        else if (uk === (secureKeys?.bypassKey || "KAPERATA_BYPASS_2024").toUpperCase()) { pc = 'Member'; st = 'Member'; pay = 'exempt'; } 
                         else throw new Error("Invalid key.");
                         
-                        // Officers/Committees are always Renewal, Bypass follows selection unless overridden
                         if (pc !== 'Member') finalMembershipType = 'renewal';
                     }
 
@@ -411,7 +398,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                             joinedDate: new Date().toISOString() 
                         };
 
-                        // Check if Member is exempt (Bypass Key) to save immediately
                         if (pc !== 'Member' || pay === 'exempt') {
                              transaction.set(memberRef, profileData);
                              transaction.set(counterRef, { memberCount: nextCount }, { merge: true });
@@ -421,7 +407,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
                         }
                     });
 
-                    // Post-Transaction Handling
                     if (pc !== 'Member' || newProfile.paymentStatus === 'exempt') {
                         localStorage.setItem('lba_profile', JSON.stringify(newProfile));
                         onLoginSuccess(newProfile);
@@ -1099,13 +1084,97 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   // Real-time Sync for Attendance Event
   useEffect(() => {
-    if (attendanceEvent && events.length > 0) {
-      const liveEvent = events.find(e => e.id === attendanceEvent.id);
-      if (liveEvent) {
-        setAttendanceEvent(liveEvent);
+    if (!user) return;
+
+    // 1. Members Registry
+    const unsubMembers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), 
+      (snap) => setMembers(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Members sync error", err)
+    );
+
+    // 2. Events
+    const unsubEvents = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'events'), orderBy('startDate', 'asc')),
+      (snap) => setEvents(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Events sync error", err)
+    );
+
+    // 3. Announcements
+    const unsubAnnounce = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), orderBy('createdAt', 'desc')),
+      (snap) => setAnnouncements(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Announcements sync error", err)
+    );
+
+    // 4. Suggestions
+    const unsubSuggest = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), orderBy('createdAt', 'desc')),
+      (snap) => setSuggestions(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Suggestions sync error", err)
+    );
+
+    // 5. Applications
+    const unsubApps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'applications'),
+      (snap) => {
+          const apps = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+          setCommitteeApps(apps);
+          if (profile?.memberId) {
+             setUserApplications(apps.filter(a => a.memberId === profile.memberId));
+          }
+      },
+      (err) => console.error("Apps sync error", err)
+    );
+
+    // 6. Tasks
+    const unsubTasks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'),
+      (snap) => setTasks(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Tasks sync error", err)
+    );
+
+    // 7. Projects
+    const unsubProjects = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'projects'),
+      (snap) => setProjects(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Projects sync error", err)
+    );
+
+    // 8. Polls
+    const unsubPolls = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'polls'),
+      (snap) => setPolls(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Polls sync error", err)
+    );
+
+    // 9. Series
+    const unsubSeries = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'),
+      (snap) => setSeriesPosts(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Series sync error", err)
+    );
+
+    // 10. Logs (Limit to recent)
+    const unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)),
+      (snap) => setLogs(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      (err) => console.error("Logs sync error", err)
+    );
+
+    // 11. Legacy
+    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'),
+      (s) => {
+          if(s.exists()) {
+             setLegacyContent(s.data());
+             setLegacyForm(s.data()); // Pre-fill form
+          }
       }
-    }
-  }, [events]);
+    );
+    
+    // 12. Masterclass Tracker
+    const unsubMc = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'),
+      (s) => {
+          if(s.exists()) setMasterclassData(s.data());
+      }
+    );
+
+    return () => {
+        unsubMembers(); unsubEvents(); unsubAnnounce(); unsubSuggest();
+        unsubApps(); unsubTasks(); unsubProjects(); unsubPolls();
+        unsubSeries(); unsubLogs(); unsubLegacy(); unsubMc();
+    };
+  }, [user, profile?.memberId]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -3577,7 +3646,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             
             {view === 'reports' && isAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-                    {/* ... (Existing Reports Content: Stats, Keys, Financials) ... */}
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
                         <StatIcon icon={TrendingUp} variant="amber" />
                         <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
