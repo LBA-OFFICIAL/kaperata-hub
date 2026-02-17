@@ -32,6 +32,7 @@ if (typeof __firebase_config !== 'undefined') {
     firebaseConfig = {};
   }
 } else {
+  // Fallback for development
   firebaseConfig = {
       apiKey: "AIzaSyByPoN0xDIfomiNHLQh2q4OS0tvhY9a_5w",
       authDomain: "kaperata-hub.firebaseapp.com",
@@ -53,7 +54,6 @@ const appId = rawAppId.replace(/[\/.]/g, '_');
 
 // --- Global Constants ---
 const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
-// Icon for homescreen shortcut / favicon
 const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMPvN_dIM3fIwY";
 
 const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Auditor", "Business Manager", "P.R.O.", "Overall Committee Head"];
@@ -2939,11 +2939,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
             
-            {/* The rest of the views (masterclass, team, events, announcements, members_corner, series, committee_hunt, daily_grind, members, reports, settings) follow same pattern as previous output */}
-            {/* ... Only showing truncated structure for brevity, but full file contains all logic ... */}
-            {/* Assuming previous logic is maintained for other views as requested by "clean it up" */}
-            
-            {/* ... Masterclass View ... */}
             {view === 'masterclass' && (
                 <div className="space-y-8 animate-fadeIn">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
@@ -2953,114 +2948,312 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         </div>
                         <button onClick={() => setShowCertificate(true)} className="bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-black transition-colors w-full md:w-auto justify-center"><Award size={16}/> View Certificate</button>
                     </div>
-                    {/* ... grid of modules ... */}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {DEFAULT_MASTERCLASS_MODULES.map(mod => {
-                             const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
-                             const details = masterclassData.moduleDetails?.[mod.id] || {};
-                             const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
-                             const icon = details.icon || defaultIcons[mod.id-1];
-                             return (
+                            const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
+                            const details = masterclassData.moduleDetails?.[mod.id] || {};
+                            // Use custom icon if set, otherwise default
+                            const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
+                            const icon = details.icon || defaultIcons[mod.id-1];
+
+                            return (
                                 <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all flex flex-col ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
                                     <div className="flex justify-between items-start mb-4">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>{icon}</div>
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>
+                                            {icon}
+                                        </div>
                                         {isCompleted && <BadgeCheck className="text-green-600" size={24}/>}
                                     </div>
                                     <h4 className="font-black uppercase text-sm text-[#3E2723] mb-1">{details.title || mod.title}</h4>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Module 0{mod.id}</p>
+                                    
                                     <div className="flex-1 space-y-4 mt-4">
-                                        {details.objectives && <div><p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Objectives</p><p className="text-xs text-gray-700 leading-relaxed">{details.objectives}</p></div>}
+                                        {details.objectives && (
+                                            <div>
+                                                <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Objectives</p>
+                                                <p className="text-xs text-gray-700 leading-relaxed">{details.objectives}</p>
+                                            </div>
+                                        )}
+                                        
+                                        {details.topics && (
+                                            <div>
+                                                <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Topics Covered</p>
+                                                <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{details.topics}</p>
+                                            </div>
+                                        )}
+                                        
+                                        {!details.objectives && !details.topics && (
+                                            <p className="text-xs text-gray-400 italic">Curriculum details coming soon.</p>
+                                        )}
                                     </div>
-                                    {isCompleted ? <div className="mt-6 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block self-start">Completed</div> : <div className="mt-6 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block self-start">Locked</div>}
+
+                                    {isCompleted ? (
+                                        <div className="mt-6 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block self-start">Completed</div>
+                                    ) : (
+                                        <div className="mt-6 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block self-start">Locked</div>
+                                    )}
                                 </div>
-                             );
+                            );
                         })}
                     </div>
-                     {/* ... Admin Controls ... */}
-                     {isAdmin && (
+                    {/* ... (Admin Masterclass Controls) ... */}
+                    {isAdmin && (
                         <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-200 mt-8 space-y-4">
                             <h4 className="font-black text-sm uppercase text-amber-800 mb-4 flex items-center gap-2"><Settings2 size={16}/> Admin Controls</h4>
-                             <div className="space-y-4">
+                            
+                            <div className="space-y-4">
                                 <div className="flex flex-col md:flex-row gap-4">
                                     <select className="p-3 rounded-xl border border-amber-200 text-xs font-bold uppercase w-full md:w-auto" value={adminMcModule} onChange={e => {
                                         setAdminMcModule(e.target.value);
                                         const details = masterclassData.moduleDetails?.[e.target.value] || {};
                                         setTempMcDetails(details);
-                                        setSelectedMcMembers([]);
+                                        setSelectedMcMembers([]); // Reset selections on module change
                                     }}>
-                                        {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.short}</option>)}
+                                        {DEFAULT_MASTERCLASS_MODULES.map(m => {
+                                            const details = masterclassData.moduleDetails?.[m.id] || {};
+                                            const displayTitle = details.title || m.title;
+                                            return <option key={m.id} value={m.id}>Module {m.id}: {displayTitle}</option>
+                                        })}
                                     </select>
-                                    <button onClick={handleBulkAddMasterclass} disabled={selectedMcMembers.length === 0} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700 disabled:opacity-50">Add {selectedMcMembers.length} Attendees</button>
+                                    
+                                    <button onClick={handleBulkAddMasterclass} disabled={selectedMcMembers.length === 0} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700 disabled:opacity-50">
+                                        Add {selectedMcMembers.length} Attendees
+                                    </button>
                                 </div>
+
                                 <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
-                                    <input type="text" placeholder="Search members to add..." className="w-full p-3 text-xs border-b border-amber-100 outline-none" value={adminMcSearch} onChange={e => setAdminMcSearch(e.target.value.toUpperCase())} />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Search members to add..." 
+                                        className="w-full p-3 text-xs border-b border-amber-100 outline-none"
+                                        value={adminMcSearch}
+                                        onChange={e => setAdminMcSearch(e.target.value.toUpperCase())}
+                                    />
                                     <div className="max-h-40 overflow-y-auto p-2 space-y-1">
-                                        {members.filter(m => (m.name.includes(adminMcSearch) || m.memberId.includes(adminMcSearch)) && !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)).slice(0, 50).map(m => (
-                                            <label key={m.memberId} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                                                <input type="checkbox" className="rounded border-gray-300 text-amber-600 focus:ring-amber-500" checked={selectedMcMembers.includes(m.memberId)} onChange={(e) => { if (e.target.checked) setSelectedMcMembers(prev => [...prev, m.memberId]); else setSelectedMcMembers(prev => prev.filter(id => id !== m.memberId)); }} />
-                                                <div><p className="text-xs font-bold text-gray-700">{m.name}</p><p className="text-[9px] text-gray-400 font-mono">{m.memberId}</p></div>
-                                            </label>
-                                        ))}
+                                        {members
+                                            .filter(m => 
+                                                // Filter by search AND filter out members already in this module
+                                                (m.name.includes(adminMcSearch) || m.memberId.includes(adminMcSearch)) &&
+                                                !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)
+                                            )
+                                            .slice(0, 50) // Limit render
+                                            .map(m => (
+                                                <label key={m.memberId} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
+                                                    <input 
+                                                        type="checkbox" 
+                                                        className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                                                        checked={selectedMcMembers.includes(m.memberId)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) setSelectedMcMembers(prev => [...prev, m.memberId]);
+                                                            else setSelectedMcMembers(prev => prev.filter(id => id !== m.memberId));
+                                                        }}
+                                                    />
+                                                    <div>
+                                                        <p className="text-xs font-bold text-gray-700">{m.name}</p>
+                                                        <p className="text-[9px] text-gray-400 font-mono">{m.memberId}</p>
+                                                    </div>
+                                                </label>
+                                            ))
+                                        }
+                                        {members.length === 0 && <p className="text-center text-xs text-gray-400 py-2">Loading members...</p>}
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex gap-2 pt-4 border-t border-amber-200">
-                                <button onClick={handleSaveCertTemplate} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold uppercase text-xs">Save Template</button>
-                                <button onClick={() => setEditingMcCurriculum(true)} className="bg-[#3E2723] text-[#FDB813] px-6 py-2 rounded-xl font-black uppercase text-xs">Edit Curriculum</button>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-amber-200">
+                                <div>
+                                    <label className="text-[10px] font-bold uppercase text-amber-800 mb-1 block">Certificate Template URL</label>
+                                    <div className="flex gap-2">
+                                        <input type="text" className="flex-1 p-3 rounded-xl border border-amber-200 text-xs" value={masterclassData.certTemplate || ''} onChange={e => setMasterclassData({...masterclassData, certTemplate: e.target.value})} />
+                                        <button onClick={handleSaveCertTemplate} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold uppercase text-xs">Save</button>
+                                    </div>
+                                </div>
+                                <div className="flex items-end">
+                                    <button onClick={() => setEditingMcCurriculum(true)} className="w-full bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-xs">Edit Curriculum for Module {adminMcModule}</button>
+                                </div>
                             </div>
                         </div>
-                     )}
+                    )}
+
+                    {/* Edit Curriculum Modal */}
+                    {editingMcCurriculum && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
+                            <div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]">
+                                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Edit Curriculum: Module {adminMcModule}</h3>
+                                <div className="space-y-4">
+                                    <input type="text" placeholder="Workshop Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={tempMcDetails.title || ''} onChange={e => setTempMcDetails({...tempMcDetails, title: e.target.value})} />
+                                    <input type="text" placeholder="Icon (Emoji)" className="w-full p-3 border rounded-xl text-xs font-bold" value={tempMcDetails.icon || ''} onChange={e => setTempMcDetails({...tempMcDetails, icon: e.target.value})} />
+                                    <textarea placeholder="Objectives" className="w-full p-3 border rounded-xl text-xs" rows="3" value={tempMcDetails.objectives || ''} onChange={e => setTempMcDetails({...tempMcDetails, objectives: e.target.value})} />
+                                    <textarea placeholder="Topics Covered" className="w-full p-3 border rounded-xl text-xs" rows="3" value={tempMcDetails.topics || ''} onChange={e => setTempMcDetails({...tempMcDetails, topics: e.target.value})} />
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setEditingMcCurriculum(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs">Cancel</button>
+                                        <button onClick={handleSaveMcCurriculum} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-[#FDB813] font-bold uppercase text-xs">Save Curriculum</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
-            
-            {/* ... Other Views omitted for brevity but logic is preserved in full file context ... */}
+
             {view === 'team' && (
                 <div className="space-y-12 animate-fadeIn text-center">
-                    <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3><p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Executive Committee {getMemberIdMeta().sy}</p></div>
-                    {/* Simplified Team rendering for this output block */}
-                     {teamStructure.tier1.length > 0 && <div className="flex justify-center">{teamStructure.tier1.map(m => <MemberCard key={m.id} m={m} />)}</div>}
-                     {teamStructure.tier2.length > 0 && <div className="flex justify-center gap-6 flex-wrap">{teamStructure.tier2.map(m => <MemberCard key={m.id} m={m} />)}</div>}
-                     {/* ... committees ... */}
+                    <div>
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
+                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Executive Committee {getMemberIdMeta().sy}</p>
+                    </div>
+
+                    {/* Tier 1: President */}
+                    {teamStructure.tier1.length > 0 && (
+                        <div className="flex justify-center">
+                            {teamStructure.tier1.map(m => <MemberCard key={m.id} m={m} />)}
+                        </div>
+                    )}
+
+                    {/* Tier 2: Secretary (VP is Tier 3 in logic but effectively high) */}
+                    {teamStructure.tier2.length > 0 && (
+                        <div className="flex justify-center gap-6 flex-wrap">
+                            {teamStructure.tier2.map(m => <MemberCard key={m.id} m={m} />)}
+                        </div>
+                    )}
+
+                    {/* Tier 3: Other Officers */}
+                    {teamStructure.tier3.length > 0 && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+                            {teamStructure.tier3.map(m => <MemberCard key={m.id} m={m} />)}
+                        </div>
+                    )}
+
+                    <div className="border-t border-amber-100 pt-12 space-y-16">
+                        {COMMITTEES_INFO.map(c => {
+                            const group = teamStructure.committees[c.id];
+                            if (!group || (group.heads.length === 0 && group.members.length === 0)) return null;
+
+                            return (
+                                <div key={c.id}>
+                                    <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h3>
+                                    <p className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-8">{c.description}</p>
+                                    
+                                    {group.heads.length > 0 && (
+                                        <div className="mb-8">
+                                            <span className="bg-amber-100 text-amber-800 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Heads</span>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center mt-6">
+                                                {group.heads.map(m => <MemberCard key={m.id} m={m} />)}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {group.members.length > 0 && (
+                                        <div>
+                                            <span className="bg-gray-100 text-gray-600 px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-widest">Members</span>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center mt-6">
+                                                {group.members.map(m => <MemberCard key={m.id} m={m} />)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Unassigned Section */}
+                        {(teamStructure.committees['Unassigned']?.heads.length > 0 || teamStructure.committees['Unassigned']?.members.length > 0) && (
+                             <div>
+                                <h3 className="font-serif text-2xl font-black uppercase text-gray-400 mb-8">General Committee</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
+                                    {[...teamStructure.committees['Unassigned'].heads, ...teamStructure.committees['Unassigned'].members].map(m => <MemberCard key={m.id} m={m} />)}
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
 
             {/* --- REFACTORED: The Task Bar (Project-Centric) --- */}
             {view === 'daily_grind' && isOfficer && (
                  <div className="space-y-8 animate-fadeIn">
-                    <div className="flex justify-between items-center"><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3><button onClick={() => { setEditingProject(null); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); setShowProjectForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button></div>
+                    <div className="flex justify-between items-center">
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3>
+                        <button onClick={() => { setEditingProject(null); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); setShowProjectForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {/* PROJECT LIST */}
                         {projects.map(proj => {
                             const isExpanded = expandedProjectId === proj.id;
                             const projectTasks = tasks.filter(t => t.projectId === proj.id);
                             const completedCount = projectTasks.filter(t => t.status === 'served').length;
                             const totalCount = projectTasks.length;
                             const progress = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
+
                             return (
                                 <div key={proj.id} className={`bg-white rounded-[32px] border transition-all ${isExpanded ? 'col-span-full border-[#3E2723] shadow-xl' : 'border-amber-100 shadow-sm hover:shadow-md'}`}>
+                                    {/* Project Header Card */}
                                     <div className="p-6 cursor-pointer" onClick={() => setExpandedProjectId(isExpanded ? null : proj.id)}>
                                         <div className="flex justify-between items-start mb-4">
-                                            <div><h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4><p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center gap-1"><UserCheck size={12}/> Head: {proj.projectHeadName || 'Unassigned'}</p></div>
-                                            <div className="text-right"><span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span></div>
+                                            <div>
+                                                <h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4>
+                                                <p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center gap-1"><UserCheck size={12}/> Head: {proj.projectHeadName || 'Unassigned'}</p>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span>
+                                                <p className="text-[9px] text-gray-400 mt-1">{completedCount}/{totalCount} Tasks</p>
+                                            </div>
                                         </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4"><div className="bg-[#3E2723] h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div></div>
+                                        
+                                        {/* Progress Bar */}
+                                        <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4">
+                                            <div className="bg-[#3E2723] h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div>
+                                        </div>
+
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-[10px] font-bold text-gray-500 flex items-center gap-1"><Clock size={12}/> Due: {new Date(proj.deadline).toLocaleDateString()}</span>
+                                            <button className="text-[10px] font-black uppercase text-amber-600 flex items-center gap-1 hover:underline">
+                                                {isExpanded ? 'Close Board' : 'Open Board'} <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}/>
+                                            </button>
+                                        </div>
                                     </div>
+
+                                    {/* EXPANDED TASK BOARD */}
                                     {isExpanded && (
                                         <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn">
                                              <div className="flex justify-between items-center mb-6">
                                                 <p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>
-                                                {(isAdmin || isCommitteeHead || profile.memberId === proj.projectHeadId) && <button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id }); setShowTaskForm(true); }} className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50">+ Add Task</button>}
+                                                {/* Only Project Head, Admins, or Committee Heads can add tasks */}
+                                                {(isAdmin || isCommitteeHead || profile.memberId === proj.projectHeadId) && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id }); setShowTaskForm(true); }} 
+                                                        className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50"
+                                                    >
+                                                        + Add Task
+                                                    </button>
+                                                )}
                                              </div>
-                                             {/* Tasks Grid */}
+
                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                                  {['pending', 'brewing', 'served'].map(status => (
                                                      <div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200">
-                                                         <h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5>
+                                                         <h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">
+                                                            {status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckSquare2 size={12}/>}
+                                                            {status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}
+                                                         </h5>
                                                          <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                                                              {projectTasks.filter(t => t.status === status).map(task => (
                                                                  <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group">
-                                                                     <div className="flex justify-between items-start mb-1"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span></div>
+                                                                     <div className="flex justify-between items-start mb-1">
+                                                                         <span className="font-bold text-xs text-[#3E2723]">{task.title}</span>
+                                                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                             <button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button>
+                                                                             <button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button>
+                                                                         </div>
+                                                                     </div>
+                                                                     {task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Link</a>}
+                                                                     
+                                                                     {task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}
+                                                                     
                                                                      <div className="flex gap-1 border-t border-gray-50 pt-1">
                                                                          {status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}
+                                                                         {status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}
                                                                          {status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}
                                                                      </div>
                                                                  </div>
@@ -3081,17 +3274,96 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             {/* Registry & Reports & Settings */}
             {view === 'members' && isOfficer && (
                 <div className="space-y-6 animate-fadeIn text-[#3E2723]">
+                    {/* ... Registry UI ... */}
                     <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
                         <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
                         <div className="flex gap-2 w-full md:w-auto justify-end">
+                            <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
+                                <option value="all">All</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                                <option value="officers">Officers</option>
+                                <option value="committee">Committee</option>
+                            </select>
                             <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
+                            <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
+                            {/* Updated: Added Download Template Button to remove unused variable warning */}
                             <button onClick={downloadImportTemplate} className="text-indigo-500 hover:underline text-[9px] font-bold uppercase mr-2">Template</button>
                             <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                             <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
                         </div>
                     </div>
-                    {/* Registry Table */}
-                     <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
+                    
+                    {/* Mobile Registry View (Cards) - Fix for blank page on mobile */}
+                    <div className="md:hidden space-y-4">
+                        {paginatedRegistry.map(m => (
+                            <div key={m.id || m.memberId} className={`bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm ${m.status !== 'active' ? 'opacity-70 grayscale' : ''}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" />
+                                        <div>
+                                            <p className="font-black text-xs uppercase">{m.name}</p>
+                                            <p className="text-[10px] font-mono text-gray-500">{m.memberId}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={20} className="text-[#FDB813]"/> : <div className="w-5 h-5 border-2 border-amber-100 rounded-full"></div>}</button>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[8px] font-bold text-gray-400 uppercase">Category</label>
+                                            <select className="w-full bg-amber-50 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>
+                                                {POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[8px] font-bold text-gray-400 uppercase">Title</label>
+                                            <select className="w-full bg-white border border-amber-100 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}>
+                                                <option value="Member">Member</option>
+                                                <option value="Org Adviser">Org Adviser</option>
+                                                {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                                {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    {m.positionCategory === 'Committee' && (
+                                        <div>
+                                            <label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Team</label>
+                                            <select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}>
+                                                <option value="">Select Team...</option>
+                                                {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                <div className="mt-4 pt-4 border-t border-amber-50 flex justify-between items-center">
+                                    <button 
+                                        onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
+                                        className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
+                                        disabled={!isAdmin}
+                                    >
+                                        {m.status === 'active' ? m.membershipType : 'EXPIRED'}
+                                    </button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="bg-yellow-50 text-yellow-600 p-2 rounded-lg"><Trophy size={16}/></button>
+                                        {isAdmin && (
+                                            <>
+                                                <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: m.joinedDate ? m.joinedDate.split('T')[0] : '' }); }} className="bg-amber-50 text-amber-600 p-2 rounded-lg"><Pen size={16}/></button>
+                                                <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="bg-red-50 text-red-500 p-2 rounded-lg"><Trash2 size={16}/></button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
+                        {/* Table implementation */}
                          <table className="w-full text-left uppercase table-fixed">
                         <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
                             <tr className="text-[10px]">
@@ -3099,6 +3371,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <th className="p-4 w-1/3">Barista</th>
                                 <th className="p-4 w-32 text-center">ID</th>
                                 <th className="p-4 w-24 text-center">Status</th>
+                                <th className="p-4 w-40 text-center">Designation</th>
                                 <th className="p-4 w-32 text-right">Manage</th>
                             </tr>
                         </thead>
@@ -3106,10 +3379,77 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             {paginatedRegistry.map(m => (
                             <tr key={m.id || m.memberId} className={`hover:bg-amber-50/50 ${m.status !== 'active' ? 'opacity-50 grayscale' : ''}`}>
                                 <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                                <td className="py-4 px-4"><div className="flex items-center gap-4"><img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" /><div className="min-w-0"><p className="font-black text-xs truncate">{m.name}</p></div></div></td>
+                                <td className="py-4 px-4">
+                                    <div className="flex items-center gap-4">
+                                    <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" />
+                                    <div className="min-w-0">
+                                        <p className="font-black text-xs truncate">{m.name}</p>
+                                        <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            {m.accolades?.map((acc, i) => (
+                                                <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    </div>
+                                </td>
                                 <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
-                                <td className="text-center font-black text-[10px] uppercase">{m.status}</td>
-                                <td className="text-right p-4"><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button></td>
+                                <td className="text-center font-black text-[10px] uppercase">
+                                    {(() => {
+                                        const isOfficerRole = ['Officer', 'Execomm', 'Committee', 'Org Adviser'].includes(m.positionCategory);
+                                        const status = m.membershipType || (isOfficerRole ? 'renewal' : 'new');
+                                        const isNew = status.toLowerCase() === 'new';
+                                        const isActive = m.status === 'active';
+                                        
+                                        return (
+                                            <button 
+                                                onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
+                                                className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${isActive ? (isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`}
+                                                title={isAdmin ? "Click to toggle status" : ""}
+                                                disabled={!isAdmin}
+                                            >
+                                                {isActive ? status : 'EXPIRED'}
+                                            </button>
+                                        );
+                                    })()}
+                                </td>
+                                <td className="text-center">
+                                    <div className="flex flex-col gap-1 items-center">
+                                        <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                        <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                        
+                                        {/* COMMITTEE SUB-TOGGLE - Allows assigning specific committee to members marked as 'Committee' */}
+                                        {m.positionCategory === 'Committee' && (
+                                            <select 
+                                                className="bg-indigo-50 border border-indigo-100 text-indigo-900 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-2 focus:ring-indigo-200" 
+                                                value={m.committee || ""} 
+                                                onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} 
+                                                disabled={!isAdmin}
+                                            >
+                                                <option value="">Select Team...</option>
+                                                {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                            </select>
+                                        )}
+                                    </div>
+                                </td>
+                                <td className="text-right p-4">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
+                                        {isAdmin && (
+                                            <>
+                                                <button 
+                                                    onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: m.joinedDate ? m.joinedDate.split('T')[0] : '' }); }} 
+                                                    className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" 
+                                                    title="Edit Member Details"
+                                                >
+                                                    <Pen size={14}/>
+                                                </button>
+                                                <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
+                                                <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                                            </>
+                                        )}
+                                    </div>
+                                </td>
                             </tr>
                             ))}
                         </tbody>
@@ -3118,22 +3458,193 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
             
-             {/* ... Terminal (Reports) ... */}
             {view === 'reports' && isAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+                    {/* ... (Existing Reports Content: Stats, Keys, Financials) ... */}
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
                         <StatIcon icon={TrendingUp} variant="amber" />
                         <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
                     </div>
-                     <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                        <h4 className="font-black uppercase text-sm mb-4">Financial Reports</h4>
-                        <button onClick={handleDownloadFinancials} className="w-full bg-[#3E2723] text-[#FDB813] py-3 rounded-xl font-black uppercase text-xs flex items-center justify-center gap-2"><FileBarChart size={14}/> Download Report</button>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
+                            <p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
+                            <p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
+                            <p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p>
+                        </div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
+                            <p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p>
+                        </div>
+                    </div>
+                    <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
+                        <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
+                        <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
+                    </div>
+
+                    {/* SECURITY VAULT */}
+                    <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white shadow-xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h4 className="font-serif text-2xl font-black uppercase text-[#FDB813]">Security Vault</h4>
+                            <Lock size={24} className="text-[#FDB813]"/>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Officer Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.officerKey || "N/A"}</span>
+                            </div>
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Head Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.headKey || "N/A"}</span>
+                            </div>
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10">
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Comm Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.commKey || "N/A"}</span>
+                            </div>
+                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 bg-[#FDB813] text-[#3E2723] text-[8px] font-black px-2 py-0.5 rounded-bl-lg">PAYMENT BYPASS</div>
+                                <span className="text-[10px] font-black uppercase text-white/60 block mb-1">Bypass Key</span>
+                                <span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.bypassKey || "N/A"}</span>
+                            </div>
+                        </div>
+                        <button onClick={handleRotateSecurityKeys} className="w-full mt-6 bg-red-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2">
+                            <RefreshCcw size={14}/> Rotate Security Keys
+                        </button>
+                    </div>
+
+                     {/* OPERATIONS LOG SECTION */}
+                    <div className="bg-white p-8 rounded-[40px] border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
+                        <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><ClipboardList size={16}/> Operations Log</h4>
+                        <div className="space-y-2">
+                            {logs && logs.length > 0 ? (
+                                logs.map(log => (
+                                    <div key={log.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl text-xs">
+                                        <div>
+                                            <span className="font-bold text-[#3E2723] block">{log.action}</span>
+                                            <span className="text-gray-500">{log.details}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="block font-bold text-amber-700">{log.actor}</span>
+                                            <span className="text-[9px] text-gray-400">{log.timestamp?.toDate ? formatDate(log.timestamp.toDate()) : 'Just now'}</span>
+                                        </div>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-center text-gray-400 text-xs py-4">No recent activity recorded.</p>
+                            )}
+                        </div>
+                    </div>
+
+                     {/* SYSTEM CONTROLS & DANGER ZONE */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+                            <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
+                            
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Maintenance Mode</span>
+                                    <button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
+                                        {hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}
+                                    </button>
+                                </div>
+                                
+                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Registration</span>
+                                    <button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>
+                                        {hubSettings.registrationOpen ? "OPEN" : "CLOSED"}
+                                    </button>
+                                </div>
+
+                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Renewal Season</span>
+                                    <button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>
+                                        {hubSettings.renewalMode ? "ACTIVE" : "OFF"}
+                                    </button>
+                                </div>
+
+                                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl">
+                                    <span className="text-xs font-bold text-gray-600">Payment Methods</span>
+                                    <button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">
+                                        {hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white p-8 rounded-[40px] border-2 border-red-100 shadow-sm">
+                             <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-red-700"><AlertOctagon size={16}/> Danger Zone</h4>
+                             <div className="space-y-3">
+                                 <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100">
+                                     <Database size={14}/> Sanitize Database
+                                 </button>
+                                 <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100">
+                                     <RefreshCcw size={14}/> Migrate: Set All to Renewal
+                                 </button>
+                                 <button onClick={handleRecoverLostData} className="w-full bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100">
+                                     <LifeBuoy size={14}/> Recover Lost Data
+                                 </button>
+                             </div>
+                        </div>
+                    </div>
+
+                    {/* ... Committee Apps ... */}
+                    <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
+                        <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {committeeApps && committeeApps.length > 0 ? (
+                                committeeApps.map(app => (
+                                    <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <p className="font-black text-sm text-[#3E2723]">{app.name}</p>
+                                                <p className="text-[10px] font-mono text-gray-500">{app.memberId}</p>
+                                            </div>
+                                            <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${
+                                                app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 
+                                                'bg-yellow-100 text-yellow-700'
+                                            }`}>
+                                                {app.status === 'for_interview' ? 'Interview' : app.status}
+                                            </span>
+                                        </div>
+                                        <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
+                                        <div className="flex gap-2 pt-3 border-t border-amber-200/50">
+                                            <button onClick={() => initiateAppAction(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">Interview</button>
+                                            <button onClick={() => initiateAppAction(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
+                                            <button onClick={() => initiateAppAction(app, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
+                                            <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
+                                            <a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a>
+                                        </div>
+                                        <p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-xs text-gray-500 italic">No applications found.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}
-
-            {view === 'settings' && (
-                  <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
+        
+        {view === 'settings' && (
+              <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
+                  <div className="flex items-center gap-4 mb-8">
+                      <div className="p-4 bg-amber-100 text-amber-700 rounded-2xl">
+                          <Settings2 size={32} />
+                      </div>
+                      <div>
+                          <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Settings</h3>
+                          <p className="text-gray-500 font-bold text-xs uppercase">Manage your barista profile</p>
+                      </div>
+                  </div>
+            
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      {/* Profile Details Form */}
                       <div className="bg-white p-8 rounded-[40px] border-2 border-amber-100 shadow-sm">
                           <h4 className="font-black text-lg uppercase text-[#3E2723] mb-6 flex items-center gap-2"><User size={20} className="text-amber-500"/> Personal Details</h4>
                           <form onSubmit={handleUpdateProfile} className="space-y-4">
