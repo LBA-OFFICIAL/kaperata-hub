@@ -985,7 +985,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       window.open(`mailto:?bcc=${emails}`);
   };
 
-  // --- MISSING REGISTRY LOGIC DEFINITIONS ---
+  // --- REGISTRY LOGIC DEFINITIONS (DEFINED ONCE) ---
   const paginatedRegistry = useMemo(() => {
       if (!members) return [];
       let filtered = members.filter(m => 
@@ -3577,6 +3577,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             
             {view === 'reports' && isAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+                    {/* ... (Existing Reports Content: Stats, Keys, Financials) ... */}
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
                         <StatIcon icon={TrendingUp} variant="amber" />
                         <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
