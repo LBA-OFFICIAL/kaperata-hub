@@ -32,7 +32,6 @@ if (typeof __firebase_config !== 'undefined') {
     firebaseConfig = {};
   }
 } else {
-  // Fallback for development/preview if needed
   firebaseConfig = {
       apiKey: "AIzaSyByPoN0xDIfomiNHLQh2q4OS0tvhY9a_5w",
       authDomain: "kaperata-hub.firebaseapp.com",
@@ -68,11 +67,11 @@ const MONTHS = [
 ];
 
 const DEFAULT_MASTERCLASS_MODULES = [
-    { id: 1, title: "Basic Coffee Knowledge & History", short: "Bean-ginnings" },
-    { id: 2, title: "Equipment Familiarization", short: "Tools & Trades" },
-    { id: 3, title: "Manual Brewing", short: "Brew-ology" },
+    { id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" },
+    { id: 2, title: "Equipment Familiarization", short: "Equipment" },
+    { id: 3, title: "Manual Brewing", short: "Brewing" },
     { id: 4, title: "Espresso Machine", short: "Espresso" },
-    { id: 5, title: "Signature Beverage (Advanced)", short: "Innovation" }
+    { id: 5, title: "Signature Beverage (Advanced)", short: "Sig Bev" }
 ];
 
 const COMMITTEES_INFO = [
@@ -174,6 +173,7 @@ const formatDate = (dateStr) => {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 };
 
+// Fixed Missing Helpers
 const getEventDay = (dateStr) => {
     if (!dateStr) return "?";
     const d = new Date(dateStr);
@@ -186,6 +186,7 @@ const getEventMonth = (dateStr) => {
     return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
 };
 
+// Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
     const start = new Date(startStr);
@@ -996,90 +997,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const toggleSelectBarista = (id) => {
       if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id));
       else setSelectedBaristas(prev => [...prev, id]);
-  };
-
-  const handleResetPassword = async (mid, email, name) => {
-      if (!confirm(`Reset password for ${name}? Default will be 'LBA' + last 5 of ID.`)) return;
-      const defaultPass = "LBA" + mid.slice(-5);
-      try {
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), { password: defaultPass });
-          alert(`Password reset to: ${defaultPass}`);
-      } catch(e) { console.error(e); }
-  };
-
-  const handleRecoverLostData = async () => {
-      alert("This feature scans for orphaned records. (Placeholder implementation)");
-  };
-
-  const handleGiveAccolade = async () => {
-      if (!showAccoladeModal || !accoladeText.trim()) return;
-      try {
-          const mid = showAccoladeModal.memberId; 
-          if (!mid) return;
-          
-          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), {
-              accolades: arrayUnion(accoladeText.trim())
-          });
-          setShowAccoladeModal(null);
-          setAccoladeText("");
-      } catch(e) { console.error(e); }
-  };
-
-  const handleRemoveAccolade = async (accText) => {
-       const mid = showAccoladeModal.memberId;
-       if (!mid) return;
-       try {
-           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), {
-               accolades: arrayRemove(accText)
-           });
-       } catch(e) { console.error(e); }
-  };
-
-  const handleRenewalPayment = async (e) => {
-      e.preventDefault();
-      // Logic for renewal payment
-      if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) {
-          return alert("Invalid Cash Key.");
-      }
-      
-      try {
-          const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId);
-          const meta = getMemberIdMeta();
-          
-          await updateDoc(memberRef, {
-              status: 'active',
-              paymentStatus: 'paid',
-              membershipType: 'renewal',
-              lastRenewedSem: meta.sem,
-              lastRenewedSY: meta.sy,
-              paymentDetails: { 
-                  method: renewalMethod, 
-                  refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH',
-                  date: new Date().toISOString()
-              }
-          });
-          
-          alert("Membership Renewed Successfully!");
-          setRenewalRef('');
-          setRenewalCashKey('');
-      } catch(err) {
-          console.error(err);
-          alert("Renewal failed.");
-      }
-  };
-
-  // Helper for Logging Actions
-  const logAction = async (action, details) => {
-      if (!profile) return;
-      try {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), {
-              action,
-              details,
-              actor: profile.name,
-              actorId: profile.memberId,
-              timestamp: serverTimestamp()
-          });
-      } catch (err) { console.error("Logging failed:", err); }
   };
 
   // Real-time Sync for Attendance Event
@@ -3646,6 +3563,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
             
             {view === 'reports' && isAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+                    {/* ... (Existing Reports Content: Stats, Keys, Financials) ... */}
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
                         <StatIcon icon={TrendingUp} variant="amber" />
                         <div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div>
