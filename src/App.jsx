@@ -2733,12 +2733,7 @@ ${window.location.origin}`;
                                     <div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg">
                                         <Coffee size={14}/> 10% Off B'Cafe
                                     </div>
-                                )}
-                            </div>
-                            
-                            <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} • Non-Transferable</p>
-                        </div>
-                    </div>
+    
 
             {view === 'home' && (
                   <div className="space-y-10 animate-fadeIn">
