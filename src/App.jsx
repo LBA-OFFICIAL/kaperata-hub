@@ -19,7 +19,7 @@ import {
   Briefcase, Music, Database, Hand, Image as ImageIcon, 
   RefreshCcw, GraduationCap, AlertOctagon, FileText, FileBarChart, 
   ClipboardList, CheckSquare2, ExternalLink as Link2,
-  BarChart2, Smile, UserCheck, QrCode
+  BarChart2, Smile, UserCheck, QrCode, Printer
 } from 'lucide-react';
 
 // --- Configuration Helper ---
@@ -187,7 +187,6 @@ const getEventMonth = (dateStr) => {
     return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase();
 };
 
-// Safe date helpers for event rendering
 const getEventDateParts = (startStr, endStr) => {
     if (!startStr) return { day: '?', month: '?' };
     const start = new Date(startStr);
@@ -2009,9 +2008,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723] relative">
       {hubSettings.maintenanceMode && (
-          <div className="w-full z-[101]">
+          <div className="absolute top-0 left-0 right-0 z-[101]">
               <MaintenanceBanner />
           </div>
       )}
@@ -2886,7 +2885,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                   </div>
                 )}
-
+            
+            {/* ... Other Views (About, Masterclass, Team, Events, Announcements, Members Corner, Series, Committee Hunt) ... */}
             {view === 'about' && (
                 <div className="space-y-8 animate-fadeIn text-[#3E2723]">
                     {legacyContent.imageUrl && (
@@ -2933,7 +2933,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                 </div>
             )}
-
+            
             {view === 'masterclass' && (
                 <div className="space-y-8 animate-fadeIn">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
