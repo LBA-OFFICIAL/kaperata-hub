@@ -2699,7 +2699,48 @@ ${window.location.origin}`;
                 </header>
 
                 {/* --- HOME DASHBOARD (Existing) --- */}
-                {view === 'home' && (
+                  {/* Welcome Message & Digital ID */}
+                    <div className="text-center mb-8">
+                        <h2 className="font-serif text-3xl md:text-4xl font-black uppercase text-[#3E2723] mb-2 tracking-wide">WELCOME TO THE KAPERATA HUB!</h2>
+                        <p className="text-amber-700/80 font-bold uppercase text-xs md:text-sm tracking-widest max-w-xl mx-auto">Your go-to space for updates, announcements, and everything brewing in the KAPErata community. ☕✨</p>
+                    </div>
+
+                    {/* Digital ID Card */}
+                    <div className="relative overflow-hidden rounded-[32px] bg-[#3E2723] text-[#FDB813] p-8 shadow-2xl border-4 border-[#FDB813] max-w-md mx-auto transform transition-all hover:scale-[1.02] mb-12">
+                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                        
+                        <div className="relative z-10 flex flex-col items-center text-center">
+                            <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA Logo" className="w-24 h-24 object-contain mb-4 drop-shadow-md" />
+                            <h2 className="font-serif text-3xl font-black uppercase tracking-widest mb-1">LPU Baristas</h2>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-80 mb-6">Official Membership ID</p>
+                            
+                            <div className="w-full bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 mb-6">
+                                <h3 className="font-black text-2xl uppercase text-white mb-1">{profile.name}</h3>
+                                <p className="font-mono text-lg text-[#FDB813] tracking-wider">{profile.memberId}</p>
+                                <p className="text-[10px] font-bold uppercase text-white/60 mt-2">{profile.specificTitle}</p>
+                            </div>
+
+                            <div className="flex items-center gap-4 w-full">
+                                <div className={`flex-1 py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 ${
+                                    profile.status === 'active' ? 'bg-green-500/20 border-green-500 text-green-400' : 
+                                    profile.status === 'expired' ? 'bg-red-500/20 border-red-500 text-red-400' :
+                                    'bg-gray-500/20 border-gray-500 text-gray-400'
+                                }`}>
+                                    {profile.status === 'active' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
+                                    {profile.status === 'active' ? 'Active Status' : profile.status}
+                                </div>
+                                {profile.status === 'active' && (
+                                    <div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg">
+                                        <Coffee size={14}/> 10% Off B'Cafe
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} • Non-Transferable</p>
+                        </div>
+                    </div>
+
+            {view === 'home' && (
                   <div className="space-y-10 animate-fadeIn">
                     {/* Expired Membership Banner */}
                     {profile.status === 'expired' && (
