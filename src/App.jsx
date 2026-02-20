@@ -2698,67 +2698,376 @@ ${window.location.origin}`;
                 </div>
                 </header>
 
-                {/* --- HOME DASHBOARD (Existing) --- */}
-                  {/* Welcome Message & Digital ID */}
+             {/* --- HOME DASHBOARD (Existing) --- */}
+                {view === 'home' && (
+                  <div className="space-y-10 animate-fadeIn">
+                    
+                    {/* Welcome Message */}
                     <div className="text-center mb-8">
                         <h2 className="font-serif text-3xl md:text-4xl font-black uppercase text-[#3E2723] mb-2 tracking-wide">WELCOME TO THE KAPERATA HUB!</h2>
                         <p className="text-amber-700/80 font-bold uppercase text-xs md:text-sm tracking-widest max-w-xl mx-auto">Your go-to space for updates, announcements, and everything brewing in the KAPErata community. ☕✨</p>
                     </div>
 
-                 {/* NEW DIGITAL ID CARD */}
-<div className="relative w-full max-w-sm mx-auto mb-12 group perspective">
-    <div className="relative bg-gradient-to-br from-[#3E2723] to-[#1a100e] rounded-[24px] overflow-hidden shadow-2xl border-[3px] border-[#FDB813] aspect-[3/4] sm:aspect-[1.586/1] text-white p-6 flex flex-col justify-between transition-transform transform hover:scale-[1.02]">
-        
-        {/* Background Pattern */}
-        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
-        <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#FDB813] rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
-        
-        {/* Header */}
-        <div className="relative z-10 flex justify-between items-start">
-            <div className="flex items-center gap-3">
-                <img src={getDirectLink(ORG_LOGO_URL)} className="w-12 h-12 object-contain drop-shadow-md" alt="Logo"/>
-                <div>
-                    <h3 className="font-serif font-black uppercase text-sm tracking-widest text-[#FDB813]">LPU Baristas</h3>
-                    <p className="text-[8px] font-bold uppercase tracking-wider opacity-70">Association</p>
-                </div>
-            </div>
-            <div className="bg-white/10 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10">
-                <p className="text-[8px] font-black uppercase tracking-widest text-[#FDB813]">{profile.positionCategory}</p>
-            </div>
-        </div>
+                    {/* NEW DIGITAL ID CARD */}
+                    <div className="relative w-full max-w-sm mx-auto mb-12 group perspective">
+                        <div className="relative bg-gradient-to-br from-[#3E2723] to-[#1a100e] rounded-[24px] overflow-hidden shadow-2xl border-[3px] border-[#FDB813] aspect-[3/4] sm:aspect-[1.586/1] text-white p-6 flex flex-col justify-between transition-transform transform hover:scale-[1.02]">
+                            
+                            {/* Background Pattern */}
+                            <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
+                            <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#FDB813] rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
+                            
+                            {/* Header */}
+                            <div className="relative z-10 flex justify-between items-start">
+                                <div className="flex items-center gap-3">
+                                    <img src={getDirectLink(ORG_LOGO_URL)} className="w-12 h-12 object-contain drop-shadow-md" alt="Logo"/>
+                                    <div>
+                                        <h3 className="font-serif font-black uppercase text-sm tracking-widest text-[#FDB813]">LPU Baristas</h3>
+                                        <p className="text-[8px] font-bold uppercase tracking-wider opacity-70">Association</p>
+                                    </div>
+                                </div>
+                                <div className="bg-white/10 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10">
+                                    <p className="text-[8px] font-black uppercase tracking-widest text-[#FDB813]">{profile.positionCategory}</p>
+                                </div>
+                            </div>
 
-        {/* Profile Section */}
-        <div className="relative z-10 flex flex-col items-center mt-6">
-            <div className="relative mb-4">
-                 <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-[#FDB813] to-[#3E2723]">
-                    <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-full h-full rounded-full object-cover border-4 border-[#1a100e]" alt="Profile"/>
-                 </div>
-                 {profile.status === 'active' && <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 rounded-full border-4 border-[#1a100e] flex items-center justify-center"><CheckCircle2 size={10} className="text-white"/></div>}
-            </div>
-            <h2 className="font-black text-xl uppercase tracking-wide text-center leading-tight mb-1">{profile.name}</h2>
-            <p className="font-mono text-xs text-[#FDB813] tracking-widest opacity-80">{profile.memberId}</p>
-            <p className="text-[10px] font-bold uppercase text-white/50 mt-1">{profile.specificTitle}</p>
-        </div>
+                            {/* Profile Section */}
+                            <div className="relative z-10 flex flex-col items-center mt-6">
+                                <div className="relative mb-4">
+                                     <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-[#FDB813] to-[#3E2723]">
+                                        <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-full h-full rounded-full object-cover border-4 border-[#1a100e]" alt="Profile"/>
+                                     </div>
+                                     {profile.status === 'active' && <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 rounded-full border-4 border-[#1a100e] flex items-center justify-center"><CheckCircle2 size={10} className="text-white"/></div>}
+                                </div>
+                                <h2 className="font-black text-xl uppercase tracking-wide text-center leading-tight mb-1">{profile.name}</h2>
+                                <p className="font-mono text-xs text-[#FDB813] tracking-widest opacity-80">{profile.memberId}</p>
+                                <p className="text-[10px] font-bold uppercase text-white/50 mt-1">{profile.specificTitle}</p>
+                            </div>
 
-        {/* Footer / Details */}
-        <div className="relative z-10 mt-6 pt-4 border-t border-white/10 flex justify-between items-end">
-            <div>
-                <p className="text-[8px] font-bold uppercase text-white/40 mb-0.5">Valid Until</p>
-                <p className="text-[10px] font-black uppercase tracking-wider">{getMemberIdMeta().sy} / {getMemberIdMeta().sem === "1" ? "DEC" : "JUL"}</p>
-            </div>
-             <div className="text-right">
-                <p className="text-[8px] font-bold uppercase text-white/40 mb-0.5">Status</p>
-                <p className={`text-[10px] font-black uppercase tracking-wider ${profile.status === 'active' ? 'text-green-400' : 'text-red-400'}`}>{profile.status}</p>
-            </div>
-            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 opacity-20">
-                 {/* Simple Barcode Simulation */}
-                 <div className="flex gap-0.5 h-6 items-end">
-                    {[...Array(20)].map((_,i) => <div key={i} className="w-0.5 bg-white h-full" style={{height: `${Math.random() * 60 + 40}%`}}></div>)}
-                 </div>
-            </div>
-        </div>
-    </div>
-</div>
+                            {/* Footer / Details */}
+                            <div className="relative z-10 mt-6 pt-4 border-t border-white/10 flex justify-between items-end">
+                                <div>
+                                    <p className="text-[8px] font-bold uppercase text-white/40 mb-0.5">Valid Until</p>
+                                    <p className="text-[10px] font-black uppercase tracking-wider">{getMemberIdMeta().sy} / {getMemberIdMeta().sem === "1" ? "DEC" : "JUL"}</p>
+                                </div>
+                                 <div className="text-right">
+                                    <p className="text-[8px] font-bold uppercase text-white/40 mb-0.5">Status</p>
+                                    <p className={`text-[10px] font-black uppercase tracking-wider ${profile.status === 'active' ? 'text-green-400' : 'text-red-400'}`}>{profile.status}</p>
+                                </div>
+                                <div className="absolute bottom-1 left-1/2 -translate-x-1/2 opacity-20">
+                                     {/* Simple Barcode Simulation */}
+                                     <div className="flex gap-0.5 h-6 items-end">
+                                        {[...Array(20)].map((_,i) => <div key={i} className="w-0.5 bg-white h-full" style={{height: `${Math.random() * 60 + 40}%`}}></div>)}
+                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Expired Membership Banner */}
+                    {profile.status === 'expired' && (
+                        <div className="bg-red-50 border-l-4 border-red-500 p-6 rounded-r-xl mb-6 shadow-md">
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    <h3 className="text-xl font-black uppercase text-red-700 flex items-center gap-2">
+                                        <AlertCircle size={24}/> Membership Expired
+                                    </h3>
+                                    <p className="text-sm text-red-800 mt-2 font-medium">
+                                        Your membership access is currently limited. Please settle your full membership fee to reactivate your account and restore full access to all features.
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="bg-red-200 text-red-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">Status: Expired</span>
+                                </div>
+                            </div>
+                            
+                            <div className="mt-6 bg-white p-6 rounded-2xl border border-red-100">
+                                <h4 className="text-sm font-black uppercase text-gray-700 mb-4">Renewal Payment</h4>
+                                <p className="text-xs text-gray-500 mb-4">Please send the full membership fee via GCash to the number below, then enter your Reference Number to verify.</p>
+                                
+                                <div className="flex flex-col md:flex-row gap-6 items-center">
+                                    <div className="bg-blue-50 p-4 rounded-xl text-center w-full md:w-auto">
+                                        <p className="text-[10px] font-black uppercase text-blue-800">GCash Only</p>
+                                        <p className="text-lg font-black text-blue-900">+63{hubSettings.gcashNumber || '9063751402'}</p>
+                                    </div>
+                                    
+                                    <form onSubmit={e => {
+                                        setRenewalMethod('gcash');
+                                        handleRenewalPayment(e);
+                                    }} className="flex-1 w-full flex gap-3">
+                                        <input 
+                                            type="text" 
+                                            required 
+                                            placeholder="Enter Reference No." 
+                                            className="flex-1 p-3 border border-gray-300 rounded-xl text-xs uppercase focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none"
+                                            value={renewalRef}
+                                            onChange={(e) => setRenewalRef(e.target.value)}
+                                        />
+                                        <button 
+                                            type="submit" 
+                                            className="bg-red-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-red-700 transition-colors shadow-lg"
+                                        >
+                                            Reactivate
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* 15-Day Renewal Period Banner (For Active Members) */}
+                    {!isExpired && hubSettings.renewalMode && !isExemptFromRenewal && (
+                        <div className="bg-orange-50 border-l-4 border-orange-500 p-6 rounded-r-xl mb-6 shadow-md animate-slideIn">
+                             <div className="flex items-start justify-between">
+                                <div>
+                                    <h3 className="text-xl font-black uppercase text-orange-700 flex items-center gap-2">
+                                        <RefreshCcw size={24}/> Renewal Period Open
+                                    </h3>
+                                    <p className="text-sm text-orange-800 mt-2 font-medium">
+                                        Please renew your membership within the 15-day period to avoid expiration.
+                                    </p>
+                                </div>
+                                <div className="text-right">
+                                    <span className="bg-orange-200 text-orange-800 px-3 py-1 rounded-full text-[10px] font-black uppercase">Action Required</span>
+                                </div>
+                            </div>
+
+                            <div className="mt-6 bg-white p-6 rounded-2xl border border-orange-100">
+                                 <h4 className="text-sm font-black uppercase text-gray-700 mb-4">Renew Membership</h4>
+                                 
+                                 <div className="flex flex-col gap-4">
+                                     {hubSettings.allowedPayment === 'both' && (
+                                         <div className="flex gap-2">
+                                             <button type="button" onClick={() => setRenewalMethod('gcash')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${renewalMethod === 'gcash' ? 'bg-blue-50 border-blue-200 text-blue-800' : 'bg-white border-gray-200 text-gray-500'}`}>GCash</button>
+                                             <button type="button" onClick={() => setRenewalMethod('cash')} className={`flex-1 py-2 text-xs font-bold rounded-lg border ${renewalMethod === 'cash' ? 'bg-green-50 border-green-200 text-green-800' : 'bg-white border-gray-200 text-gray-500'}`}>Cash</button>
+                                         </div>
+                                     )}
+
+                                     <form onSubmit={handleRenewalPayment} className="flex flex-col gap-3">
+                                         {renewalMethod === 'gcash' ? (
+                                             <div className="space-y-3">
+                                                 <div className="text-xs bg-blue-50 p-3 rounded-lg text-blue-900">
+                                                     <strong>Send to:</strong> 0{hubSettings.gcashNumber || '9063751402'} (GCash)
+                                                 </div>
+                                                 <input 
+                                                    type="text" 
+                                                    required 
+                                                    placeholder="Enter GCash Reference No." 
+                                                    className="w-full p-3 border border-gray-300 rounded-xl text-xs uppercase outline-none focus:border-orange-500"
+                                                    value={renewalRef}
+                                                    onChange={(e) => setRenewalRef(e.target.value)}
+                                                 />
+                                             </div>
+                                         ) : (
+                                             <div className="space-y-3">
+                                                 <div className="text-xs bg-green-50 p-3 rounded-lg text-green-900">
+                                                     Pay to an officer to get the Daily Cash Key.
+                                                 </div>
+                                                 <input 
+                                                    type="text" 
+                                                    required 
+                                                    placeholder="Enter Daily Cash Key" 
+                                                    className="w-full p-3 border border-gray-300 rounded-xl text-xs uppercase outline-none focus:border-orange-500"
+                                                    value={renewalCashKey}
+                                                    onChange={(e) => setRenewalCashKey(e.target.value.toUpperCase())}
+                                                 />
+                                             </div>
+                                         )}
+                                         
+                                         <button 
+                                            type="submit" 
+                                            className="w-full bg-orange-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-orange-700 transition-colors shadow-lg"
+                                         >
+                                             Confirm Renewal
+                                         </button>
+                                     </form>
+                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Birthday & Anniversary Banners */}
+                    <div className="space-y-4">
+                        {isBirthday && (
+                            <div className="bg-gradient-to-r from-pink-500 to-rose-500 p-8 rounded-[40px] shadow-xl flex items-center gap-6 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-8 opacity-10"><Cake size={120} /></div>
+                                <div className="bg-white/20 p-4 rounded-full text-white"><Cake size={40} /></div>
+                                <div className="text-white z-10">
+                                    <h3 className="font-serif text-3xl font-black uppercase">Happy Birthday!</h3>
+                                    <p className="font-medium text-white/90">Wishing you the happiest of days, {profile.nickname || profile.name.split(' ')[0]}! 🎂</p>
+                                </div>
+                            </div>
+                        )}
+                        {isAnniversary && (
+                            <div className="bg-gradient-to-r from-[#FDB813] to-amber-500 p-8 rounded-[40px] shadow-xl flex items-center gap-6 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-8 opacity-10"><Sparkles size={120} /></div>
+                                <div className="bg-white/20 p-4 rounded-full text-white"><Sparkles size={40} /></div>
+                                <div className="text-white z-10">
+                                    <h3 className="font-serif text-3xl font-black uppercase">Happy Anniversary, LBA!</h3>
+                                    <p className="font-medium text-white/90">Celebrating another year of brewing excellence and community. ☕✨</p>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {/* Left Column: Notices & Upcoming Events */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <div>
+                                <h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                                <Bell size={20} className="text-amber-600"/> Latest Notices
+                                </h3>
+                                <div className="space-y-4">
+                                {announcements.length === 0 ? 
+                                    <div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center">
+                                        <p className="text-xs font-bold text-gray-400 uppercase">All caught up!</p>
+                                        <p className="text-[10px] text-gray-300">No new notices to display.</p>
+                                    </div>
+                                : announcements.slice(0, 2).map(ann => (
+                                    <div key={ann.id} className="bg-white p-6 rounded-3xl border border-amber-100 shadow-sm">
+                                        <div className="flex justify-between items-start mb-2">
+                                        <h4 className="font-black text-sm uppercase text-[#3E2723]">{ann.title}</h4>
+                                        <span className="text-[8px] font-bold text-gray-400 uppercase">{formatDate(ann.date)}</span>
+                                        </div>
+                                        <p className="text-xs text-gray-600 line-clamp-2">{ann.content}</p>
+                                    </div>
+                                ))}
+                                </div>
+                            </div>
+                            <div>
+                                <h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                                <Calendar size={20} className="text-amber-600"/> Upcoming Events
+                                </h3>
+                                <div className="space-y-4">
+                                {events.length === 0 ? 
+                                    <div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center">
+                                        <Calendar size={24} className="mx-auto text-gray-300 mb-2"/>
+                                        <p className="text-xs font-bold text-gray-400 uppercase">No upcoming events</p>
+                                        <p className="text-[10px] text-gray-300">Stay tuned for future updates!</p>
+                                    </div>
+                                : events.slice(0, 3).map(ev => {
+                                    const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                                    return (
+                                        <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4">
+                                            <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0">
+                                                <span className="text-xs font-black">{day}</span>
+                                                <span className="text-[8px] uppercase">{month}</span>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <h4 className="font-black text-xs uppercase truncate">{ev.name}</h4>
+                                                <p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right Column: Trophy Case */}
+                        <div className="bg-white p-6 rounded-[32px] border border-amber-100 h-full">
+                            <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2">
+                                <Trophy size={16} className="text-amber-500"/> Trophy Case
+                            </h3>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="flex flex-col items-center gap-1">
+                                    <div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                        <div className="text-2xl md:text-3xl mb-1">☕</div>
+                                        <span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900/60 leading-none">Member</span>
+                                    </div>
+                                </div>
+                                
+                                {['Officer', 'Execomm'].includes(profile.positionCategory) && (
+                                    <div className="flex flex-col items-center gap-1">
+                                        <div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🛡️</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-indigo-900/60 leading-none">Officer</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {profile.positionCategory === 'Committee' && (
+                                    <div className="flex flex-col items-center gap-1">
+                                        <div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🎗️</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-pink-900/60 leading-none">Comm.</span>
+                                        </div>
+                                    </div>
+                                )}
+                                
+                                {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && (
+                                    <div className="flex flex-col items-center gap-1">
+                                        <div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🏅</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-yellow-900/60 leading-none">Veteran</span>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {volunteerCount > 0 && (
+                                    <div className="flex flex-col items-center gap-1">
+                                        {(() => {
+                                            let tier = { icon: '🤚', label: 'Volunteer', color: 'bg-teal-50 text-teal-900/60' };
+                                            if (volunteerCount >= 15) tier = { icon: '👑', label: 'Super Vol.', color: 'bg-rose-100 text-rose-900/60' };
+                                            else if (volunteerCount >= 9) tier = { icon: '🚀', label: 'Adv. Vol.', color: 'bg-purple-100 text-purple-900/60' };
+                                            else if (volunteerCount >= 4) tier = { icon: '🔥', label: 'Inter. Vol.', color: 'bg-orange-100 text-orange-900/60' };
+                                            const textColor = tier.color.split(' ')[1] || 'text-gray-500';
+                                            const bgColor = tier.color.split(' ')[0] || 'bg-gray-100';
+                                            return (
+                                                <div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square ${bgColor} rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2`}>
+                                                    <div className="text-2xl md:text-3xl mb-1">{tier.icon}</div>
+                                                    <span className={`text-[8px] md:text-[10px] font-black uppercase ${textColor} leading-none tracking-tight`}>{tier.label}</span>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+                                )}
+
+                                {(() => {
+                                    const myBadges = [];
+                                    let completedCount = 0;
+                                    DEFAULT_MASTERCLASS_MODULES.forEach(mod => {
+                                        if (masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId)) {
+                                            completedCount++;
+                                            const details = masterclassData.moduleDetails?.[mod.id] || {};
+                                            const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
+                                            const iconToUse = details.icon || defaultIcons[mod.id-1];
+                                            const displayTitle = details.title || mod.title; 
+                                            myBadges.push(
+                                                <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
+                                                    <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 border border-green-100">
+                                                        <div className="text-2xl md:text-3xl mb-1">{iconToUse}</div>
+                                                        <span className="text-[8px] md:text-[10px] font-black uppercase text-green-800 text-center leading-none tracking-tighter line-clamp-2">{displayTitle}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                    });
+                                    if (completedCount === 5) {
+                                        myBadges.unshift(
+                                            <div key="mc-master" className="flex flex-col items-center gap-1">
+                                                <div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 shadow-lg border-2 border-white">
+                                                    <div className="text-2xl md:text-3xl mb-1">🎓</div>
+                                                    <span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900 leading-none">Master</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return myBadges;
+                                })()}
+                                
+                                {profile.accolades?.map((acc, i) => (
+                                    <div key={i} className="flex flex-col items-center gap-1">
+                                        <div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2">
+                                            <div className="text-2xl md:text-3xl mb-1">🏆</div>
+                                            <span className="text-[8px] md:text-[10px] font-black uppercase text-purple-900/60 leading-none line-clamp-2 tracking-tight">{acc}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                  </div>
+                )}
     
 
             {view === 'home' && (
