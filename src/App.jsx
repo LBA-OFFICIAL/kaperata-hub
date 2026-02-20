@@ -2181,19 +2181,65 @@ ${window.location.origin}`;
     }
   };
 
-  // Registry Helpers
-  const filteredRegistry = useMemo(() => {
-    let res = [...members];
-    if (searchQuery) res = res.filter(m => (m.name && m.name.toLowerCase().includes(searchQuery.toLowerCase())) || (m.memberId && m.memberId.toLowerCase().includes(searchQuery.toLowerCase())));
-    res.sort((a, b) => (a[sortConfig.key] || "").localeCompare(b[sortConfig.key] || "") * (sortConfig.direction === 'asc' ? 1 : -1));
-    return res;
-  }, [members, searchQuery, sortConfig]);
+ // --- REGISTRY LOGIC DEFINITIONS (BULLETPROOFED) ---
+  const paginatedRegistry = useMemo(() => {
+      if (!members || !Array.isArray(members)) return [];
+      
+      const queryUpper = (searchQuery || "").toUpperCase();
+      
+      let filtered = members.filter(m => {
+          if (!queryUpper) return true;
+          
+          const nameMatch = (m.name || "").toUpperCase().includes(queryUpper);
+          const idMatch = (m.memberId || "").toUpperCase().includes(queryUpper);
+          const emailMatch = (m.email || "").toUpperCase().includes(queryUpper);
+          
+          return nameMatch || idMatch || emailMatch;
+      });
 
-  // Pagination Logic
-  const totalPages = Math.ceil(filteredRegistry.length / itemsPerPage);
-  const paginatedRegistry = filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-  const nextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
-  const prevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
+      if (exportFilter !== 'all') {
+          if (exportFilter === 'active') filtered = filtered.filter(m => m.status === 'active');
+          else if (exportFilter === 'inactive') filtered = filtered.filter(m => m.status !== 'active');
+          else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
+          else if (exportFilter === 'committee') filtered = filtered.filter(m => m.positionCategory === 'Committee');
+      }
+      return filtered; 
+  }, [members, searchQuery, exportFilter]);
+
+  const handleExportCSV = () => {
+      if (!members) return;
+      const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined"];
+      const rows = members.map(m => [
+          m.memberId, m.name, m.email, m.positionCategory, m.specificTitle, m.committee || '', m.status, m.joinedDate || ''
+      ]);
+      generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`);
+  };
+
+  const handleBulkEmail = () => {
+      const targets = selectedBaristas.length > 0 ? members.filter(m => selectedBaristas.includes(m.memberId)) : members; 
+      const emails = targets.map(m => m.email).filter(e => e).join(',');
+      if (emails) window.open(`mailto:?bcc=${emails}`);
+  };
+
+  const toggleSelectAll = () => {
+      if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) {
+          setSelectedBaristas([]);
+      } else {
+          setSelectedBaristas(paginatedRegistry.map(m => m.memberId));
+      }
+  };
+
+  const toggleSelectBarista = (id) => {
+      if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id));
+      else setSelectedBaristas(prev => [...prev, id]);
+  };
+  
+  const getSafeDateString = (dateVal) => {
+      if (!dateVal) return '';
+      if (typeof dateVal === 'string') return dateVal.split('T')[0];
+      if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0];
+      return '';
+  };
 
 
   const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
@@ -3258,11 +3304,12 @@ ${window.location.origin}`;
                 </div>
             )}
 
+         {/* --- TEAM VIEW (BREW CREW) --- */}
             {view === 'team' && (
-                <div className="space-y-12 animate-fadeIn text-center">
+                <div className="space-y-16 animate-fadeIn text-center pb-20">
                     <div>
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
-                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest">Executive Committee {getMemberIdMeta().sy}</p>
+                        <h3 className="font-serif text-5xl font-black uppercase text-[#3E2723] mb-2">The Brew Crew</h3>
+                        <p className="text-amber-600 text-sm font-bold uppercase tracking-widest">Executive Committee {getMemberIdMeta().sy}</p>
                     </div>
 
                     {/* Tier 1: President */}
@@ -3272,7 +3319,7 @@ ${window.location.origin}`;
                         </div>
                     )}
 
-                    {/* Tier 2: Secretary (VP is Tier 3 in logic but effectively high) */}
+                    {/* Tier 2: Secretary */}
                     {teamStructure.tier2.length > 0 && (
                         <div className="flex justify-center gap-6 flex-wrap">
                             {teamStructure.tier2.map(m => <MemberCard key={m.id} m={m} />)}
@@ -3286,21 +3333,58 @@ ${window.location.origin}`;
                         </div>
                     )}
 
-                    <div className="border-t border-amber-100 pt-12">
-                        <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Heads</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 justify-items-center">
-                            {teamStructure.committees.heads.map(m => <MemberCard key={m.id} m={m} />)}
+                    {/* Segregated Committees Section */}
+                    <div className="border-t-[4px] border-[#3E2723]/10 pt-16 space-y-20">
+                        <div className="text-center mb-10">
+                            <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Committee Departments</h3>
+                            <p className="text-amber-600 text-xs font-bold uppercase tracking-widest mt-2">The Backbone of LBA</p>
                         </div>
-                    </div>
 
-                    {teamStructure.committees.members.length > 0 && (
-                        <div className="border-t border-amber-100 pt-12">
-                            <h3 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-8">Committee Members</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 justify-items-center">
-                                {teamStructure.committees.members.map(m => <MemberCard key={m.id} m={m} />)}
+                        {COMMITTEES_INFO.map(c => {
+                            const group = teamStructure.committees[c.id];
+                            // Skip rendering if committee is completely empty
+                            if (!group || (group.heads.length === 0 && group.members.length === 0)) return null;
+
+                            return (
+                                <div key={c.id} className="bg-white p-10 rounded-[48px] border-2 border-amber-100 shadow-sm relative overflow-hidden">
+                                    {/* Committee Banner/Header */}
+                                    <div className="absolute top-0 left-0 right-0 h-32 bg-[#3E2723] opacity-5"></div>
+                                    <div className="relative z-10 mb-10">
+                                        <h3 className="font-serif text-3xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h3>
+                                        <p className="text-gray-500 text-xs font-bold uppercase tracking-widest max-w-2xl mx-auto">{c.description}</p>
+                                    </div>
+                                    
+                                    {group.heads.length > 0 && (
+                                        <div className="mb-12 relative z-10">
+                                            <span className="inline-block bg-[#FDB813] text-[#3E2723] px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border border-amber-200">Department Heads</span>
+                                            <div className="flex flex-wrap justify-center gap-6 mt-6">
+                                                {group.heads.map(m => <MemberCard key={m.id} m={m} />)}
+                                            </div>
+                                        </div>
+                                    )}
+                                    
+                                    {group.members.length > 0 && (
+                                        <div className="relative z-10">
+                                            <span className="inline-block bg-gray-100 text-gray-600 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-gray-200">Committee Members</span>
+                                            <div className="flex flex-wrap justify-center gap-6 mt-6">
+                                                {group.members.map(m => <MemberCard key={m.id} m={m} />)}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Unassigned/General Section */}
+                        {(teamStructure.committees['Unassigned']?.heads.length > 0 || teamStructure.committees['Unassigned']?.members.length > 0) && (
+                             <div className="bg-gray-50 p-10 rounded-[48px] border border-gray-200">
+                                <h3 className="font-serif text-2xl font-black uppercase text-gray-500 mb-8">General Pool (Unassigned)</h3>
+                                <div className="flex flex-wrap justify-center gap-6">
+                                    {[...teamStructure.committees['Unassigned'].heads, ...teamStructure.committees['Unassigned'].members].map(m => <MemberCard key={m.id} m={m} />)}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -3338,30 +3422,96 @@ ${window.location.origin}`;
                 </div>
             )}
 
-           {/* Grind Report / Announcements View */}
+          {/* --- WHAT'S BREWING (EVENTS) VIEW --- */}
+            {view === 'events' && (
+                <div className="space-y-6 animate-fadeIn">
+                     <div className="flex justify-between items-center">
+                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
+                        {/* Functioning Create Button */}
+                        {isAdmin && <button onClick={() => { setEditingEvent(null); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); setShowEventForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Event</button>}
+                    </div>
+                    <div className="space-y-4">
+                        {events.length === 0 ? (
+                            <div className="p-10 bg-white rounded-[32px] border border-dashed border-amber-200 text-center">
+                                <Calendar size={32} className="mx-auto text-amber-300 mb-3"/>
+                                <p className="text-sm font-black text-amber-900 uppercase">No upcoming events</p>
+                                <p className="text-xs text-amber-700/60 mt-1">Stay tuned for future updates!</p>
+                            </div>
+                        ) : (
+                            events.map(ev => {
+                                const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
+                                return (
+                                    <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                                         {/* Edit and Delete Buttons for Admin */}
+                                         {isAdmin && (
+                                             <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                                                <button onClick={() => handleEditEvent(ev)} className="p-2 bg-white border border-amber-100 rounded-xl text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit Event"><Pen size={14}/></button>
+                                                <button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-white border border-red-100 rounded-xl text-red-600 hover:bg-red-50 shadow-sm" title="Delete Event"><Trash2 size={14}/></button>
+                                             </div>
+                                         )}
+                                         
+                                         <div className="flex flex-col sm:flex-row gap-6">
+                                            <div className="bg-[#3E2723] text-[#FDB813] w-24 h-24 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0 shadow-inner">
+                                                <span className="text-3xl">{day}</span>
+                                                <span className="text-xs uppercase mt-2 tracking-widest">{month}</span>
+                                            </div>
+                                            <div className="flex-1">
+                                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] pr-24">{ev.name}</h4>
+                                                <p className="text-xs font-bold text-amber-700 uppercase mt-2 flex items-center gap-2"><MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}</p>
+                                                <p className="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
+                                                
+                                                {/* Action Buttons */}
+                                                <div className="mt-6 flex flex-wrap gap-3">
+                                                    {ev.registrationRequired && (
+                                                        <button onClick={() => handleRegisterEvent(ev)} className={`px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-sm ${ev.registered?.includes(profile.memberId) ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-[#FDB813] text-[#3E2723] hover:bg-amber-400'}`}>
+                                                            {ev.registered?.includes(profile.memberId) ? 'Registered ✓' : 'Register Now'}
+                                                        </button>
+                                                    )}
+                                                    
+                                                    {isAdmin && ev.attendanceRequired && (
+                                                        <button onClick={() => setAttendanceEvent(ev)} className="px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex items-center gap-2 border border-indigo-200">
+                                                            <ClipboardList size={14}/> Open Attendance
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                {ev.evaluationLink && <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200">📝 Post-Event Evaluation</a>}
+                                            </div>
+                                          </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* --- GRIND REPORT (ANNOUNCEMENTS) VIEW --- */}
             {view === 'announcements' && (
                 <div className="space-y-6 animate-fadeIn">
                      <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
-                        {isAdmin && <button onClick={() => setShowAnnounceForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
+                        {/* Functioning Create Button */}
+                        {isAdmin && <button onClick={() => { setEditingAnnouncement(null); setNewAnnouncement({ title: '', content: '' }); setShowAnnounceForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Notice</button>}
                     </div>
                     {announcements.length === 0 ? (
-                        <div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center">
-                            <p className="text-xs font-bold text-gray-400 uppercase">All caught up!</p>
-                            <p className="text-[10px] text-gray-300">No new notices to display.</p>
+                        <div className="p-10 bg-white rounded-[32px] border border-dashed border-amber-200 text-center">
+                            <Bell size={32} className="mx-auto text-amber-300 mb-3"/>
+                            <p className="text-sm font-black text-amber-900 uppercase">All caught up!</p>
+                            <p className="text-xs text-amber-700/60 mt-1">No new notices to display.</p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {announcements.map(ann => (
-                                <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-100 shadow-sm relative group hover:shadow-md transition-shadow">
+                                <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-200 shadow-sm relative group hover:shadow-md transition-shadow">
+                                    {/* Edit and Delete Buttons for Admin */}
                                     {isAdmin && (
                                         <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button>
-                                            <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-full text-red-500 hover:text-red-600 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button>
+                                            <button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-xl text-amber-600 border border-amber-100 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button>
+                                            <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-xl text-red-600 border border-red-100 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button>
                                         </div>
                                     )}
-                                    <span className="inline-block bg-[#FDB813] px-3 py-1 rounded-full text-[10px] font-black uppercase text-[#3E2723] mb-4">{formatDate(ann.date)}</span>
-                                    <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3 pr-16">{ann.title}</h4>
+                                    <span className="inline-block bg-[#FDB813] px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest text-[#3E2723] mb-4 shadow-sm">{formatDate(ann.date)}</span>
+                                    <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3 pr-20 leading-tight">{ann.title}</h4>
                                     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
                                 </div>
                             ))}
@@ -3479,6 +3629,7 @@ ${window.location.origin}`;
                 </div>
             )}
 
+           {/* --- COMMITTEE HUNT VIEW --- */}
             {view === 'committee_hunt' && (
                 <div className="space-y-8 animate-fadeIn">
                      <div className="bg-[#3E2723] text-white p-10 rounded-[48px] text-center relative overflow-hidden">
@@ -3488,18 +3639,64 @@ ${window.location.origin}`;
                         </div>
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {COMMITTEES_INFO.map(c => (
-                            <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
-                                <div className="h-40 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
-                                     {/* CHANGED: Removed filters entirely for original color */}
-                                    <img src={c.image} className="w-full h-full object-cover" alt={c.title} />
-                                </div>
-                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
-                                <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp} className="w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-xs hover:bg-black disabled:opacity-50">Apply Now</button>
+
+                    {/* APPLICATION STATUS BOX */}
+                    {userApplications && userApplications.length > 0 && (
+                        <div className="bg-white p-8 rounded-[32px] border-2 border-amber-200 shadow-md">
+                            <h4 className="font-black uppercase text-sm mb-4 text-[#3E2723] flex items-center gap-2">
+                                <Briefcase size={18}/> Your Application Status
+                            </h4>
+                            <div className="space-y-3">
+                                {userApplications.map(app => (
+                                    <div key={app.id} className="flex justify-between items-center bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                                        <div>
+                                            <p className="font-black text-[#3E2723] uppercase">{app.committee}</p>
+                                            <p className="text-xs text-gray-500 font-bold uppercase">{app.role}</p>
+                                            <p className="text-[9px] text-gray-400 mt-1">Last Updated: {app.statusUpdatedAt?.toDate ? formatDate(app.statusUpdatedAt.toDate()) : 'Recently'}</p>
+                                        </div>
+                                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm ${
+                                            app.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : 
+                                            app.status === 'for_interview' ? 'bg-blue-100 text-blue-700 border border-blue-200 animate-pulse' : 
+                                            app.status === 'accepted' ? 'bg-green-100 text-green-700 border border-green-200' : 
+                                            'bg-red-100 text-red-700 border border-red-200'
+                                        }`}>
+                                            {app.status === 'for_interview' ? 'For Interview' : app.status}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                        {COMMITTEES_INFO.map(c => {
+                            // Check if the user has already applied for this specific committee
+                            const hasAppliedToThis = userApplications && userApplications.some(a => a.committee === c.id);
+                            // Prevent multiple applications if you only allow one at a time (Optional)
+                            const hasActiveApp = userApplications && userApplications.some(a => ['pending', 'for_interview'].includes(a.status));
+
+                            return (
+                                <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
+                                    <div className="h-32 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
+                                        <img src={c.image} className="w-full h-full object-cover" alt={c.title} />
+                                    </div>
+                                    <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
+                                    <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
+                                    
+                                    <button 
+                                        onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} 
+                                        disabled={submittingApp || hasAppliedToThis || hasActiveApp} 
+                                        className={`w-full py-4 rounded-xl font-black uppercase text-xs transition-all ${
+                                            hasAppliedToThis ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' :
+                                            hasActiveApp ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
+                                            'bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md hover:shadow-lg'
+                                        }`}
+                                    >
+                                        {hasAppliedToThis ? 'Applied ✓' : hasActiveApp ? 'Locked' : 'Apply Now'}
+                                    </button>
+                                </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}
@@ -3640,7 +3837,7 @@ ${window.location.origin}`;
                                 <th className="p-4 w-32 text-right">Manage</th>
                             </tr>
                         </thead>
-                        <tbody className="text-[#3E2723] divide-y divide-amber-50">
+                       <tbody className="text-[#3E2723] divide-y divide-amber-50">
                             {paginatedRegistry.map(m => (
                             <tr key={m.id || m.memberId} className={`hover:bg-amber-50/50 ${m.status !== 'active' ? 'opacity-50 grayscale' : ''}`}>
                                 <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
@@ -3651,7 +3848,7 @@ ${window.location.origin}`;
                                         <p className="font-black text-xs truncate">{m.name}</p>
                                         <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
                                         <div className="flex flex-wrap gap-1 mt-1">
-                                            {m.accolades?.map((acc, i) => (
+                                            {Array.isArray(m.accolades) && m.accolades.map((acc, i) => (
                                                 <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
                                             ))}
                                         </div>
@@ -3660,42 +3857,47 @@ ${window.location.origin}`;
                                 </td>
                                 <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
                                 <td className="text-center font-black text-[10px] uppercase">
-                                    {(() => {
-                                        const isOfficerRole = ['Officer', 'Execomm', 'Committee', 'Org Adviser'].includes(m.positionCategory);
-                                        const status = m.membershipType || (isOfficerRole ? 'renewal' : 'new');
-                                        const isNew = status.toLowerCase() === 'new';
-                                        const isActive = m.status === 'active';
+                                    <button 
+                                        onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
+                                        className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${m.status === 'active' ? (m.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`}
+                                        disabled={!isAdmin}
+                                    >
+                                        {m.status === 'active' ? (m.membershipType || 'ACTIVE') : 'EXPIRED'}
+                                    </button>
+                                </td>
+                                <td className="text-center py-2">
+                                    <div className="flex flex-col gap-1 items-center">
+                                        <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>
+                                            {POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                                        </select>
                                         
-                                        return (
-                                            <button 
-                                                onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
-                                                className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${isActive ? (isNew ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`}
-                                                title={isAdmin ? "Click to toggle status" : ""}
+                                        <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}>
+                                            <option value="Member">Member</option>
+                                            <option value="Org Adviser">Org Adviser</option>
+                                            {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                            {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                        </select>
+                                        
+                                        {/* THE COMMITTEE TYPE SUB-SELECTION */}
+                                        {m.positionCategory === 'Committee' && (
+                                            <select 
+                                                className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-1 focus:ring-indigo-400" 
+                                                value={m.committee || ""} 
+                                                onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} 
                                                 disabled={!isAdmin}
                                             >
-                                                {isActive ? status : 'EXPIRED'}
-                                            </button>
-                                        );
-                                    })()}
-                                </td>
-                                <td className="text-center">
-                                    <div className="flex flex-col gap-1 items-center">
-                                        <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                        <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                                <option value="">Select Dept...</option>
+                                                {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                            </select>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="text-right p-4">
                                     <div className="flex items-center justify-end gap-1">
-                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
+                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId, currentAccolades: m.accolades }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
                                         {isAdmin && (
                                             <>
-                                                <button 
-                                                    onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: m.joinedDate ? m.joinedDate.split('T')[0] : '' }); }} 
-                                                    className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" 
-                                                    title="Edit Member Details"
-                                                >
-                                                    <Pen size={14}/>
-                                                </button>
+                                                <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" title="Edit Member Details"><Pen size={14}/></button>
                                                 <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
                                                 <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
                                             </>
