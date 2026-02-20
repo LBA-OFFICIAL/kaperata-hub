@@ -2705,34 +2705,60 @@ ${window.location.origin}`;
                         <p className="text-amber-700/80 font-bold uppercase text-xs md:text-sm tracking-widest max-w-xl mx-auto">Your go-to space for updates, announcements, and everything brewing in the KAPErata community. ☕✨</p>
                     </div>
 
-                    {/* Digital ID Card */}
-                    <div className="relative overflow-hidden rounded-[32px] bg-[#3E2723] text-[#FDB813] p-8 shadow-2xl border-4 border-[#FDB813] max-w-md mx-auto transform transition-all hover:scale-[1.02] mb-12">
-                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                        
-                        <div className="relative z-10 flex flex-col items-center text-center">
-                            <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA Logo" className="w-24 h-24 object-contain mb-4 drop-shadow-md" />
-                            <h2 className="font-serif text-3xl font-black uppercase tracking-widest mb-1">LPU Baristas</h2>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-80 mb-6">Official Membership ID</p>
-                            
-                            <div className="w-full bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 mb-6">
-                                <h3 className="font-black text-2xl uppercase text-white mb-1">{profile.name}</h3>
-                                <p className="font-mono text-lg text-[#FDB813] tracking-wider">{profile.memberId}</p>
-                                <p className="text-[10px] font-bold uppercase text-white/60 mt-2">{profile.specificTitle}</p>
-                            </div>
+                 {/* NEW DIGITAL ID CARD */}
+<div className="relative w-full max-w-sm mx-auto mb-12 group perspective">
+    <div className="relative bg-gradient-to-br from-[#3E2723] to-[#1a100e] rounded-[24px] overflow-hidden shadow-2xl border-[3px] border-[#FDB813] aspect-[3/4] sm:aspect-[1.586/1] text-white p-6 flex flex-col justify-between transition-transform transform hover:scale-[1.02]">
+        
+        {/* Background Pattern */}
+        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] pointer-events-none"></div>
+        <div className="absolute -top-20 -right-20 w-64 h-64 bg-[#FDB813] rounded-full blur-[100px] opacity-20 pointer-events-none"></div>
+        
+        {/* Header */}
+        <div className="relative z-10 flex justify-between items-start">
+            <div className="flex items-center gap-3">
+                <img src={getDirectLink(ORG_LOGO_URL)} className="w-12 h-12 object-contain drop-shadow-md" alt="Logo"/>
+                <div>
+                    <h3 className="font-serif font-black uppercase text-sm tracking-widest text-[#FDB813]">LPU Baristas</h3>
+                    <p className="text-[8px] font-bold uppercase tracking-wider opacity-70">Association</p>
+                </div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-md px-3 py-1 rounded-lg border border-white/10">
+                <p className="text-[8px] font-black uppercase tracking-widest text-[#FDB813]">{profile.positionCategory}</p>
+            </div>
+        </div>
 
-                            <div className="flex items-center gap-4 w-full">
-                                <div className={`flex-1 py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 ${
-                                    profile.status === 'active' ? 'bg-green-500/20 border-green-500 text-green-400' : 
-                                    profile.status === 'expired' ? 'bg-red-500/20 border-red-500 text-red-400' :
-                                    'bg-gray-500/20 border-gray-500 text-gray-400'
-                                }`}>
-                                    {profile.status === 'active' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
-                                    {profile.status === 'active' ? 'Active Status' : profile.status}
-                                </div>
-                                {profile.status === 'active' && (
-                                    <div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg">
-                                        <Coffee size={14}/> 10% Off B'Cafe
-                                    </div>
+        {/* Profile Section */}
+        <div className="relative z-10 flex flex-col items-center mt-6">
+            <div className="relative mb-4">
+                 <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-br from-[#FDB813] to-[#3E2723]">
+                    <img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-full h-full rounded-full object-cover border-4 border-[#1a100e]" alt="Profile"/>
+                 </div>
+                 {profile.status === 'active' && <div className="absolute bottom-1 right-1 w-6 h-6 bg-green-500 rounded-full border-4 border-[#1a100e] flex items-center justify-center"><CheckCircle2 size={10} className="text-white"/></div>}
+            </div>
+            <h2 className="font-black text-xl uppercase tracking-wide text-center leading-tight mb-1">{profile.name}</h2>
+            <p className="font-mono text-xs text-[#FDB813] tracking-widest opacity-80">{profile.memberId}</p>
+            <p className="text-[10px] font-bold uppercase text-white/50 mt-1">{profile.specificTitle}</p>
+        </div>
+
+        {/* Footer / Details */}
+        <div className="relative z-10 mt-6 pt-4 border-t border-white/10 flex justify-between items-end">
+            <div>
+                <p className="text-[8px] font-bold uppercase text-white/40 mb-0.5">Valid Until</p>
+                <p className="text-[10px] font-black uppercase tracking-wider">{getMemberIdMeta().sy} / {getMemberIdMeta().sem === "1" ? "DEC" : "JUL"}</p>
+            </div>
+             <div className="text-right">
+                <p className="text-[8px] font-bold uppercase text-white/40 mb-0.5">Status</p>
+                <p className={`text-[10px] font-black uppercase tracking-wider ${profile.status === 'active' ? 'text-green-400' : 'text-red-400'}`}>{profile.status}</p>
+            </div>
+            <div className="absolute bottom-1 left-1/2 -translate-x-1/2 opacity-20">
+                 {/* Simple Barcode Simulation */}
+                 <div className="flex gap-0.5 h-6 items-end">
+                    {[...Array(20)].map((_,i) => <div key={i} className="w-0.5 bg-white h-full" style={{height: `${Math.random() * 60 + 40}%`}}></div>)}
+                 </div>
+            </div>
+        </div>
+    </div>
+</div>
     
 
             {view === 'home' && (
