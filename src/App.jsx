@@ -655,8 +655,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [seriesPosts, setSeriesPosts] = useState([]);
   
   // New States for Member's Corner & Diaries
-const [polls, setPolls] = useState([]);
-  const [seriesPosts, setSeriesPosts] = useState([]);
   const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] });
   const [showPollForm, setShowPollForm] = useState(false);
   const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' });
@@ -1251,29 +1249,6 @@ const handleCreatePoll = async (e) => {
   };
 
   const handleDeletePoll = async (id) => { if(!confirm("Delete this poll?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'polls', id)); } catch (e) { console.error(e); } };
-
-  const handlePostSeries = async (e) => {
-      e.preventDefault();
-      const validUrls = newSeriesPost.imageUrls.filter(url => url.trim() !== '');
-      if (validUrls.length === 0) return alert("At least one image URL is required.");
-      try {
-          if (editingSeriesId) {
-              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', editingSeriesId), { title: newSeriesPost.title, imageUrls: validUrls, caption: newSeriesPost.caption, lastEdited: serverTimestamp() });
-              logAction("Update Series", `Updated Barista Diaries: ${newSeriesPost.title}`); setEditingSeriesId(null);
-          } else {
-              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), { title: newSeriesPost.title, imageUrls: validUrls, caption: newSeriesPost.caption, author: profile.name, authorId: profile.memberId, createdAt: serverTimestamp() });
-              logAction("Post Series", `Posted to Barista Diaries: ${newSeriesPost.title}`);
-          }
-          setShowSeriesForm(false); setNewSeriesPost({ title: '', imageUrls: [''], caption: '' });
-      } catch (e) { console.error(e); }
-  };
-
-  const handleEditSeries = (post) => {
-      setNewSeriesPost({ title: post.title, imageUrls: post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : [post.imageUrl || ''], caption: post.caption });
-      setEditingSeriesId(post.id); setShowSeriesForm(true);
-  };
-
-  const handleDeleteSeries = async (id) => { if(!confirm("Delete this post?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', id)); } catch (e) { console.error(e); } };
 
   // --- BARISTA DIARIES ACTIONS ---
   const handlePostSeries = async (e) => {
@@ -2858,7 +2833,7 @@ ${window.location.origin}`;
                         <p className="text-amber-700/80 font-bold uppercase text-xs md:text-sm tracking-widest max-w-xl mx-auto">Your go-to space for updates, announcements, and everything brewing in the KAPErata community. ☕✨</p>
                     </div>
 
-                 {/* ORIGINAL DIGITAL ID CARD */}
+                {/* ORIGINAL DIGITAL ID CARD */}
                     <div className="relative overflow-hidden rounded-[32px] bg-[#3E2723] text-[#FDB813] p-8 shadow-2xl border-4 border-[#FDB813] max-w-md mx-auto transform transition-all hover:scale-[1.02] mb-12">
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                         <div className="relative z-10 flex flex-col items-center text-center">
@@ -2875,13 +2850,13 @@ ${window.location.origin}`;
                                     {profile.status === 'active' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
                                     {profile.status === 'active' ? 'Active Status' : profile.status}
                                 </div>
-                                {profile.status === 'active' && (<div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg"><Coffee size={14}/> 10% Off B'Cafe</div>)}
+                                {profile.status === 'active' && (
+                                    <div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg">
+                                        <Coffee size={14}/> 10% Off B&apos;Cafe
+                                    </div>
+                                )}
                             </div>
-                            <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} • Non-Transferable</p>
-                        </div>
-                    </div>
-                            
-                            <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} • Non-Transferable</p>
+                            <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} &bull; Non-Transferable</p>
                         </div>
                     </div>
 
