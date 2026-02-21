@@ -2110,34 +2110,6 @@ const handleCreatePoll = async (e) => {
   };
 
   // --- NEW FEATURES ---
-  const handleExportCSV = () => {
-      let dataToExport = [...members];
-      if (exportFilter === 'active') dataToExport = dataToExport.filter(m => m.status === 'active');
-      else if (exportFilter === 'inactive') dataToExport = dataToExport.filter(m => m.status !== 'active');
-      else if (exportFilter === 'officers') dataToExport = dataToExport.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory));
-      else if (exportFilter === 'committee') dataToExport = dataToExport.filter(m => m.positionCategory === 'Committee');
-      
-      const headers = ["Name", "ID", "Email", "Program", "Position", "Status"];
-      const rows = dataToExport.map(e => [e.name, e.memberId, e.email, e.program, e.specificTitle, e.status]);
-
-      generateCSV(headers, rows, `LBA_Registry_${exportFilter}.csv`);
-      logAction("Export CSV", `Exported ${exportFilter} registry`);
-  };
-
-  const handleBulkEmail = () => {
-    const recipients = selectedBaristas.length > 0 
-        ? members.filter(m => selectedBaristas.includes(m.memberId))
-        : filteredRegistry;
-    
-    const emails = recipients
-        .map(m => m.email)
-        .filter(e => e)
-        .join(',');
-        
-    if (!emails) return alert("No valid emails found.");
-    window.location.href = `mailto:?bcc=${emails}`;
-  };
-
   const handleGiveAccolade = async () => {
       if (!accoladeText.trim() || !showAccoladeModal) return;
       try {
@@ -2248,16 +2220,6 @@ ${window.location.origin}`;
       if (emails) window.location.href = `mailto:?bcc=${emails}`;
   };
 
-  const toggleSelectAll = () => {
-      if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) { setSelectedBaristas([]); } 
-      else { setSelectedBaristas(paginatedRegistry.map(m => m.memberId)); }
-  };
-
-  const toggleSelectBarista = (id) => {
-      if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id));
-      else setSelectedBaristas(prev => [...prev, id]);
-  };
-  
   const getSafeDateString = (dateVal) => {
       if (!dateVal) return ''; if (typeof dateVal === 'string') return dateVal.split('T')[0];
       if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0]; return '';
