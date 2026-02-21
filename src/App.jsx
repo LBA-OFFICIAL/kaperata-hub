@@ -655,10 +655,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [seriesPosts, setSeriesPosts] = useState([]);
   
   // New States for Member's Corner & Diaries
-  const [newPoll, setNewPoll] = useState({ question: '', option1: '', option2: '' });
+const [polls, setPolls] = useState([]);
+  const [seriesPosts, setSeriesPosts] = useState([]);
+  const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] });
   const [showPollForm, setShowPollForm] = useState(false);
-  const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrl: '', caption: '' });
+  const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' });
   const [showSeriesForm, setShowSeriesForm] = useState(false);
+  const [editingSeriesId, setEditingSeriesId] = useState(null);
 
   // Project Form State
   const [showProjectForm, setShowProjectForm] = useState(false);
@@ -1219,23 +1222,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   };
 
   // --- MEMBER'S CORNER ACTIONS ---
-  const handleCreatePoll = async (e) => {
+const handleCreatePoll = async (e) => {
       e.preventDefault();
-      if (!newPoll.question || !newPoll.option1 || !newPoll.option2) return;
+      const validOptions = newPoll.options.filter(o => o.trim() !== '');
+      if (!newPoll.question || validOptions.length < 2) return alert("A question and at least 2 options are required.");
       try {
+          const formattedOptions = validOptions.map((opt, idx) => ({ id: idx + 1, text: opt, votes: [] }));
           await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), {
-              question: newPoll.question,
-              options: [
-                  { id: 1, text: newPoll.option1, votes: [] },
-                  { id: 2, text: newPoll.option2, votes: [] }
-              ],
-              createdBy: profile.name,
-              createdAt: serverTimestamp(),
-              status: 'active'
+              question: newPoll.question, options: formattedOptions, createdBy: profile.name, createdAt: serverTimestamp(), status: 'active'
           });
-          setShowPollForm(false);
-          setNewPoll({ question: '', option1: '', option2: '' });
-          logAction("Create Poll", `Created poll: ${newPoll.question}`);
+          setShowPollForm(false); setNewPoll({ question: '', options: ['', ''] }); logAction("Create Poll", `Created poll: ${newPoll.question}`);
       } catch (e) { console.error(e); }
   };
 
@@ -1243,44 +1239,82 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       if (isExpired) return alert("Renew membership to vote.");
       try {
           const pollRef = doc(db, 'artifacts', appId, 'public', 'data', 'polls', pollId);
-          // Get current poll data to update correctly
           const poll = polls.find(p => p.id === pollId);
           if (!poll) return;
-
           const updatedOptions = poll.options.map(opt => {
-              // Remove user from all options first to ensure single vote
               const newVotes = opt.votes.filter(uid => uid !== profile.memberId);
-              if (opt.id === optionId) {
-                  newVotes.push(profile.memberId);
-              }
+              if (opt.id === optionId) { newVotes.push(profile.memberId); }
               return { ...opt, votes: newVotes };
           });
-
           await updateDoc(pollRef, { options: updatedOptions });
       } catch (e) { console.error(e); }
   };
 
-  const handleDeletePoll = async (id) => {
-      if(!confirm("Delete this poll?")) return;
+  const handleDeletePoll = async (id) => { if(!confirm("Delete this poll?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'polls', id)); } catch (e) { console.error(e); } };
+
+  const handlePostSeries = async (e) => {
+      e.preventDefault();
+      const validUrls = newSeriesPost.imageUrls.filter(url => url.trim() !== '');
+      if (validUrls.length === 0) return alert("At least one image URL is required.");
       try {
-          await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'polls', id));
+          if (editingSeriesId) {
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', editingSeriesId), { title: newSeriesPost.title, imageUrls: validUrls, caption: newSeriesPost.caption, lastEdited: serverTimestamp() });
+              logAction("Update Series", `Updated Barista Diaries: ${newSeriesPost.title}`); setEditingSeriesId(null);
+          } else {
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), { title: newSeriesPost.title, imageUrls: validUrls, caption: newSeriesPost.caption, author: profile.name, authorId: profile.memberId, createdAt: serverTimestamp() });
+              logAction("Post Series", `Posted to Barista Diaries: ${newSeriesPost.title}`);
+          }
+          setShowSeriesForm(false); setNewSeriesPost({ title: '', imageUrls: [''], caption: '' });
       } catch (e) { console.error(e); }
   };
+
+  const handleEditSeries = (post) => {
+      setNewSeriesPost({ title: post.title, imageUrls: post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : [post.imageUrl || ''], caption: post.caption });
+      setEditingSeriesId(post.id); setShowSeriesForm(true);
+  };
+
+  const handleDeleteSeries = async (id) => { if(!confirm("Delete this post?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', id)); } catch (e) { console.error(e); } };
 
   // --- BARISTA DIARIES ACTIONS ---
   const handlePostSeries = async (e) => {
       e.preventDefault();
+      const validUrls = newSeriesPost.imageUrls.filter(url => url.trim() !== '');
+      if (validUrls.length === 0) return alert("At least one image URL is required.");
+      
       try {
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), {
-              ...newSeriesPost,
-              author: profile.name,
-              authorId: profile.memberId,
-              createdAt: serverTimestamp()
-          });
+          if (editingSeriesId) {
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', editingSeriesId), {
+                  title: newSeriesPost.title,
+                  imageUrls: validUrls,
+                  caption: newSeriesPost.caption,
+                  lastEdited: serverTimestamp()
+              });
+              logAction("Update Series", `Updated Barista Diaries: ${newSeriesPost.title}`);
+              setEditingSeriesId(null);
+          } else {
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), {
+                  title: newSeriesPost.title,
+                  imageUrls: validUrls,
+                  caption: newSeriesPost.caption,
+                  author: profile.name,
+                  authorId: profile.memberId,
+                  createdAt: serverTimestamp()
+              });
+              logAction("Post Series", `Posted to Barista Diaries: ${newSeriesPost.title}`);
+          }
           setShowSeriesForm(false);
-          setNewSeriesPost({ title: '', imageUrl: '', caption: '' });
-          logAction("Post Series", `Posted to Barista Diaries: ${newSeriesPost.title}`);
+          setNewSeriesPost({ title: '', imageUrls: [''], caption: '' });
       } catch (e) { console.error(e); }
+  };
+
+  const handleEditSeries = (post) => {
+      setNewSeriesPost({
+          title: post.title,
+          imageUrls: post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : [post.imageUrl || ''],
+          caption: post.caption
+      });
+      setEditingSeriesId(post.id);
+      setShowSeriesForm(true);
   };
 
   const handleDeleteSeries = async (id) => {
@@ -2181,22 +2215,17 @@ ${window.location.origin}`;
     }
   };
 
- // --- REGISTRY LOGIC DEFINITIONS (BULLETPROOFED) ---
+// --- REGISTRY LOGIC DEFINITIONS (BULLETPROOFED) ---
   const paginatedRegistry = useMemo(() => {
       if (!members || !Array.isArray(members)) return [];
-      
       const queryUpper = (searchQuery || "").toUpperCase();
-      
       let filtered = members.filter(m => {
           if (!queryUpper) return true;
-          
           const nameMatch = (m.name || "").toUpperCase().includes(queryUpper);
           const idMatch = (m.memberId || "").toUpperCase().includes(queryUpper);
           const emailMatch = (m.email || "").toUpperCase().includes(queryUpper);
-          
           return nameMatch || idMatch || emailMatch;
       });
-
       if (exportFilter !== 'all') {
           if (exportFilter === 'active') filtered = filtered.filter(m => m.status === 'active');
           else if (exportFilter === 'inactive') filtered = filtered.filter(m => m.status !== 'active');
@@ -2209,24 +2238,19 @@ ${window.location.origin}`;
   const handleExportCSV = () => {
       if (!members) return;
       const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined"];
-      const rows = members.map(m => [
-          m.memberId, m.name, m.email, m.positionCategory, m.specificTitle, m.committee || '', m.status, m.joinedDate || ''
-      ]);
+      const rows = members.map(m => [m.memberId, m.name, m.email, m.positionCategory, m.specificTitle, m.committee || '', m.status, m.joinedDate || '']);
       generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`);
   };
 
   const handleBulkEmail = () => {
       const targets = selectedBaristas.length > 0 ? members.filter(m => selectedBaristas.includes(m.memberId)) : members; 
       const emails = targets.map(m => m.email).filter(e => e).join(',');
-      if (emails) window.open(`mailto:?bcc=${emails}`);
+      if (emails) window.location.href = `mailto:?bcc=${emails}`;
   };
 
   const toggleSelectAll = () => {
-      if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) {
-          setSelectedBaristas([]);
-      } else {
-          setSelectedBaristas(paginatedRegistry.map(m => m.memberId));
-      }
+      if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) { setSelectedBaristas([]); } 
+      else { setSelectedBaristas(paginatedRegistry.map(m => m.memberId)); }
   };
 
   const toggleSelectBarista = (id) => {
@@ -2235,10 +2259,8 @@ ${window.location.origin}`;
   };
   
   const getSafeDateString = (dateVal) => {
-      if (!dateVal) return '';
-      if (typeof dateVal === 'string') return dateVal.split('T')[0];
-      if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0];
-      return '';
+      if (!dateVal) return ''; if (typeof dateVal === 'string') return dateVal.split('T')[0];
+      if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0]; return '';
   };
 
 
@@ -2655,20 +2677,37 @@ ${window.location.origin}`;
           </div>
       )}
 
-      {/* Poll Creation Modal */}
+     {/* Poll Creation Modal */}
       {showPollForm && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-              <div className="bg-white rounded-[32px] p-8 max-w-sm w-full border-b-[8px] border-[#3E2723]">
+              <div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]">
                   <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Create New Poll</h3>
                   <div className="space-y-4">
-                      <input type="text" placeholder="Question" className="w-full p-3 border rounded-xl text-xs font-bold" value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} />
-                      <div className="space-y-2">
-                          <input type="text" placeholder="Option 1" className="w-full p-3 border rounded-xl text-xs" value={newPoll.option1} onChange={e => setNewPoll({...newPoll, option1: e.target.value})} />
-                          <input type="text" placeholder="Option 2" className="w-full p-3 border rounded-xl text-xs" value={newPoll.option2} onChange={e => setNewPoll({...newPoll, option2: e.target.value})} />
+                      <input type="text" placeholder="Poll Question" className="w-full p-3 border border-amber-200 rounded-xl text-sm font-bold" value={newPoll.question} onChange={e => setNewPoll({...newPoll, question: e.target.value})} />
+                      
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                          {newPoll.options.map((opt, index) => (
+                              <div key={index} className="flex gap-2">
+                                  <input type="text" placeholder={`Option ${index + 1}`} className="flex-1 p-3 border rounded-xl text-xs" value={opt} onChange={e => {
+                                      const updatedOptions = [...newPoll.options];
+                                      updatedOptions[index] = e.target.value;
+                                      setNewPoll({...newPoll, options: updatedOptions});
+                                  }} />
+                                  {newPoll.options.length > 2 && (
+                                      <button type="button" onClick={() => {
+                                          const filtered = newPoll.options.filter((_, i) => i !== index);
+                                          setNewPoll({...newPoll, options: filtered});
+                                      }} className="text-red-400 hover:text-red-600 font-bold px-2">X</button>
+                                  )}
+                              </div>
+                          ))}
                       </div>
-                      <div className="flex gap-3 pt-2">
+                      
+                      <button type="button" onClick={() => setNewPoll({...newPoll, options: [...newPoll.options, '']})} className="text-xs text-amber-600 font-bold uppercase w-full text-center hover:text-amber-800">+ Add Another Option</button>
+
+                      <div className="flex gap-3 pt-4 border-t border-gray-100">
                           <button onClick={() => setShowPollForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
-                          <button onClick={handleCreatePoll} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">Post Poll</button>
+                          <button onClick={handleCreatePoll} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-[#FDB813] font-bold uppercase text-xs hover:bg-black">Post Poll</button>
                       </div>
                   </div>
               </div>
@@ -2679,20 +2718,108 @@ ${window.location.origin}`;
       {showSeriesForm && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
               <div className="bg-white rounded-[32px] p-8 max-w-md w-full border-b-[8px] border-[#3E2723]">
-                  <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">Post to Barista Diaries</h3>
+                  <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingSeriesId ? 'Edit Diary Post' : 'Post to Barista Diaries'}</h3>
                   <div className="space-y-4">
-                      <input type="text" placeholder="Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newSeriesPost.title} onChange={e => setNewSeriesPost({...newSeriesPost, title: e.target.value})} />
-                      <input type="text" placeholder="Image URL" className="w-full p-3 border rounded-xl text-xs" value={newSeriesPost.imageUrl} onChange={e => setNewSeriesPost({...newSeriesPost, imageUrl: e.target.value})} />
-                      <textarea placeholder="Caption" className="w-full p-3 border rounded-xl text-xs h-24" value={newSeriesPost.caption} onChange={e => setNewSeriesPost({...newSeriesPost, caption: e.target.value})} />
+                      <input type="text" placeholder="Post Title" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={newSeriesPost.title} onChange={e => setNewSeriesPost({...newSeriesPost, title: e.target.value})} />
+                      
+                      <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Image URLs (Google Drive / Direct Links)</label>
+                          {newSeriesPost.imageUrls.map((url, index) => (
+                              <div key={index} className="flex gap-2">
+                                  <input type="text" placeholder={`Image URL ${index + 1}`} className="flex-1 p-3 border rounded-xl text-xs" value={url} onChange={e => {
+                                      const updatedUrls = [...newSeriesPost.imageUrls];
+                                      updatedUrls[index] = e.target.value;
+                                      setNewSeriesPost({...newSeriesPost, imageUrls: updatedUrls});
+                                  }} />
+                                  {index === newSeriesPost.imageUrls.length - 1 ? (
+                                      <button type="button" onClick={() => setNewSeriesPost({...newSeriesPost, imageUrls: [...newSeriesPost.imageUrls, '']})} className="bg-amber-100 text-amber-700 font-black rounded-xl px-4 hover:bg-amber-200">+</button>
+                                  ) : (
+                                      <button type="button" onClick={() => {
+                                          const filtered = newSeriesPost.imageUrls.filter((_, i) => i !== index);
+                                          setNewSeriesPost({...newSeriesPost, imageUrls: filtered});
+                                      }} className="text-red-400 hover:text-red-600 font-bold px-3">X</button>
+                                  )}
+                              </div>
+                          ))}
+                      </div>
+
+                      <textarea placeholder="Write your caption here..." className="w-full p-3 border border-amber-200 rounded-xl text-xs h-24 custom-scrollbar" value={newSeriesPost.caption} onChange={e => setNewSeriesPost({...newSeriesPost, caption: e.target.value})} />
                       
                       <div className="flex gap-3 pt-2">
                           <button onClick={() => setShowSeriesForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
-                          <button onClick={handlePostSeries} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">Post</button>
+                          <button onClick={handlePostSeries} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-[#FDB813] font-bold uppercase text-xs hover:bg-black">{editingSeriesId ? 'Save Changes' : 'Publish'}</button>
                       </div>
                   </div>
               </div>
           </div>
       )}
+
+     {view === 'series' && (
+                <div className="space-y-8 animate-fadeIn">
+                     <div className="flex justify-between items-end mb-4">
+                         <div>
+                            <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Barista Diaries</h3>
+                            <p className="text-gray-500 font-bold text-xs uppercase">Life behind the bar & beyond</p>
+                         </div>
+                        {/* Officers OR Committee Members can post */}
+                        {(isOfficer || profile.positionCategory === 'Committee') && (
+                            <button onClick={() => { setEditingSeriesId(null); setNewSeriesPost({ title: '', imageUrls: [''], caption: '' }); setShowSeriesForm(true); }} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black flex items-center gap-2">
+                                <Plus size={16}/> New Post
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                         {seriesPosts.length === 0 ? (
+                             <div className="col-span-full py-20 text-center text-gray-400">
+                                 <Smile size={48} className="mx-auto mb-4 opacity-50"/>
+                                 <p>No stories yet. Be the first to share!</p>
+                             </div>
+                         ) : (
+                             seriesPosts.map(post => {
+                                 // Handle legacy single-image data vs new multi-image data
+                                 const postImages = post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []);
+                                 const canEdit = isAdmin || profile.memberId === post.authorId;
+
+                                 return (
+                                     <div key={post.id} className="bg-white rounded-[32px] overflow-hidden border border-amber-100 shadow-sm hover:shadow-lg transition-shadow group relative">
+                                         {canEdit && (
+                                             <div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                 <button onClick={() => handleEditSeries(post)} className="p-2 bg-white/90 backdrop-blur rounded-full text-amber-600 hover:text-amber-800 shadow-md"><Pen size={14}/></button>
+                                                 <button onClick={() => handleDeleteSeries(post.id)} className="p-2 bg-white/90 backdrop-blur rounded-full text-red-500 hover:text-red-700 shadow-md"><Trash2 size={14}/></button>
+                                             </div>
+                                         )}
+                                         
+                                         {/* CSS Scroll Snap Carousel for Multiple Images */}
+                                         <div className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar h-64 bg-gray-100">
+                                             {postImages.map((imgUrl, idx) => (
+                                                 <div key={idx} className="w-full flex-shrink-0 snap-center relative">
+                                                     <img src={getDirectLink(imgUrl)} alt={`${post.title} ${idx+1}`} className="w-full h-full object-cover" />
+                                                     {/* Show dots indicator if more than 1 image */}
+                                                     {postImages.length > 1 && (
+                                                         <div className="absolute bottom-2 right-3 bg-black/50 text-white text-[9px] px-2 py-1 rounded-full font-bold tracking-widest backdrop-blur-sm">
+                                                             {idx + 1} / {postImages.length}
+                                                         </div>
+                                                     )}
+                                                 </div>
+                                             ))}
+                                         </div>
+                                         
+                                         <div className="p-6">
+                                             <h4 className="font-black text-lg text-[#3E2723] mb-2 leading-tight">{post.title}</h4>
+                                             <p className="text-xs text-gray-600 leading-relaxed mb-4 whitespace-pre-wrap">{post.caption}</p>
+                                             <div className="flex justify-between items-center text-[9px] font-bold uppercase text-gray-400 border-t border-gray-100 pt-4">
+                                                 <span>By {post.author}</span>
+                                                 <span>{post.createdAt?.toDate ? formatDate(post.createdAt.toDate()) : 'Recently'}</span>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 );
+                             })
+                         )}
+                    </div>
+                </div>
+            )}
 
       {/* FIXED STRUCTURE: Flex column for the page, then nested flex row for layout */}
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden relative">
@@ -2773,36 +2900,28 @@ ${window.location.origin}`;
                         <p className="text-amber-700/80 font-bold uppercase text-xs md:text-sm tracking-widest max-w-xl mx-auto">Your go-to space for updates, announcements, and everything brewing in the KAPErata community. ☕✨</p>
                     </div>
 
-                    {/* ORIGINAL DIGITAL ID CARD */}
+                 {/* ORIGINAL DIGITAL ID CARD */}
                     <div className="relative overflow-hidden rounded-[32px] bg-[#3E2723] text-[#FDB813] p-8 shadow-2xl border-4 border-[#FDB813] max-w-md mx-auto transform transition-all hover:scale-[1.02] mb-12">
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
-                        
                         <div className="relative z-10 flex flex-col items-center text-center">
                             <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA Logo" className="w-24 h-24 object-contain mb-4 drop-shadow-md" />
                             <h2 className="font-serif text-3xl font-black uppercase tracking-widest mb-1">LPU Baristas</h2>
                             <p className="text-[10px] font-bold uppercase tracking-[0.3em] opacity-80 mb-6">Official Membership ID</p>
-                            
                             <div className="w-full bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 mb-6 shadow-inner">
                                 <h3 className="font-black text-2xl uppercase text-white mb-1">{profile.name}</h3>
                                 <p className="font-mono text-lg text-[#FDB813] tracking-wider">{profile.memberId}</p>
                                 <p className="text-[10px] font-bold uppercase text-white/60 mt-2">{profile.specificTitle}</p>
                             </div>
-
                             <div className="flex items-center gap-4 w-full">
-                                <div className={`flex-1 py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 ${
-                                    profile.status === 'active' ? 'bg-green-500/20 border-green-500 text-green-400' : 
-                                    profile.status === 'expired' ? 'bg-red-500/20 border-red-500 text-red-400' :
-                                    'bg-gray-500/20 border-gray-500 text-gray-400'
-                                }`}>
+                                <div className={`flex-1 py-3 rounded-xl font-black uppercase text-xs border-2 flex items-center justify-center gap-2 ${profile.status === 'active' ? 'bg-green-500/20 border-green-500 text-green-400' : profile.status === 'expired' ? 'bg-red-500/20 border-red-500 text-red-400' : 'bg-gray-500/20 border-gray-500 text-gray-400'}`}>
                                     {profile.status === 'active' ? <CheckCircle2 size={14}/> : <AlertCircle size={14}/>}
                                     {profile.status === 'active' ? 'Active Status' : profile.status}
                                 </div>
-                                {profile.status === 'active' && (
-                                    <div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg">
-                                        <Coffee size={14}/> 10% Off B'Cafe
-                                    </div>
-                                )}
+                                {profile.status === 'active' && (<div className="flex-1 py-3 rounded-xl font-black uppercase text-xs bg-[#FDB813] text-[#3E2723] flex items-center justify-center gap-2 shadow-lg"><Coffee size={14}/> 10% Off B'Cafe</div>)}
                             </div>
+                            <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} • Non-Transferable</p>
+                        </div>
+                    </div>
                             
                             <p className="text-[8px] font-bold uppercase text-white/40 mt-6">Valid for AY {profile.lastRenewedSY || new Date().getFullYear()} • Non-Transferable</p>
                         </div>
@@ -3073,7 +3192,7 @@ ${window.location.origin}`;
                                     </div>
                                 )}
 
-                                {(() => {
+                             {(() => {
                                     const myBadges = [];
                                     let completedCount = 0;
                                     DEFAULT_MASTERCLASS_MODULES.forEach(mod => {
@@ -3082,11 +3201,13 @@ ${window.location.origin}`;
                                             const details = masterclassData.moduleDetails?.[mod.id] || {};
                                             const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
                                             const iconToUse = details.icon || defaultIcons[mod.id-1];
-                                            const displayTitle = details.title || mod.title; 
+                                            
+                                            // THIS LINE GRABS THE CUSTOM CURRICULUM TITLE (or falls back to default short title)
+                                            const displayTitle = details.title || mod.short; 
                                             
                                             myBadges.push(
                                                 <div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1">
-                                                    <div title={`Completed: ${mod.title}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 border border-green-100">
+                                                    <div title={`Completed: ${displayTitle}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 border border-green-100">
                                                         <div className="text-2xl md:text-3xl mb-1">{iconToUse}</div>
                                                         <span className="text-[8px] md:text-[10px] font-black uppercase text-green-800 text-center leading-none tracking-tighter line-clamp-2">{displayTitle}</span>
                                                     </div>
@@ -3420,59 +3541,30 @@ ${window.location.origin}`;
                         })}
                     </div>
                 </div>
-            )}
-
-          {/* --- WHAT'S BREWING (EVENTS) VIEW --- */}
-            {view === 'events' && (
+            )}{view === 'events' && (
                 <div className="space-y-6 animate-fadeIn">
                      <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
-                        {/* Functioning Create Button */}
                         {isAdmin && <button onClick={() => { setEditingEvent(null); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); setShowEventForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Event</button>}
                     </div>
                     <div className="space-y-4">
                         {events.length === 0 ? (
-                            <div className="p-10 bg-white rounded-[32px] border border-dashed border-amber-200 text-center">
-                                <Calendar size={32} className="mx-auto text-amber-300 mb-3"/>
-                                <p className="text-sm font-black text-amber-900 uppercase">No upcoming events</p>
-                                <p className="text-xs text-amber-700/60 mt-1">Stay tuned for future updates!</p>
-                            </div>
+                            <div className="p-10 bg-white rounded-[32px] border border-dashed border-amber-200 text-center"><Calendar size={32} className="mx-auto text-amber-300 mb-3"/><p className="text-sm font-black text-amber-900 uppercase">No upcoming events</p><p className="text-xs text-amber-700/60 mt-1">Stay tuned for future updates!</p></div>
                         ) : (
                             events.map(ev => {
                                 const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
                                 return (
                                     <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                                         {/* Edit and Delete Buttons for Admin */}
-                                         {isAdmin && (
-                                             <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                                                <button onClick={() => handleEditEvent(ev)} className="p-2 bg-white border border-amber-100 rounded-xl text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit Event"><Pen size={14}/></button>
-                                                <button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-white border border-red-100 rounded-xl text-red-600 hover:bg-red-50 shadow-sm" title="Delete Event"><Trash2 size={14}/></button>
-                                             </div>
-                                         )}
-                                         
+                                         {isAdmin && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditEvent(ev)} className="p-2 bg-white border border-amber-100 rounded-xl text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit Event"><Pen size={14}/></button><button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-white border border-red-100 rounded-xl text-red-600 hover:bg-red-50 shadow-sm" title="Delete Event"><Trash2 size={14}/></button></div>)}
                                          <div className="flex flex-col sm:flex-row gap-6">
-                                            <div className="bg-[#3E2723] text-[#FDB813] w-24 h-24 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0 shadow-inner">
-                                                <span className="text-3xl">{day}</span>
-                                                <span className="text-xs uppercase mt-2 tracking-widest">{month}</span>
-                                            </div>
+                                            <div className="bg-[#3E2723] text-[#FDB813] w-24 h-24 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0 shadow-inner"><span className="text-3xl">{day}</span><span className="text-xs uppercase mt-2 tracking-widest">{month}</span></div>
                                             <div className="flex-1">
                                                 <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] pr-24">{ev.name}</h4>
                                                 <p className="text-xs font-bold text-amber-700 uppercase mt-2 flex items-center gap-2"><MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}</p>
                                                 <p className="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
-                                                
-                                                {/* Action Buttons */}
                                                 <div className="mt-6 flex flex-wrap gap-3">
-                                                    {ev.registrationRequired && (
-                                                        <button onClick={() => handleRegisterEvent(ev)} className={`px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-sm ${ev.registered?.includes(profile.memberId) ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-[#FDB813] text-[#3E2723] hover:bg-amber-400'}`}>
-                                                            {ev.registered?.includes(profile.memberId) ? 'Registered ✓' : 'Register Now'}
-                                                        </button>
-                                                    )}
-                                                    
-                                                    {isAdmin && ev.attendanceRequired && (
-                                                        <button onClick={() => setAttendanceEvent(ev)} className="px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex items-center gap-2 border border-indigo-200">
-                                                            <ClipboardList size={14}/> Open Attendance
-                                                        </button>
-                                                    )}
+                                                    {ev.registrationRequired && (<button onClick={() => handleRegisterEvent(ev)} className={`px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-sm ${ev.registered?.includes(profile.memberId) ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-[#FDB813] text-[#3E2723] hover:bg-amber-400'}`}>{ev.registered?.includes(profile.memberId) ? 'Registered ✓' : 'Register Now'}</button>)}
+                                                    {isAdmin && ev.attendanceRequired && (<button onClick={() => setAttendanceEvent(ev)} className="px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex items-center gap-2 border border-indigo-200"><ClipboardList size={14}/> Open Attendance</button>)}
                                                 </div>
                                                 {ev.evaluationLink && <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-colors border border-blue-200">📝 Post-Event Evaluation</a>}
                                             </div>
@@ -3485,31 +3577,19 @@ ${window.location.origin}`;
                 </div>
             )}
 
-            {/* --- GRIND REPORT (ANNOUNCEMENTS) VIEW --- */}
             {view === 'announcements' && (
                 <div className="space-y-6 animate-fadeIn">
                      <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
-                        {/* Functioning Create Button */}
                         {isAdmin && <button onClick={() => { setEditingAnnouncement(null); setNewAnnouncement({ title: '', content: '' }); setShowAnnounceForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Notice</button>}
                     </div>
                     {announcements.length === 0 ? (
-                        <div className="p-10 bg-white rounded-[32px] border border-dashed border-amber-200 text-center">
-                            <Bell size={32} className="mx-auto text-amber-300 mb-3"/>
-                            <p className="text-sm font-black text-amber-900 uppercase">All caught up!</p>
-                            <p className="text-xs text-amber-700/60 mt-1">No new notices to display.</p>
-                        </div>
+                        <div className="p-10 bg-white rounded-[32px] border border-dashed border-amber-200 text-center"><Bell size={32} className="mx-auto text-amber-300 mb-3"/><p className="text-sm font-black text-amber-900 uppercase">All caught up!</p><p className="text-xs text-amber-700/60 mt-1">No new notices to display.</p></div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {announcements.map(ann => (
                                 <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-200 shadow-sm relative group hover:shadow-md transition-shadow">
-                                    {/* Edit and Delete Buttons for Admin */}
-                                    {isAdmin && (
-                                        <div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-xl text-amber-600 border border-amber-100 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button>
-                                            <button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-xl text-red-600 border border-red-100 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button>
-                                        </div>
-                                    )}
+                                    {isAdmin && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-xl text-amber-600 border border-amber-100 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-xl text-red-600 border border-red-100 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button></div>)}
                                     <span className="inline-block bg-[#FDB813] px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest text-[#3E2723] mb-4 shadow-sm">{formatDate(ann.date)}</span>
                                     <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3 pr-20 leading-tight">{ann.title}</h4>
                                     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
@@ -3522,55 +3602,37 @@ ${window.location.origin}`;
 
             {view === 'members_corner' && (
                 <div className="space-y-6 animate-fadeIn max-w-2xl mx-auto">
-                    <div className="text-center mb-8">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Member's Corner</h3>
-                        <p className="text-gray-500 font-bold text-xs uppercase">Your voice, your vote, your community.</p>
-                    </div>
-
+                    <div className="text-center mb-8"><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Member's Corner</h3><p className="text-gray-500 font-bold text-xs uppercase">Your voice, your vote, your community.</p></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* POLLS SECTION */}
                         <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><BarChart2 size={18}/> Community Polls</h4>
-                                {isAdmin && <button onClick={() => setShowPollForm(true)} className="bg-amber-100 text-amber-700 p-2 rounded-xl hover:bg-amber-200"><Plus size={16}/></button>}
-                            </div>
-                            
+                            <div className="flex justify-between items-center"><h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><BarChart2 size={18}/> Community Polls</h4>{isAdmin && <button onClick={() => { setNewPoll({ question: '', options: ['', ''] }); setShowPollForm(true); }} className="bg-amber-100 text-amber-700 p-2 rounded-xl hover:bg-amber-200"><Plus size={16}/></button>}</div>
                             <div className="space-y-4">
-                                {polls.length === 0 ? (
-                                    <div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center text-xs text-gray-400">No active polls.</div>
-                                ) : (
+                                {polls.length === 0 ? (<div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center text-xs text-gray-400">No active polls.</div>) : (
                                     polls.map(poll => (
                                         <div key={poll.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm relative group">
-                                            {isAdmin && <button onClick={() => handleDeletePoll(poll.id)} className="absolute top-4 right-4 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={14}/></button>}
-                                            <h5 className="font-bold text-sm text-[#3E2723] mb-4">{poll.question}</h5>
+                                            {isAdmin && <button onClick={() => handleDeletePoll(poll.id)} className="absolute top-4 right-4 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 size={14}/></button>}
+                                            <h5 className="font-bold text-sm text-[#3E2723] mb-4 pr-6">{poll.question}</h5>
                                             <div className="space-y-3">
-                                                {poll.options.map(opt => {
+                                                {poll.options && poll.options.map(opt => {
                                                     const totalVotes = poll.options.reduce((acc, o) => acc + (o.votes?.length || 0), 0);
                                                     const percent = totalVotes === 0 ? 0 : Math.round(((opt.votes?.length || 0) / totalVotes) * 100);
                                                     const hasVoted = opt.votes?.includes(profile.memberId);
                                                     return (
                                                         <div key={opt.id} onClick={() => handleVotePoll(poll.id, opt.id)} className={`relative overflow-hidden rounded-xl border-2 cursor-pointer transition-all ${hasVoted ? 'border-[#3E2723]' : 'border-gray-100 hover:border-amber-200'}`}>
                                                             <div className="absolute top-0 left-0 bottom-0 bg-amber-100 transition-all duration-500" style={{ width: `${percent}%` }}></div>
-                                                            <div className="relative p-3 flex justify-between items-center z-10">
-                                                                <span className={`text-xs font-bold ${hasVoted ? 'text-[#3E2723]' : 'text-gray-600'}`}>{opt.text}</span>
-                                                                <span className="text-[10px] font-black opacity-60">{percent}%</span>
-                                                            </div>
+                                                            <div className="relative p-3 flex justify-between items-center z-10"><span className={`text-xs font-bold ${hasVoted ? 'text-[#3E2723]' : 'text-gray-600'}`}>{opt.text}</span><span className="text-[10px] font-black opacity-60">{percent}%</span></div>
                                                         </div>
                                                     );
                                                 })}
                                             </div>
-                                            <p className="text-[9px] text-gray-400 text-right mt-3 uppercase font-bold">{poll.options.reduce((acc,o)=>acc+(o.votes?.length||0),0)} Votes</p>
+                                            <p className="text-[9px] text-gray-400 text-right mt-3 uppercase font-bold">{poll.options?.reduce((acc,o)=>acc+(o.votes?.length||0),0)} Votes</p>
                                         </div>
                                     ))
                                 )}
                             </div>
                         </div>
-
-                        {/* SUGGESTION BOX SECTION */}
                         <div className="space-y-6">
-                            <div className="flex justify-between items-center">
-                                <h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><MessageSquare size={18}/> Suggestion Box</h4>
-                            </div>
+                            <div className="flex justify-between items-center"><h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><MessageSquare size={18}/> Suggestion Box</h4></div>
                             <div className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm">
                                 <form onSubmit={handlePostSuggestion}>
                                     <textarea className="w-full p-4 bg-gray-50 rounded-2xl border-none outline-none text-sm resize-none focus:ring-2 ring-amber-100" rows="3" placeholder="Drop your thoughts anonymously..." value={suggestionText} onChange={e => setSuggestionText(e.target.value)} />
@@ -3594,106 +3656,65 @@ ${window.location.origin}`;
             {view === 'series' && (
                 <div className="space-y-8 animate-fadeIn">
                      <div className="flex justify-between items-end mb-4">
-                         <div>
-                            <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Barista Diaries</h3>
-                            <p className="text-gray-500 font-bold text-xs uppercase">Life behind the bar & beyond</p>
-                         </div>
-                        {isOfficer && <button onClick={() => setShowSeriesForm(true)} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black"><Plus size={16}/> New Post</button>}
+                         <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Barista Diaries</h3><p className="text-gray-500 font-bold text-xs uppercase">Life behind the bar & beyond</p></div>
+                        {(isOfficer || profile.positionCategory === 'Committee') && (<button onClick={() => { setEditingSeriesId(null); setNewSeriesPost({ title: '', imageUrls: [''], caption: '' }); setShowSeriesForm(true); }} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black flex items-center gap-2"><Plus size={16}/> New Post</button>)}
                     </div>
-
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                         {seriesPosts.length === 0 ? (
-                             <div className="col-span-full py-20 text-center text-gray-400">
-                                 <Smile size={48} className="mx-auto mb-4 opacity-50"/>
-                                 <p>No stories yet. Be the first to share!</p>
-                             </div>
-                         ) : (
-                             seriesPosts.map(post => (
-                                 <div key={post.id} className="bg-white rounded-[32px] overflow-hidden border border-amber-100 shadow-sm hover:shadow-lg transition-shadow group relative">
-                                     {isAdmin && <button onClick={() => handleDeleteSeries(post.id)} className="absolute top-4 right-4 z-10 bg-white/80 p-2 rounded-full text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16}/></button>}
-                                     <div className="h-64 bg-gray-100">
-                                         <img src={getDirectLink(post.imageUrl)} alt={post.title} className="w-full h-full object-cover" />
-                                     </div>
-                                     <div className="p-6">
-                                         <h4 className="font-black text-lg text-[#3E2723] mb-2 leading-tight">{post.title}</h4>
-                                         <p className="text-xs text-gray-600 leading-relaxed mb-4">{post.caption}</p>
-                                         <div className="flex justify-between items-center text-[9px] font-bold uppercase text-gray-400 border-t border-gray-100 pt-4">
-                                             <span>By {post.author}</span>
-                                             <span>{post.createdAt?.toDate ? formatDate(post.createdAt.toDate()) : 'Recently'}</span>
+                         {seriesPosts.length === 0 ? (<div className="col-span-full py-20 text-center text-gray-400"><Smile size={48} className="mx-auto mb-4 opacity-50"/><p>No stories yet. Be the first to share!</p></div>) : (
+                             seriesPosts.map(post => {
+                                 const postImages = post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []);
+                                 const canEdit = isAdmin || profile.memberId === post.authorId;
+                                 return (
+                                     <div key={post.id} className="bg-white rounded-[32px] overflow-hidden border border-amber-100 shadow-sm hover:shadow-lg transition-shadow group relative">
+                                         {canEdit && (<div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditSeries(post)} className="p-2 bg-white/90 backdrop-blur rounded-full text-amber-600 hover:text-amber-800 shadow-md"><Pen size={14}/></button><button onClick={() => handleDeleteSeries(post.id)} className="p-2 bg-white/90 backdrop-blur rounded-full text-red-500 hover:text-red-700 shadow-md"><Trash2 size={14}/></button></div>)}
+                                         <div className="flex overflow-x-auto snap-x snap-mandatory hide-scrollbar h-64 bg-gray-100">
+                                             {postImages.map((imgUrl, idx) => (
+                                                 <div key={idx} className="w-full flex-shrink-0 snap-center relative"><img src={getDirectLink(imgUrl)} alt={`${post.title} ${idx+1}`} className="w-full h-full object-cover" />{postImages.length > 1 && (<div className="absolute bottom-2 right-3 bg-black/50 text-white text-[9px] px-2 py-1 rounded-full font-bold tracking-widest backdrop-blur-sm">{idx + 1} / {postImages.length}</div>)}</div>
+                                             ))}
+                                         </div>
+                                         <div className="p-6">
+                                             <h4 className="font-black text-lg text-[#3E2723] mb-2 leading-tight">{post.title}</h4>
+                                             <p className="text-xs text-gray-600 leading-relaxed mb-4 whitespace-pre-wrap">{post.caption}</p>
+                                             <div className="flex justify-between items-center text-[9px] font-bold uppercase text-gray-400 border-t border-gray-100 pt-4"><span>By {post.author}</span><span>{post.createdAt?.toDate ? formatDate(post.createdAt.toDate()) : 'Recently'}</span></div>
                                          </div>
                                      </div>
-                                 </div>
-                             ))
+                                 );
+                             })
                          )}
                     </div>
                 </div>
             )}
 
            {/* --- COMMITTEE HUNT VIEW --- */}
-            {view === 'committee_hunt' && (
+           {view === 'committee_hunt' && (
                 <div className="space-y-8 animate-fadeIn">
                      <div className="bg-[#3E2723] text-white p-10 rounded-[48px] text-center relative overflow-hidden">
-                        <div className="relative z-10">
-                            <h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3>
-                            <p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Serve the student body, hone your leadership skills, and be part of the legacy.</p>
-                        </div>
+                        <div className="relative z-10"><h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3><p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Serve the student body, hone your leadership skills, and be part of the legacy.</p></div>
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                     </div>
-
-                    {/* APPLICATION STATUS BOX */}
                     {userApplications && userApplications.length > 0 && (
                         <div className="bg-white p-8 rounded-[32px] border-2 border-amber-200 shadow-md">
-                            <h4 className="font-black uppercase text-sm mb-4 text-[#3E2723] flex items-center gap-2">
-                                <Briefcase size={18}/> Your Application Status
-                            </h4>
+                            <h4 className="font-black uppercase text-sm mb-4 text-[#3E2723] flex items-center gap-2"><Briefcase size={18}/> Your Application Status</h4>
                             <div className="space-y-3">
                                 {userApplications.map(app => (
                                     <div key={app.id} className="flex justify-between items-center bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                                        <div>
-                                            <p className="font-black text-[#3E2723] uppercase">{app.committee}</p>
-                                            <p className="text-xs text-gray-500 font-bold uppercase">{app.role}</p>
-                                            <p className="text-[9px] text-gray-400 mt-1">Last Updated: {app.statusUpdatedAt?.toDate ? formatDate(app.statusUpdatedAt.toDate()) : 'Recently'}</p>
-                                        </div>
-                                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm ${
-                                            app.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : 
-                                            app.status === 'for_interview' ? 'bg-blue-100 text-blue-700 border border-blue-200 animate-pulse' : 
-                                            app.status === 'accepted' ? 'bg-green-100 text-green-700 border border-green-200' : 
-                                            'bg-red-100 text-red-700 border border-red-200'
-                                        }`}>
-                                            {app.status === 'for_interview' ? 'For Interview' : app.status}
-                                        </span>
+                                        <div><p className="font-black text-[#3E2723] uppercase">{app.committee}</p><p className="text-xs text-gray-500 font-bold uppercase">{app.role}</p><p className="text-[9px] text-gray-400 mt-1">Last Updated: {app.statusUpdatedAt?.toDate ? formatDate(app.statusUpdatedAt.toDate()) : 'Recently'}</p></div>
+                                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm ${app.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : app.status === 'for_interview' ? 'bg-blue-100 text-blue-700 border border-blue-200 animate-pulse' : app.status === 'accepted' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{app.status === 'for_interview' ? 'For Interview' : app.status}</span>
                                     </div>
                                 ))}
                             </div>
                         </div>
                     )}
-
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
                         {COMMITTEES_INFO.map(c => {
-                            // Check if the user has already applied for this specific committee
                             const hasAppliedToThis = userApplications && userApplications.some(a => a.committee === c.id);
-                            // Prevent multiple applications if you only allow one at a time (Optional)
                             const hasActiveApp = userApplications && userApplications.some(a => ['pending', 'for_interview'].includes(a.status));
-
                             return (
                                 <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
-                                    <div className="h-32 rounded-2xl bg-gray-100 mb-6 overflow-hidden">
-                                        <img src={c.image} className="w-full h-full object-cover" alt={c.title} />
-                                    </div>
+                                    <div className="h-32 rounded-2xl bg-gray-100 mb-6 overflow-hidden"><img src={c.image} className="w-full h-full object-cover" alt={c.title} /></div>
                                     <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
                                     <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                    
-                                    <button 
-                                        onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} 
-                                        disabled={submittingApp || hasAppliedToThis || hasActiveApp} 
-                                        className={`w-full py-4 rounded-xl font-black uppercase text-xs transition-all ${
-                                            hasAppliedToThis ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' :
-                                            hasActiveApp ? 'bg-gray-100 text-gray-400 cursor-not-allowed' :
-                                            'bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md hover:shadow-lg'
-                                        }`}
-                                    >
-                                        {hasAppliedToThis ? 'Applied ✓' : hasActiveApp ? 'Locked' : 'Apply Now'}
-                                    </button>
+                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp || hasAppliedToThis || hasActiveApp} className={`w-full py-4 rounded-xl font-black uppercase text-xs transition-all ${hasAppliedToThis ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' : hasActiveApp ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md hover:shadow-lg'}`}>{hasAppliedToThis ? 'Applied ✓' : hasActiveApp ? 'Locked' : 'Apply Now'}</button>
                                 </div>
                             );
                         })}
