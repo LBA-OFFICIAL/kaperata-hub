@@ -2263,10 +2263,6 @@ ${window.location.origin}`;
       if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0]; return '';
   };
 
-
-  const toggleSelectAll = () => setSelectedBaristas(selectedBaristas.length === paginatedRegistry.length ? [] : paginatedRegistry.map(m => m.memberId));
-  const toggleSelectBarista = (mid) => setSelectedBaristas(prev => prev.includes(mid) ? prev.filter(id => id !== mid) : [...prev, mid]);
-
   const handleUpdatePosition = async (targetId, cat, specific = "") => {
     if (!isAdmin) return; // RESTRICTED: Only Admins (Officer/Execomm) can update positions
     const target = members.find(m => m.memberId === targetId);
