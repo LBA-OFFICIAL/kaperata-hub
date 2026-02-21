@@ -1670,24 +1670,48 @@ const handleCreatePoll = async (e) => {
   };
 
   // --- PROJECT & TASK ACTIONS ---
-  const handleCreateProject = async (e) => {
-      e.preventDefault();
-      try {
-          const projectHead = members.find(m => m.memberId === newProject.projectHeadId);
-          await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), {
-              title: newProject.title,
-              description: newProject.description,
-              deadline: newProject.deadline,
-              projectHeadId: newProject.projectHeadId,
-              projectHeadName: projectHead ? projectHead.name : '',
-              createdBy: profile.memberId,
-              createdAt: serverTimestamp(),
-              status: 'active'
-          });
-          setShowProjectForm(false);
-          setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' });
-          logAction("Create Project", `Created project: ${newProject.title}`);
-      } catch(e) { console.error(e); }
+ const handleCreateProject = async (e) => { 
+      e.preventDefault(); 
+      try { 
+          const projectHead = members.find(m => m.memberId === newProject.projectHeadId); 
+          const payload = {
+              title: newProject.title, description: newProject.description, deadline: newProject.deadline, 
+              projectHeadId: newProject.projectHeadId, projectHeadName: projectHead ? projectHead.name : ''
+          };
+
+          if (editingProject) {
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', editingProject.id), {
+                  ...payload, lastEdited: serverTimestamp()
+              });
+              logAction("Update Project", `Updated project: ${newProject.title}`);
+              setEditingProject(null);
+          } else {
+              await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), { 
+                  ...payload, createdBy: profile.memberId, createdAt: serverTimestamp(), status: 'active' 
+              }); 
+              logAction("Create Project", `Created project: ${newProject.title}`);
+          }
+          setShowProjectForm(false); 
+          setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); 
+      } catch(e) { console.error(e); } 
+  };
+
+  const handleEditProject = (proj) => {
+      setNewProject({
+          title: proj.title, description: proj.description, deadline: proj.deadline,
+          projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName
+      });
+      setEditingProject(proj);
+      setShowProjectForm(true);
+  };
+
+  const handleEditProject = (proj) => {
+      setNewProject({
+          title: proj.title, description: proj.description, deadline: proj.deadline,
+          projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName
+      });
+      setEditingProject(proj);
+      setShowProjectForm(true);
   };
 
   const handleAddTask = async (e) => {
@@ -2163,14 +2187,15 @@ ${window.location.origin}`;
   };
 
 // --- REGISTRY LOGIC DEFINITIONS (BULLETPROOFED) ---
-  const paginatedRegistry = useMemo(() => {
+ // --- REGISTRY LOGIC DEFINITIONS (WITH PAGINATION RESTORED) ---
+  const filteredRegistry = useMemo(() => {
       if (!members || !Array.isArray(members)) return [];
       const queryUpper = (searchQuery || "").toUpperCase();
       let filtered = members.filter(m => {
           if (!queryUpper) return true;
-          const nameMatch = (m.name || "").toUpperCase().includes(queryUpper);
-          const idMatch = (m.memberId || "").toUpperCase().includes(queryUpper);
-          const emailMatch = (m.email || "").toUpperCase().includes(queryUpper);
+          const nameMatch = (m?.name || "").toUpperCase().includes(queryUpper);
+          const idMatch = (m?.memberId || "").toUpperCase().includes(queryUpper);
+          const emailMatch = (m?.email || "").toUpperCase().includes(queryUpper);
           return nameMatch || idMatch || emailMatch;
       });
       if (exportFilter !== 'all') {
@@ -2181,6 +2206,20 @@ ${window.location.origin}`;
       }
       return filtered; 
   }, [members, searchQuery, exportFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRegistry.length / itemsPerPage));
+  
+  const paginatedRegistry = useMemo(() => {
+      return filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  }, [filteredRegistry, currentPage, itemsPerPage]);
+
+  const nextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages));
+  const prevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
+
+  // Auto-reset to page 1 when searching or changing filters
+  useEffect(() => {
+      setCurrentPage(1);
+  }, [searchQuery, exportFilter]);
 
   const handleExportCSV = () => {
       if (!members) return;
@@ -3222,120 +3261,64 @@ ${window.location.origin}`;
                 </div>
             )}
 
+          {/* --- MASTERCLASS VIEW --- */}
             {view === 'masterclass' && (
                 <div className="space-y-8 animate-fadeIn">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                        <div>
-                            <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Masterclass</h3>
-                            <p className="text-amber-600 font-bold text-xs uppercase">School of Coffee Excellence</p>
-                        </div>
+                        <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Masterclass</h3><p className="text-amber-600 font-bold text-xs uppercase">School of Coffee Excellence</p></div>
                         <button onClick={() => setShowCertificate(true)} className="bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-black transition-colors w-full md:w-auto justify-center"><Award size={16}/> View Certificate</button>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {DEFAULT_MASTERCLASS_MODULES.map(mod => {
                             const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
                             const details = masterclassData.moduleDetails?.[mod.id] || {};
-                            // Use custom icon if set, otherwise default
-                            const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"];
-                            const icon = details.icon || defaultIcons[mod.id-1];
-
+                            const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"]; const icon = details.icon || defaultIcons[mod.id-1];
                             return (
-                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>
-                                            {icon}
-                                        </div>
-                                        {isCompleted && <BadgeCheck className="text-green-600" size={24}/>}
-                                    </div>
+                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all flex flex-col ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
+                                    <div className="flex justify-between items-start mb-4"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>{icon}</div>{isCompleted && <BadgeCheck className="text-green-600" size={24}/>}</div>
                                     <h4 className="font-black uppercase text-sm text-[#3E2723] mb-1">{details.title || mod.title}</h4>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Module 0{mod.id}</p>
-                                    
-                                    {details.objectives && <p className="text-xs text-gray-600 mt-2 line-clamp-2">{details.objectives}</p>}
-
-                                    {isCompleted ? (
-                                        <div className="mt-4 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block">Completed</div>
-                                    ) : (
-                                        <div className="mt-4 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block">Locked</div>
-                                    )}
+                                    <div className="flex-1 space-y-4 mt-4">
+                                        {details.objectives && (<div><p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Objectives</p><p className="text-xs text-gray-700 leading-relaxed">{details.objectives}</p></div>)}
+                                        {details.topics && (<div><p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Topics Covered</p><p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{details.topics}</p></div>)}
+                                        {!details.objectives && !details.topics && (<p className="text-xs text-gray-400 italic">Curriculum details coming soon.</p>)}
+                                    </div>
+                                    {isCompleted ? (<div className="mt-6 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block self-start">Completed</div>) : (<div className="mt-6 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block self-start">Locked</div>)}
                                 </div>
                             );
                         })}
                     </div>
-                    {/* ... (Admin Masterclass Controls kept same) ... */}
                     {isAdmin && (
                         <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-200 mt-8 space-y-4">
                             <h4 className="font-black text-sm uppercase text-amber-800 mb-4 flex items-center gap-2"><Settings2 size={16}/> Admin Controls</h4>
-                            
                             <div className="space-y-4">
                                 <div className="flex flex-col md:flex-row gap-4">
-                                    <select className="p-3 rounded-xl border border-amber-200 text-xs font-bold uppercase w-full md:w-auto" value={adminMcModule} onChange={e => {
-                                        setAdminMcModule(e.target.value);
-                                        const details = masterclassData.moduleDetails?.[e.target.value] || {};
-                                        setTempMcDetails(details);
-                                        setSelectedMcMembers([]); // Reset selections on module change
-                                    }}>
-                                        {DEFAULT_MASTERCLASS_MODULES.map(m => <option key={m.id} value={m.id}>Module {m.id}: {m.short}</option>)}
+                                    <select className="p-3 rounded-xl border border-amber-200 text-xs font-bold uppercase w-full md:w-auto" value={adminMcModule} onChange={e => { setAdminMcModule(e.target.value); const details = masterclassData.moduleDetails?.[e.target.value] || {}; setTempMcDetails(details); setSelectedMcMembers([]); }}>
+                                        {DEFAULT_MASTERCLASS_MODULES.map(m => { const details = masterclassData.moduleDetails?.[m.id] || {}; const displayTitle = details.title || m.title; return <option key={m.id} value={m.id}>Module {m.id}: {displayTitle}</option> })}
                                     </select>
-                                    
-                                    <button onClick={handleBulkAddMasterclass} disabled={selectedMcMembers.length === 0} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700 disabled:opacity-50">
-                                        Add {selectedMcMembers.length} Attendees
-                                    </button>
+                                    <button onClick={handleBulkAddMasterclass} disabled={selectedMcMembers.length === 0} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700 disabled:opacity-50">Add {selectedMcMembers.length} Attendees</button>
                                 </div>
-
                                 <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
-                                    <input 
-                                        type="text" 
-                                        placeholder="Search members to add..." 
-                                        className="w-full p-3 text-xs border-b border-amber-100 outline-none"
-                                        value={adminMcSearch}
-                                        onChange={e => setAdminMcSearch(e.target.value.toUpperCase())}
-                                    />
+                                    <input type="text" placeholder="Search members to add..." className="w-full p-3 text-xs border-b border-amber-100 outline-none" value={adminMcSearch} onChange={e => setAdminMcSearch(e.target.value.toUpperCase())} />
                                     <div className="max-h-40 overflow-y-auto p-2 space-y-1">
-                                        {members
-                                            .filter(m => 
-                                                // Filter by search AND filter out members already in this module
-                                                (m.name.includes(adminMcSearch) || m.memberId.includes(adminMcSearch)) &&
-                                                !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)
-                                            )
-                                            .slice(0, 50) // Limit render
-                                            .map(m => (
+                                        {members.filter(m => (m.name.includes(adminMcSearch) || m.memberId.includes(adminMcSearch)) && !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)).slice(0, 50).map(m => (
                                                 <label key={m.memberId} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                                                    <input 
-                                                        type="checkbox" 
-                                                        className="rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-                                                        checked={selectedMcMembers.includes(m.memberId)}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) setSelectedMcMembers(prev => [...prev, m.memberId]);
-                                                            else setSelectedMcMembers(prev => prev.filter(id => id !== m.memberId));
-                                                        }}
-                                                    />
-                                                    <div>
-                                                        <p className="text-xs font-bold text-gray-700">{m.name}</p>
-                                                        <p className="text-[9px] text-gray-400 font-mono">{m.memberId}</p>
-                                                    </div>
+                                                    <input type="checkbox" className="rounded border-gray-300 text-amber-600 focus:ring-amber-500" checked={selectedMcMembers.includes(m.memberId)} onChange={(e) => { if (e.target.checked) setSelectedMcMembers(prev => [...prev, m.memberId]); else setSelectedMcMembers(prev => prev.filter(id => id !== m.memberId)); }} />
+                                                    <div><p className="text-xs font-bold text-gray-700">{m.name}</p><p className="text-[9px] text-gray-400 font-mono">{m.memberId}</p></div>
                                                 </label>
                                             ))
                                         }
-                                        {members.length === 0 && <p className="text-center text-xs text-gray-400 py-2">Loading members...</p>}
                                     </div>
                                 </div>
                             </div>
-
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-amber-200">
-                                <div>
-                                    <label className="text-[10px] font-bold uppercase text-amber-800 mb-1 block">Certificate Template URL</label>
-                                    <div className="flex gap-2">
-                                        <input type="text" className="flex-1 p-3 rounded-xl border border-amber-200 text-xs" value={masterclassData.certTemplate || ''} onChange={e => setMasterclassData({...masterclassData, certTemplate: e.target.value})} />
-                                        <button onClick={handleSaveCertTemplate} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold uppercase text-xs">Save</button>
-                                    </div>
-                                </div>
-                                <div className="flex items-end">
-                                    <button onClick={() => setEditingMcCurriculum(true)} className="w-full bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-xs">Edit Curriculum for Module {adminMcModule}</button>
-                                </div>
+                                <div><label className="text-[10px] font-bold uppercase text-amber-800 mb-1 block">Certificate Template URL</label><div className="flex gap-2"><input type="text" className="flex-1 p-3 rounded-xl border border-amber-200 text-xs" value={masterclassData.certTemplate || ''} onChange={e => setMasterclassData({...masterclassData, certTemplate: e.target.value})} /><button onClick={handleSaveCertTemplate} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold uppercase text-xs">Save</button></div></div>
+                                <div className="flex items-end"><button onClick={() => setEditingMcCurriculum(true)} className="w-full bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-xs">Edit Curriculum for Module {adminMcModule}</button></div>
                             </div>
                         </div>
                     )}
+                </div>
+            )}
 
                     {/* Edit Curriculum Modal */}
                     {editingMcCurriculum && (
@@ -3442,39 +3425,8 @@ ${window.location.origin}`;
                 </div>
             )}
 
+           {/* --- WHAT'S BREWING (EVENTS) VIEW --- */}
             {view === 'events' && (
-                <div className="space-y-6 animate-fadeIn">
-                     <div className="flex justify-between items-center">
-                        <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
-                        {isAdmin && <button onClick={() => setShowEventForm(true)} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}
-                    </div>
-                    {/* ... (Event Form and List rendering kept same) ... */}
-                    <div className="space-y-4">
-                        {events.map(ev => {
-                            const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
-                            return (
-                                <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                                     {/* ... (Event Card Content) ... */}
-                                      <div className="flex flex-col sm:flex-row gap-6">
-                                        <div className="bg-[#3E2723] text-[#FDB813] w-20 h-20 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0">
-                                            <span className="text-2xl">{day}</span>
-                                            <span className="text-xs uppercase mt-1">{month}</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            <h4 className="font-serif text-xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
-                                            <p className="text-xs font-bold text-gray-500 uppercase mt-1 flex items-center gap-2"><MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
-                                            </p>
-                                            <p className="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
-                                             {/* ... (Buttons logic) ... */}
-                                             {ev.evaluationLink && <a href={ev.evaluationLink} target="_blank" rel="noreferrer" className="inline-block mt-4 text-[10px] font-black uppercase text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition-colors">📝 Post-Event Evaluation</a>}
-                                        </div>
-                                      </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}{view === 'events' && (
                 <div className="space-y-6 animate-fadeIn">
                      <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
@@ -3509,7 +3461,7 @@ ${window.location.origin}`;
                     </div>
                 </div>
             )}
-
+        
             {view === 'announcements' && (
                 <div className="space-y-6 animate-fadeIn">
                      <div className="flex justify-between items-center">
@@ -3618,45 +3570,63 @@ ${window.location.origin}`;
                 </div>
             )}
 
-           {/* --- COMMITTEE HUNT VIEW --- */}
-           {view === 'committee_hunt' && (
+            {/* --- COMMITTEE HUNT VIEW --- */}
+            {view === 'committee_hunt' && (
                 <div className="space-y-8 animate-fadeIn">
                      <div className="bg-[#3E2723] text-white p-10 rounded-[48px] text-center relative overflow-hidden">
                         <div className="relative z-10"><h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3><p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Serve the student body, hone your leadership skills, and be part of the legacy.</p></div>
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                     </div>
+
                     {userApplications && userApplications.length > 0 && (
                         <div className="bg-white p-8 rounded-[32px] border-2 border-amber-200 shadow-md">
                             <h4 className="font-black uppercase text-sm mb-4 text-[#3E2723] flex items-center gap-2"><Briefcase size={18}/> Your Application Status</h4>
                             <div className="space-y-3">
-                                {userApplications.map(app => (
-                                    <div key={app.id} className="flex justify-between items-center bg-amber-50 p-4 rounded-2xl border border-amber-100">
-                                        <div><p className="font-black text-[#3E2723] uppercase">{app.committee}</p><p className="text-xs text-gray-500 font-bold uppercase">{app.role}</p><p className="text-[9px] text-gray-400 mt-1">Last Updated: {app.statusUpdatedAt?.toDate ? formatDate(app.statusUpdatedAt.toDate()) : 'Recently'}</p></div>
-                                        <span className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-sm ${app.status === 'pending' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' : app.status === 'for_interview' ? 'bg-blue-100 text-blue-700 border border-blue-200 animate-pulse' : app.status === 'accepted' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>{app.status === 'for_interview' ? 'For Interview' : app.status}</span>
-                                    </div>
-                                ))}
+                                {userApplications.map(app => {
+                                    // Custom Status Banners
+                                    let statusBg = 'bg-yellow-50 border-yellow-200';
+                                    let statusText = <p className="text-yellow-700 font-black uppercase text-xs">Application Pending</p>;
+                                    if (app.status === 'for_interview') {
+                                        statusBg = 'bg-blue-50 border-blue-200 animate-pulse';
+                                        statusText = <><p className="text-blue-700 font-black uppercase text-xs">For Interview</p><p className="text-[10px] text-blue-600 mt-1">Please check your LPU email.</p></>;
+                                    } else if (app.status === 'accepted') {
+                                        statusBg = 'bg-green-50 border-green-300';
+                                        statusText = <><p className="text-green-700 font-black uppercase text-sm">🎉 CONGRATULATIONS!</p><p className="text-[10px] text-green-600 mt-1">Welcome to the team!</p></>;
+                                    } else if (app.status === 'denied') {
+                                        statusBg = 'bg-gray-50 border-gray-200';
+                                        statusText = <><p className="text-gray-700 font-black uppercase text-xs">Application Closed</p><p className="text-[10px] text-gray-500 mt-1">Reach out to any officer for feedback.</p></>;
+                                    }
+
+                                    return (
+                                        <div key={app.id} className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-5 rounded-2xl border-2 ${statusBg} gap-4`}>
+                                            <div><p className="font-black text-[#3E2723] uppercase text-lg">{app.committee}</p><p className="text-xs text-gray-500 font-bold uppercase">{app.role}</p><p className="text-[9px] text-gray-400 mt-1">Applied: {app.createdAt?.toDate ? formatDate(app.createdAt.toDate()) : 'Recently'}</p></div>
+                                            <div className="text-left sm:text-right">{statusText}</div>
+                                        </div>
+                                    )
+                                })}
                             </div>
                         </div>
                     )}
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
                         {COMMITTEES_INFO.map(c => {
+                            // Lock ONLY the specific committee they applied for, letting them apply to others!
                             const hasAppliedToThis = userApplications && userApplications.some(a => a.committee === c.id);
-                            const hasActiveApp = userApplications && userApplications.some(a => ['pending', 'for_interview'].includes(a.status));
                             return (
                                 <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
                                     <div className="h-32 rounded-2xl bg-gray-100 mb-6 overflow-hidden"><img src={c.image} className="w-full h-full object-cover" alt={c.title} /></div>
                                     <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
                                     <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp || hasAppliedToThis || hasActiveApp} className={`w-full py-4 rounded-xl font-black uppercase text-xs transition-all ${hasAppliedToThis ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' : hasActiveApp ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md hover:shadow-lg'}`}>{hasAppliedToThis ? 'Applied ✓' : hasActiveApp ? 'Locked' : 'Apply Now'}</button>
+                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp || hasAppliedToThis} className={`w-full py-4 rounded-xl font-black uppercase text-xs transition-all ${hasAppliedToThis ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md hover:shadow-lg'}`}>{hasAppliedToThis ? 'Applied ✓' : 'Apply Now'}</button>
                                 </div>
                             );
                         })}
                     </div>
                 </div>
-            )}
+            )})}
 
             {/* --- REFACTORED: The Task Bar (Project-Centric) --- */}
-            {view === 'daily_grind' && isOfficer && (
+           {view === 'daily_grind' && isOfficer && (
                  <div className="space-y-8 animate-fadeIn">
                     <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3>
@@ -3679,7 +3649,7 @@ ${window.location.origin}`;
                                         <div className="flex justify-between items-start mb-4">
                                             <div>
                                                 <h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4>
-                                                <p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center gap-1"><UserCheck size={12}/> Head: {proj.projectHeadName || 'Unassigned'}</p>
+                                                <p className="text-[10px] font-bold text-indigo-600 mt-1 flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded-md w-max"><UserCheck size={12}/> Assigned Head: {proj.projectHeadName || 'Unassigned'}</p>
                                             </div>
                                             <div className="text-right">
                                                 <span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span>
@@ -3703,17 +3673,28 @@ ${window.location.origin}`;
                                     {/* EXPANDED TASK BOARD */}
                                     {isExpanded && (
                                         <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn">
-                                             <div className="flex justify-between items-center mb-6">
-                                                <p className="text-xs text-gray-500 max-w-2xl italic">{proj.description}</p>
-                                                {/* Only Project Head, Admins, or Committee Heads can add tasks */}
-                                                {(isAdmin || isCommitteeHead || profile.memberId === proj.projectHeadId) && (
-                                                    <button 
-                                                        onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id }); setShowTaskForm(true); }} 
-                                                        className="bg-white border border-amber-200 text-[#3E2723] px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-50"
-                                                    >
-                                                        + Add Task
-                                                    </button>
-                                                )}
+                                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+                                                <p className="text-xs text-gray-500 max-w-2xl italic pr-4">"{proj.description}"</p>
+                                                
+                                                <div className="flex gap-2 shrink-0">
+                                                    {/* Edit and Delete Board (Project Details) */}
+                                                    {(isAdmin || profile.memberId === proj.projectHeadId) && (
+                                                        <>
+                                                            <button onClick={(e) => { e.stopPropagation(); setNewProject({ title: proj.title, description: proj.description, deadline: proj.deadline, projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName }); setEditingProject(proj); setShowProjectForm(true); }} className="bg-amber-100 text-amber-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-200 flex items-center gap-1"><Pen size={12}/> Edit Board</button>
+                                                            {isAdmin && <button onClick={async (e) => { e.stopPropagation(); if(confirm('Delete this project board?')) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', proj.id)); } }} className="bg-red-100 text-red-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-200 flex items-center gap-1"><Trash2 size={12}/></button>}
+                                                        </>
+                                                    )}
+                                                    
+                                                    {/* Only Project Head, Admins, or Committee Heads can add tasks */}
+                                                    {(isAdmin || isCommitteeHead || profile.memberId === proj.projectHeadId) && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id }); setShowTaskForm(true); }} 
+                                                            className="bg-[#3E2723] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-black flex items-center gap-1"
+                                                        >
+                                                            <Plus size={12}/> Add Task
+                                                        </button>
+                                                    )}
+                                                </div>
                                              </div>
 
                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -3723,24 +3704,37 @@ ${window.location.origin}`;
                                                             {status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckSquare2 size={12}/>}
                                                             {status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}
                                                          </h5>
-                                                         <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                                                         <div className="space-y-3 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
                                                              {projectTasks.filter(t => t.status === status).map(task => (
-                                                                 <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm hover:border-amber-200 group">
+                                                                 <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
                                                                      <div className="flex justify-between items-start mb-1">
                                                                          <span className="font-bold text-xs text-[#3E2723]">{task.title}</span>
-                                                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                             <button onClick={() => handleEditTask(task)} className="text-amber-500"><Pen size={10}/></button>
-                                                                             <button onClick={() => handleDeleteTask(task.id)} className="text-red-400"><Trash2 size={10}/></button>
+                                                                         <div className="flex gap-1">
+                                                                             <button onClick={() => handleEditTask(task)} className="text-amber-500 hover:text-amber-700 p-1"><Pen size={12}/></button>
+                                                                             {isAdmin && <button onClick={() => handleDeleteTask(task.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={12}/></button>}
                                                                          </div>
                                                                      </div>
-                                                                     {task.link && <a href={task.link} target="_blank" className="text-[9px] text-blue-500 hover:underline flex items-center gap-1 mb-1"><Link2 size={8}/> Link</a>}
                                                                      
-                                                                     {task.notes && <div className="bg-amber-50 p-1.5 rounded text-[8px] text-amber-900 mb-2 italic">"{task.notes}"</div>}
-                                                                     
-                                                                     <div className="flex gap-1 border-t border-gray-50 pt-1">
-                                                                         {status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] rounded py-1 hover:bg-gray-200">←</button>}
-                                                                         {status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-50 text-[8px] rounded py-1 hover:bg-amber-100 text-amber-700">Brew</button>}
-                                                                         {status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-50 text-[8px] rounded py-1 hover:bg-green-100 text-green-700">✓</button>}
+                                                                     {/* Collapsible View for Links & Context outside the modal! */}
+                                                                     <details className="mt-2 text-[10px] cursor-pointer">
+                                                                         <summary className="font-bold text-amber-600 mb-2 outline-none list-none flex items-center gap-1 hover:text-amber-800 transition-colors">
+                                                                            <ChevronRight size={12} className="inline-block transition-transform duration-200"/> View Output & Details
+                                                                         </summary>
+                                                                         <div className="pl-3 py-2 border-l-2 border-amber-100 space-y-3 cursor-default">
+                                                                            {task.description && <p className="text-gray-600 italic leading-relaxed">{task.description}</p>}
+                                                                            {task.link && (
+                                                                                <a href={task.link.startsWith('http') ? task.link : `https://${task.link}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1.5 rounded-lg w-fit">
+                                                                                    <Link2 size={10}/> Open Reference / Output
+                                                                                </a>
+                                                                            )}
+                                                                            {task.notes && <div className="bg-amber-50 p-2 rounded-lg text-amber-900 border border-amber-100 font-medium">Feedback: {task.notes}</div>}
+                                                                         </div>
+                                                                     </details>
+
+                                                                     <div className="flex gap-1 border-t border-gray-100 pt-2 mt-2">
+                                                                         {status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-gray-200 text-gray-600 transition-colors">Revert</button>}
+                                                                         {status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-amber-200 text-amber-800 transition-colors">Brew</button>}
+                                                                         {status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-green-200 text-green-800 transition-colors">Serve</button>}
                                                                      </div>
                                                                  </div>
                                                              ))}
@@ -3758,11 +3752,13 @@ ${window.location.origin}`;
             )}
 
             {/* ... (Registry and Reports Views kept same) ... */}
-            {view === 'members' && isOfficer && (
+           {view === 'members' && isOfficer && (
                 <div className="space-y-6 animate-fadeIn text-[#3E2723]">
-                    {/* ... Registry UI ... */}
                     <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
-                        <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
+                        <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto">
+                            <Search size={16}/>
+                            <input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/>
+                        </div>
                         <div className="flex gap-2 w-full md:w-auto justify-end">
                             <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}>
                                 <option value="all">All</option>
@@ -3778,91 +3774,152 @@ ${window.location.origin}`;
                         </div>
                     </div>
                     
-                    <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
-                        {/* Table implementation */}
-                         <table className="w-full text-left uppercase table-fixed">
-                        <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
-                            <tr className="text-[10px]">
-                                <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === paginatedRegistry.length ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
-                                <th className="p-4 w-1/3">Barista</th>
-                                <th className="p-4 w-32 text-center">ID</th>
-                                <th className="p-4 w-24 text-center">Status</th>
-                                <th className="p-4 w-40 text-center">Designation</th>
-                                <th className="p-4 w-32 text-right">Manage</th>
-                            </tr>
-                        </thead>
-                       <tbody className="text-[#3E2723] divide-y divide-amber-50">
-                            {paginatedRegistry.map(m => (
-                            <tr key={m.id || m.memberId} className={`hover:bg-amber-50/50 ${m.status !== 'active' ? 'opacity-50 grayscale' : ''}`}>
-                                <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m.memberId)}>{selectedBaristas.includes(m.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                                <td className="py-4 px-4">
-                                    <div className="flex items-center gap-4">
-                                    <img src={getDirectLink(m.photoUrl) || `https://ui-avatars.com/api/?name=${m.name}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" />
-                                    <div className="min-w-0">
-                                        <p className="font-black text-xs truncate">{m.name}</p>
-                                        <p className="text-[8px] opacity-60 truncate">"{m.nickname || m.program}"</p>
-                                        <div className="flex flex-wrap gap-1 mt-1">
-                                            {Array.isArray(m.accolades) && m.accolades.map((acc, i) => (
-                                                <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
-                                            ))}
+                    {/* MOBILE REGISTRY VIEW */}
+                    <div className="md:hidden space-y-4">
+                        {paginatedRegistry && paginatedRegistry.map(m => (
+                            <div key={m?.memberId || Math.random()} className={`bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm ${m?.status !== 'active' ? 'opacity-70 grayscale' : ''}`}>
+                                <div className="flex justify-between items-start mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" alt="Avatar"/>
+                                        <div>
+                                            <p className="font-black text-xs uppercase">{m?.name || 'Unknown'}</p>
+                                            <p className="text-[10px] font-mono text-gray-500">{m?.memberId || 'No ID'}</p>
                                         </div>
                                     </div>
+                                    <button onClick={()=>toggleSelectBarista(m?.memberId)}>{selectedBaristas.includes(m?.memberId) ? <CheckCircle2 size={20} className="text-[#FDB813]"/> : <div className="w-5 h-5 border-2 border-amber-100 rounded-full"></div>}</button>
+                                </div>
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <label className="text-[8px] font-bold text-gray-400 uppercase">Category</label>
+                                            <select className="w-full bg-amber-50 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>
+                                                {POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="text-[8px] font-bold text-gray-400 uppercase">Title</label>
+                                            <select className="w-full bg-white border border-amber-100 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}>
+                                                <option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>
+                                                {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                                {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                        </div>
                                     </div>
-                                </td>
-                                <td className="text-center font-mono font-black text-xs">{m.memberId}</td>
-                                <td className="text-center font-black text-[10px] uppercase">
-                                    <button 
-                                        onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)}
-                                        className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${m.status === 'active' ? (m.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`}
-                                        disabled={!isAdmin}
-                                    >
-                                        {m.status === 'active' ? (m.membershipType || 'ACTIVE') : 'EXPIRED'}
-                                    </button>
-                                </td>
-                                <td className="text-center py-2">
-                                    <div className="flex flex-col gap-1 items-center">
-                                        <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>
-                                            {POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
-                                        </select>
-                                        
-                                        <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}>
-                                            <option value="Member">Member</option>
-                                            <option value="Org Adviser">Org Adviser</option>
-                                            {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
-                                            {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                        
-                                        {/* THE COMMITTEE TYPE SUB-SELECTION */}
-                                        {m.positionCategory === 'Committee' && (
-                                            <select 
-                                                className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-1 focus:ring-indigo-400" 
-                                                value={m.committee || ""} 
-                                                onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} 
-                                                disabled={!isAdmin}
-                                            >
+                                    {/* COMMITTEE SUB-SELECTION */}
+                                    {m?.positionCategory === 'Committee' && (
+                                        <div>
+                                            <label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Dept</label>
+                                            <select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}>
                                                 <option value="">Select Dept...</option>
                                                 {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                                             </select>
-                                        )}
-                                    </div>
-                                </td>
-                                <td className="text-right p-4">
-                                    <div className="flex items-center justify-end gap-1">
-                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ memberId: m.memberId, currentAccolades: m.accolades }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="mt-4 pt-4 border-t border-amber-50 flex justify-between items-center">
+                                    <button onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m?.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`} disabled={!isAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ id: m.id, memberId: m.memberId, currentAccolades: m?.accolades || [] }); }} className="bg-yellow-50 text-yellow-600 p-2 rounded-lg"><Trophy size={16}/></button>
                                         {isAdmin && (
                                             <>
-                                                <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" title="Edit Member Details"><Pen size={14}/></button>
+                                                <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="bg-amber-50 text-amber-600 p-2 rounded-lg"><Pen size={16}/></button>
                                                 <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
-                                                <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                                                <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="bg-red-50 text-red-500 p-2 rounded-lg"><Trash2 size={16}/></button>
                                             </>
                                         )}
                                     </div>
-                                </td>
-                            </tr>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* DESKTOP REGISTRY VIEW */}
+                    <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
+                        <table className="w-full text-left uppercase table-fixed">
+                            <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
+                                <tr className="text-[10px]">
+                                    <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === (paginatedRegistry?.length || 0) && selectedBaristas.length > 0 ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
+                                    <th className="p-4 w-1/3">Barista</th>
+                                    <th className="p-4 w-32 text-center">ID</th>
+                                    <th className="p-4 w-24 text-center">Status</th>
+                                    <th className="p-4 w-40 text-center">Designation</th>
+                                    <th className="p-4 w-32 text-right">Manage</th>
+                                </tr>
+                            </thead>
+                            <tbody className="text-[#3E2723] divide-y divide-amber-50">
+                                {paginatedRegistry && paginatedRegistry.map(m => (
+                                <tr key={m?.memberId || Math.random()} className={`hover:bg-amber-50/50 ${m?.status !== 'active' ? 'opacity-50 grayscale' : ''}`}>
+                                    <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m?.memberId)}>{selectedBaristas.includes(m?.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
+                                    <td className="py-4 px-4">
+                                        <div className="flex items-center gap-4">
+                                            <img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" alt="Avatar"/>
+                                            <div className="min-w-0">
+                                                <p className="font-black text-xs truncate">{m?.name || 'Unknown'}</p>
+                                                <p className="text-[8px] opacity-60 truncate">"{m?.nickname || m?.program || ''}"</p>
+                                                <div className="flex flex-wrap gap-1 mt-1">
+                                                    {Array.isArray(m?.accolades) && m.accolades.map((acc, i) => (
+                                                        <span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="text-center font-mono font-black text-xs">{m?.memberId || 'N/A'}</td>
+                                    <td className="text-center font-black text-[10px] uppercase">
+                                        <button onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${m?.status === 'active' ? (m?.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`} disabled={!isAdmin}>
+                                            {m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}
+                                        </button>
+                                    </td>
+                                    <td className="text-center py-2">
+                                        <div className="flex flex-col gap-1 items-center">
+                                            <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>
+                                                {POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                                            </select>
+                                            <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}>
+                                                <option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>
+                                                {OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                                {COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}
+                                            </select>
+                                            {/* COMMITTEE SUB-SELECTION */}
+                                            {m?.positionCategory === 'Committee' && (
+                                                <select className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-1 focus:ring-indigo-400" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}>
+                                                    <option value="">Select Dept...</option>
+                                                    {COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
+                                                </select>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="text-right p-4">
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ id: m.id, memberId: m.memberId, currentAccolades: m?.accolades || [] }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
+                                            {isAdmin && (
+                                                <>
+                                                    <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" title="Edit Member Details"><Pen size={14}/></button>
+                                                    <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
+                                                    <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                                                </>
+                                            )}
+                                        </div>
+                                    </td>
+                                </tr>
                             ))}
                         </tbody>
                     </table>
                     </div>
+
+                    {/* PAGINATION CONTROLS */}
+                    <div className="flex justify-between items-center bg-white p-4 rounded-[24px] border border-amber-100 shadow-sm mt-4">
+                        <button onClick={prevPage} disabled={currentPage === 1} className="px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-black uppercase text-[10px] disabled:opacity-50 hover:bg-gray-200 transition-colors">
+                            Previous
+                        </button>
+                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                            Page <span className="text-[#3E2723] text-xs">{currentPage}</span> of {totalPages}
+                        </span>
+                        <button onClick={nextPage} disabled={currentPage === totalPages} className="px-6 py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black uppercase text-[10px] disabled:opacity-50 hover:bg-black transition-colors">
+                            Next
+                        </button>
+                    </div>
+
                 </div>
             )}
             
