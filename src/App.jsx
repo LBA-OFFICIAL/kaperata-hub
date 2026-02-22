@@ -101,21 +101,23 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const financialStats = useMemo(() => {
     if (!members || !Array.isArray(members)) return { totalPaid: 0, cashCount: 0, gcashCount: 0, exemptCount: 0 };
-    let filtered = members; if (financialFilter !== 'all') { const [sy, sem] = financialFilter.split('-'); filtered = members.filter(m => m.lastRenewedSY === sy && m.lastRenewedSem === sem); }
-    const payingMembers = filtered.filter(m => { const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m.positionCategory) || m.paymentStatus === 'exempt'; return !isExempt && m.paymentStatus === 'paid'; });
-    const cashPayments = payingMembers.filter(m => m.paymentDetails?.method === 'cash').length; const gcashPayments = payingMembers.filter(m => m.paymentDetails?.method === 'gcash').length;
+    const validMembers = members.filter(m => m != null);
+    let filtered = validMembers; if (financialFilter !== 'all') { const [sy, sem] = financialFilter.split('-'); filtered = validMembers.filter(m => m?.lastRenewedSY === sy && m?.lastRenewedSem === sem); }
+    const payingMembers = filtered.filter(m => { const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m?.positionCategory) || m?.paymentStatus === 'exempt'; return !isExempt && m?.paymentStatus === 'paid'; });
+    const cashPayments = payingMembers.filter(m => m?.paymentDetails?.method === 'cash').length; const gcashPayments = payingMembers.filter(m => m?.paymentDetails?.method === 'gcash').length;
     return { totalPaid: payingMembers.length, cashCount: cashPayments, gcashCount: gcashPayments, exemptCount: filtered.length - payingMembers.length };
   }, [members, financialFilter]);
 
-  const semesterOptions = useMemo(() => { if(!members || !Array.isArray(members)) return []; const sems = new Set(members.map(m => `${m.lastRenewedSY}-${m.lastRenewedSem}`)); return Array.from(sems).filter(s => s !== "undefined-undefined").sort().reverse(); }, [members]);
+  const semesterOptions = useMemo(() => { if(!members || !Array.isArray(members)) return []; const sems = new Set(members.filter(m => m != null).map(m => `${m?.lastRenewedSY}-${m?.lastRenewedSem}`)); return Array.from(sems).filter(s => s !== "undefined-undefined").sort().reverse(); }, [members]);
 
   const teamStructure = useMemo(() => {
     if (!members || !Array.isArray(members)) return { tier1: [], tier2: [], tier3: [], committees: {} };
-    const sortedMembers = [...members].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
-    const hasTitle = (m, title) => (m.specificTitle || "").toUpperCase().includes(title.toUpperCase());
-    const isCat = (m, cat) => (m.positionCategory || "").toUpperCase() === cat.toUpperCase();
-    const committeesMap = {}; COMMITTEES_INFO.forEach(c => { committeesMap[c.id] = { heads: sortedMembers.filter(m => m.committee === c.id && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => m.committee === c.id && isCat(m, "Committee") && !hasTitle(m, "Head")) }; });
-    committeesMap['Unassigned'] = { heads: sortedMembers.filter(m => !m.committee && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => !m.committee && isCat(m, "Committee") && !hasTitle(m, "Head")) };
+    const validMembers = members.filter(m => m != null);
+    const sortedMembers = [...validMembers].sort((a, b) => (a?.name || "").localeCompare(b?.name || ""));
+    const hasTitle = (m, title) => (m?.specificTitle || "").toUpperCase().includes(title.toUpperCase());
+    const isCat = (m, cat) => (m?.positionCategory || "").toUpperCase() === cat.toUpperCase();
+    const committeesMap = {}; COMMITTEES_INFO.forEach(c => { committeesMap[c.id] = { heads: sortedMembers.filter(m => m?.committee === c.id && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => m?.committee === c.id && isCat(m, "Committee") && !hasTitle(m, "Head")) }; });
+    committeesMap['Unassigned'] = { heads: sortedMembers.filter(m => !m?.committee && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => !m?.committee && isCat(m, "Committee") && !hasTitle(m, "Head")) };
     return { tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")), tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")), tier3: sortedMembers.filter(m => !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")), committees: committeesMap };
   }, [members]);
 
@@ -124,20 +126,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const notifications = useMemo(() => {
       const hasNew = (items, pageKey) => { if (!items || items.length === 0) return false; const lastVisit = lastVisited[pageKey]; if (!lastVisit) return true; return items.some(i => { const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0); return d > new Date(lastVisit); }); };
       let huntNotify = isOfficer ? committeeApps.some(a => a.status === 'pending') : userApplications.some(a => { const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null; const lastVisit = lastVisited['committee_hunt']; if (!updated) return false; return !lastVisit || updated > new Date(lastVisit); });
-      let regNotify = isOfficer ? hasNew((members || []).map(m => ({ createdAt: m.joinedDate })), 'members') : false;
+      let regNotify = isOfficer ? hasNew((members || []).map(m => ({ createdAt: m?.joinedDate })), 'members') : false;
       return { events: hasNew(events, 'events'), announcements: hasNew(announcements, 'announcements'), suggestions: hasNew(suggestions, 'suggestions'), committee_hunt: huntNotify, members: regNotify };
   }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer]);
 
   const filteredRegistry = useMemo(() => {
       if (!members || !Array.isArray(members)) return [];
+      const validMembers = members.filter(m => m != null);
       const queryUpper = (searchQuery || "").toUpperCase();
-      let filtered = members.filter(m => {
+      let filtered = validMembers.filter(m => {
           if (!queryUpper) return true;
           const nameMatch = (m?.name || "").toUpperCase().includes(queryUpper); const idMatch = (m?.memberId || "").toUpperCase().includes(queryUpper); const emailMatch = (m?.email || "").toUpperCase().includes(queryUpper);
           return nameMatch || idMatch || emailMatch;
       });
       if (exportFilter !== 'all') {
-          if (exportFilter === 'active') filtered = filtered.filter(m => m.status === 'active'); else if (exportFilter === 'inactive') filtered = filtered.filter(m => m.status !== 'active'); else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m.positionCategory)); else if (exportFilter === 'committee') filtered = filtered.filter(m => m.positionCategory === 'Committee');
+          if (exportFilter === 'active') filtered = filtered.filter(m => m?.status === 'active'); else if (exportFilter === 'inactive') filtered = filtered.filter(m => m?.status !== 'active'); else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m?.positionCategory)); else if (exportFilter === 'committee') filtered = filtered.filter(m => m?.positionCategory === 'Committee');
       }
       return filtered; 
   }, [members, searchQuery, exportFilter]);
@@ -148,8 +151,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   useEffect(() => { setCurrentPage(1); }, [searchQuery, exportFilter]);
 
   const updateLastVisited = (page) => { const newVisits = { ...lastVisited, [page]: new Date().toISOString() }; setLastVisited(newVisits); localStorage.setItem('lba_last_visited', JSON.stringify(newVisits)); };
-  const handleExportCSV = () => { if (!members) return; const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined"]; const rows = members.map(m => [ m.memberId, m.name, m.email, m.positionCategory, m.specificTitle, m.committee || '', m.status, m.joinedDate || '' ]); generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`); };
-  const handleBulkEmail = () => { const targets = selectedBaristas.length > 0 ? members.filter(m => selectedBaristas.includes(m.memberId)) : members; const emails = targets.map(m => m.email).filter(e => e).join(','); if (emails) window.location.href = `mailto:?bcc=${emails}`; };
+  const handleExportCSV = () => { if (!members) return; const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined"]; const rows = members.filter(m => m != null).map(m => [ m?.memberId, m?.name, m?.email, m?.positionCategory, m?.specificTitle, m?.committee || '', m?.status, m?.joinedDate || '' ]); generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`); };
+  const handleBulkEmail = () => { const targets = selectedBaristas.length > 0 ? members.filter(m => m && selectedBaristas.includes(m.memberId)) : members.filter(m => m != null); const emails = targets.map(m => m?.email).filter(e => e).join(','); if (emails) window.location.href = `mailto:?bcc=${emails}`; };
   const toggleSelectAll = () => { if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) { setSelectedBaristas([]); } else { setSelectedBaristas(paginatedRegistry.map(m => m.memberId)); } };
   const toggleSelectBarista = (id) => { if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id)); else setSelectedBaristas(prev => [...prev, id]); };
   const getSafeDateString = (dateVal) => { if (!dateVal) return ''; if (typeof dateVal === 'string') return dateVal.split('T')[0]; if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0]; return ''; };
@@ -212,7 +215,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleSaveMcCurriculum = async () => { try { const newData = { ...masterclassData, moduleDetails: { ...masterclassData.moduleDetails, [adminMcModule]: tempMcDetails } }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData); logAction("Update Curriculum", `Updated Module ${adminMcModule}`); setEditingMcCurriculum(false); alert("Curriculum Updated"); } catch(e) {} };
   const handleUpdateGcashNumber = async () => { if (!newGcashNumber.trim()) return; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, gcashNumber: newGcashNumber }); logAction("Update GCash", `Changed GCash number to ${newGcashNumber}`); setNewGcashNumber(''); alert("GCash Number Updated Successfully"); } catch (err) { alert("Failed to update GCash Number"); } };
   const handleApplyCommittee = async (e, targetCommittee) => { e.preventDefault(); if (isExpired) return alert("Your membership is expired. Please renew to apply."); setSubmittingApp(true); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)); const snap = await getDocs(q); if(!snap.empty) { alert("You already have a pending application."); setSubmittingApp(false); return; } await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), { memberId: profile.memberId, name: profile.name, email: profile.email, committee: targetCommittee, role: committeeForm.role, status: 'pending', createdAt: serverTimestamp(), statusUpdatedAt: serverTimestamp() }); alert("Application submitted successfully!"); } catch(err) { alert("Failed to submit application."); } finally { setSubmittingApp(false); } };
-  const handleCreateProject = async (e) => { e.preventDefault(); try { const projectHead = members.find(m => m.memberId === newProject.projectHeadId); const payload = { title: newProject.title, description: newProject.description, deadline: newProject.deadline, projectHeadId: newProject.projectHeadId, projectHeadName: projectHead ? projectHead.name : '' }; if (editingProject) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', editingProject.id), { ...payload, lastEdited: serverTimestamp() }); logAction("Update Project", `Updated project: ${newProject.title}`); setEditingProject(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), { ...payload, createdBy: profile.memberId, createdAt: serverTimestamp(), status: 'active' }); logAction("Create Project", `Created project: ${newProject.title}`); } setShowProjectForm(false); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); } catch(e) {} };
+  const handleCreateProject = async (e) => { e.preventDefault(); try { const projectHead = members.find(m => m?.memberId === newProject.projectHeadId); const payload = { title: newProject.title, description: newProject.description, deadline: newProject.deadline, projectHeadId: newProject.projectHeadId, projectHeadName: projectHead ? projectHead.name : '' }; if (editingProject) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', editingProject.id), { ...payload, lastEdited: serverTimestamp() }); logAction("Update Project", `Updated project: ${newProject.title}`); setEditingProject(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), { ...payload, createdBy: profile.memberId, createdAt: serverTimestamp(), status: 'active' }); logAction("Create Project", `Created project: ${newProject.title}`); } setShowProjectForm(false); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); } catch(e) {} };
   const handleEditProject = (proj) => { setNewProject({ title: proj.title, description: proj.description, deadline: proj.deadline, projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName }); setEditingProject(proj); setShowProjectForm(true); };
   const handleAddTask = async (e) => { e.preventDefault(); if (!newTask.projectId) return alert("Task must belong to a project"); try { if (editingTask) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTask.id), { ...newTask, lastEdited: serverTimestamp() }); logAction("Update Task", `Updated task: ${newTask.title}`); setEditingTask(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), { ...newTask, createdBy: profile.memberId, creatorName: profile.name, createdAt: serverTimestamp() }); logAction("Create Task", `Created task: ${newTask.title}`); } setShowTaskForm(false); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: newTask.projectId }); } catch (err) {} };
   const handleUpdateTaskStatus = async (taskId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', taskId), { status: newStatus }); } catch (err) {} };
@@ -385,7 +388,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   <div className="space-y-4">
                       <input type="text" placeholder="Project Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
                       <textarea placeholder="Description / Goals" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} />
-                      <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Deadline</label><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Assign Project Head</label><select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}><option value="">Select Member...</option>{members.map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}</select></div></div>
+                      <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Deadline</label><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Assign Project Head</label><select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}><option value="">Select Member...</option>{members.filter(m => m != null).map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}</select></div></div>
                       <div className="flex gap-3 pt-2"><button onClick={() => setShowProjectForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button><button onClick={handleCreateProject} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">{editingProject ? "Save" : "Create"}</button></div>
                   </div>
               </div>
@@ -433,6 +436,50 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   </div>
               </div>
           </div>
+      )}
+
+      {showEventForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-2xl w-full border-b-[8px] border-[#3E2723] h-[80vh] overflow-y-auto custom-scrollbar">
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingEvent ? 'Edit Event' : 'Create Event'}</h3>
+                <form onSubmit={handleAddEvent} className="space-y-4">
+                    <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} />
+                    <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div><label className="text-[10px] font-bold text-gray-500 uppercase">Start</label><div className="flex gap-2"><input type="date" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div></div>
+                        <div><label className="text-[10px] font-bold text-gray-500 uppercase">End</label><div className="flex gap-2"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} /><input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} /></div></div>
+                    </div>
+                    <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs h-24" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} />
+                    <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/> Registration Required</label>
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer"><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/> Volunteer Event</label>
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer"><input type="checkbox" checked={newEvent.attendanceRequired} onChange={e => setNewEvent({...newEvent, attendanceRequired: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/> Attendance Check</label>
+                    </div>
+                    {newEvent.isVolunteer && (
+                        <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
+                            <h4 className="text-xs font-black uppercase text-amber-800 mb-2">Volunteer Shifts</h4>
+                                <div className="flex gap-2 mb-2"><input type="date" className="p-2 border rounded-lg text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} /><select className="p-2 border rounded-lg text-xs" value={tempShift.type} onChange={e => setTempShift({...tempShift, type: e.target.value})}><option value="WHOLE_DAY">Whole Day</option><option value="SHIFT">Specific Time</option></select>{tempShift.type === 'SHIFT' && <input type="text" placeholder="e.g. AM Shift" className="p-2 border rounded-lg text-xs w-20" value={tempShift.name} onChange={e => setTempShift({...tempShift, name: e.target.value})} />}<input type="number" placeholder="Cap" className="p-2 border rounded-lg text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /><button type="button" onClick={addShift} className="bg-amber-600 text-white px-3 rounded-lg text-xs font-bold">+</button></div>
+                                <div className="space-y-1">{newEvent.shifts.map((s, i) => (<div key={i} className="flex justify-between items-center text-xs bg-white p-2 rounded border border-amber-200"><span>{s.date} - {s.session} (Max: {s.capacity})</span><button type="button" onClick={() => removeShift(s.id)} className="text-red-500 font-bold">x</button></div>))}</div>
+                        </div>
+                    )}
+                    <input type="text" placeholder="Evaluation Link (Optional)" className="w-full p-3 border rounded-xl text-xs" value={newEvent.evaluationLink} onChange={e => setNewEvent({...newEvent, evaluationLink: e.target.value})} />
+                    <div className="flex gap-3 pt-2"><button type="button" onClick={() => { setShowEventForm(false); setEditingEvent(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">{editingEvent ? 'Update' : 'Create'}</button></div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {showAnnounceForm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+            <div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]">
+                <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingAnnouncement ? 'Edit Notice' : 'Post Notice'}</h3>
+                <form onSubmit={handlePostAnnouncement} className="space-y-4">
+                    <input type="text" placeholder="Title" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newAnnouncement.title} onChange={e => setNewAnnouncement({...newAnnouncement, title: e.target.value})} />
+                    <textarea placeholder="Content" required className="w-full p-3 border rounded-xl text-xs h-32" value={newAnnouncement.content} onChange={e => setNewAnnouncement({...newAnnouncement, content: e.target.value})} />
+                    <div className="flex gap-3 pt-2"><button type="button" onClick={() => { setShowAnnounceForm(false); setEditingAnnouncement(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button><button type="submit" className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">{editingAnnouncement ? 'Update' : 'Post'}</button></div>
+                </form>
+            </div>
+        </div>
       )}
 
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden relative">
@@ -560,6 +607,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             </div>
                         </div>
 
+                        {/* Right Column: Trophy Case */}
                         <div className="bg-white p-6 rounded-[32px] border border-amber-100 h-full">
                             <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Trophy size={16} className="text-amber-500"/> Trophy Case</h3>
                             <div className="grid grid-cols-3 gap-3">
@@ -653,7 +701,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
                                     <input type="text" placeholder="Search members to add..." className="w-full p-3 text-xs border-b border-amber-100 outline-none" value={adminMcSearch} onChange={e => setAdminMcSearch(e.target.value.toUpperCase())} />
                                     <div className="max-h-40 overflow-y-auto p-2 space-y-1">
-                                        {members.filter(m => (m.name.includes(adminMcSearch) || m.memberId.includes(adminMcSearch)) && !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)).slice(0, 50).map(m => (
+                                        {members.filter(m => m != null && (m?.name?.includes(adminMcSearch) || m?.memberId?.includes(adminMcSearch)) && !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)).slice(0, 50).map(m => (
                                                 <label key={m.memberId} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
                                                     <input type="checkbox" className="rounded border-gray-300 text-amber-600 focus:ring-amber-500" checked={selectedMcMembers.includes(m.memberId)} onChange={(e) => { if (e.target.checked) setSelectedMcMembers(prev => [...prev, m.memberId]); else setSelectedMcMembers(prev => prev.filter(id => id !== m.memberId)); }} />
                                                     <div><p className="text-xs font-bold text-gray-700">{m.name}</p><p className="text-[9px] text-gray-400 font-mono">{m.memberId}</p></div>
