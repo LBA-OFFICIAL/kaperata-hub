@@ -753,11 +753,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {DEFAULT_MASTERCLASS_MODULES.map(mod => {
                             const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
+                            // NEW: Check if this module is linked to any current event!
+                            const isOpen = events.some(ev => ev.masterclassModuleIds?.includes(mod.id));
+                            
                             const details = masterclassData.moduleDetails?.[mod.id] || {};
                             const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"]; const icon = details.icon || defaultIcons[mod.id-1];
                             return (
-                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all flex flex-col ${isCompleted ? 'bg-green-50 border-green-200' : 'bg-white border-gray-100 opacity-80'}`}>
-                                    <div className="flex justify-between items-start mb-4"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : 'bg-gray-100'}`}>{icon}</div>{isCompleted && <BadgeCheck className="text-green-600" size={24}/>}</div>
+                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all flex flex-col ${isCompleted ? 'bg-green-50 border-green-200' : isOpen ? 'bg-white border-blue-300 shadow-md' : 'bg-white border-gray-100 opacity-80'}`}>
+                                    <div className="flex justify-between items-start mb-4"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : isOpen ? 'bg-blue-100' : 'bg-gray-100'}`}>{icon}</div>{isCompleted && <BadgeCheck className="text-green-600" size={24}/>}</div>
                                     <h4 className="font-black uppercase text-sm text-[#3E2723] mb-1">{details.title || mod.title}</h4>
                                     <p className="text-[10px] font-bold text-gray-400 uppercase">Module 0{mod.id}</p>
                                     <div className="flex-1 space-y-4 mt-4">
@@ -765,7 +768,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                         {details.topics && (<div><p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Topics Covered</p><p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{details.topics}</p></div>)}
                                         {!details.objectives && !details.topics && (<p className="text-xs text-gray-400 italic">Curriculum details coming soon.</p>)}
                                     </div>
-                                    {isCompleted ? (<div className="mt-6 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block self-start">Completed</div>) : (<div className="mt-6 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block self-start">Locked</div>)}
+                                    {isCompleted ? (
+                                        <div className="mt-6 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block self-start">Completed</div>
+                                    ) : isOpen ? (
+                                        <div className="mt-6 text-[10px] font-bold text-blue-700 uppercase bg-blue-100 px-3 py-1 rounded-full inline-block self-start shadow-sm animate-pulse">Registration Open</div>
+                                    ) : (
+                                        <div className="mt-6 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block self-start">Locked</div>
+                                    )}
                                 </div>
                             );
                         })}
