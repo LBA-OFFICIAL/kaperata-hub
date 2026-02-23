@@ -297,16 +297,19 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           <img src={getDirectLink(masterclassData.certTemplate)} alt="Certificate Background" className="absolute inset-0 w-full h-full object-cover" />
                           
                           <div className="absolute inset-0 w-full h-full">
-                              {/* THE NAME - Font sizes reduced to be more elegant */}
-                              <div className="absolute w-full flex justify-center px-12 text-center" style={{ top: '44%' }}>
-                                  <h2 className="font-serif text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white uppercase tracking-widest drop-shadow-md leading-tight">
+                              {/* THE NAME - Forced to single line, auto-scales down, changed to LBA Yellow */}
+                              <div className="absolute w-full flex justify-center px-4 md:px-12 text-center" style={{ top: '45%' }}>
+                                  <h2 
+                                    className="font-serif font-black text-[#FDB813] uppercase tracking-wide drop-shadow-md whitespace-nowrap"
+                                    style={{ fontSize: 'clamp(1rem, 4vw, 2.5rem)' }}
+                                  >
                                       {profile.name}
                                   </h2>
                               </div>
                               
-                              {/* THE DATE - Scaled down slightly to match the "Given this" text */}
+                              {/* THE DATE - Placed perfectly under 'Given this' in Yellow */}
                               <div className="absolute w-full flex justify-center" style={{ top: '75%' }}>
-                                  <p className="font-serif text-[8px] sm:text-[10px] md:text-xs text-white/90 font-bold tracking-[0.2em] drop-shadow-sm">
+                                  <p className="font-serif text-[8px] sm:text-[10px] md:text-xs text-[#FDB813] font-bold tracking-[0.2em] drop-shadow-sm">
                                       {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                                   </p>
                               </div>
