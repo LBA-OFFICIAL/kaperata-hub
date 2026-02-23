@@ -484,12 +484,42 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
                     {newEvent.scheduleType === 'MULTIPLE_SHIFTS' && (
                         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 space-y-4">
-                            <h4 className="text-xs font-black uppercase text-amber-800">Define Shifts / Days</h4>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                                <input type="date" className="p-2 border rounded-lg text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
-                                <input type="text" placeholder="Name (e.g. Day 1, AM Shift)" className="p-2 border rounded-lg text-xs" value={tempShift.name} onChange={e => setTempShift({...tempShift, name: e.target.value})} />
-                                <input type="time" className="p-2 border rounded-lg text-xs" value={tempShift.startTime} onChange={e => setTempShift({...tempShift, startTime: e.target.value})} />
-                                <input type="time" className="p-2 border rounded-lg text-xs" value={tempShift.endTime} onChange={e => setTempShift({...tempShift, endTime: e.target.value})} />
+                           <h4 className="text-xs font-black uppercase text-amber-800">Define Shifts / Days</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Date</label>
+                                    <input type="date" className="w-full p-2 border rounded-lg text-xs" value={tempShift.date} onChange={e => setTempShift({...tempShift, date: e.target.value})} />
+                                </div>
+                                
+                                <div>
+                                    <div className="flex justify-between items-center ml-1 mb-1">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase">Session Name</label>
+                                        <select 
+                                           className="text-[9px] border-none outline-none bg-transparent text-amber-600 font-black uppercase cursor-pointer"
+                                           onChange={e => {
+                                               const val = e.target.value;
+                                               if (val === 'AM Session') setTempShift({...tempShift, name: 'AM Session', startTime: '08:00', endTime: '12:00'});
+                                               else if (val === 'PM Session') setTempShift({...tempShift, name: 'PM Session', startTime: '13:00', endTime: '17:00'});
+                                               e.target.value = ''; // Reset to allow re-selection
+                                           }}
+                                        >
+                                           <option value="">Quick Fill ▼</option>
+                                           <option value="AM Session">AM Session (8am-12nn)</option>
+                                           <option value="PM Session">PM Session (1pm-5pm)</option>
+                                        </select>
+                                    </div>
+                                    <input type="text" placeholder="e.g. AM Session" className="w-full p-2 border border-amber-200 rounded-lg text-xs font-bold" value={tempShift.name} onChange={e => setTempShift({...tempShift, name: e.target.value})} />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">Start Time</label>
+                                    <input type="time" className="w-full p-2 border rounded-lg text-xs" value={tempShift.startTime} onChange={e => setTempShift({...tempShift, startTime: e.target.value})} />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500 uppercase ml-1">End Time</label>
+                                    <input type="time" className="w-full p-2 border rounded-lg text-xs" value={tempShift.endTime} onChange={e => setTempShift({...tempShift, endTime: e.target.value})} />
+                                </div>
                             </div>
                             <div className="flex gap-4 items-center bg-white p-2 rounded-lg border border-amber-200">
                                 <label className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase">Attendee Cap: <input type="number" className="p-2 border rounded-lg text-xs w-16" value={tempShift.capacity} onChange={e => setTempShift({...tempShift, capacity: parseInt(e.target.value)})} /></label>
