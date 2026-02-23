@@ -445,16 +445,42 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 <form onSubmit={handleAddEvent} className="space-y-4">
                     <input type="text" placeholder="Event Name" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.name} onChange={e => setNewEvent({...newEvent, name: e.target.value})} />
                     <input type="text" placeholder="Venue" required className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newEvent.venue} onChange={e => setNewEvent({...newEvent, venue: e.target.value})} />
-                    <div className="grid grid-cols-2 gap-4">
+                   <div className="grid grid-cols-2 gap-4">
                         <div><label className="text-[10px] font-bold text-gray-500 uppercase">Start</label><div className="flex gap-2"><input type="date" required className="w-full p-3 border rounded-xl text-xs" value={newEvent.startDate} onChange={e => setNewEvent({...newEvent, startDate: e.target.value})} /><input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.startTime} onChange={e => setNewEvent({...newEvent, startTime: e.target.value})} /></div></div>
                         <div><label className="text-[10px] font-bold text-gray-500 uppercase">End</label><div className="flex gap-2"><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endDate} onChange={e => setNewEvent({...newEvent, endDate: e.target.value})} /><input type="time" className="w-full p-3 border rounded-xl text-xs" value={newEvent.endTime} onChange={e => setNewEvent({...newEvent, endTime: e.target.value})} /></div></div>
                     </div>
+
+                    {/* NEW EVENT TYPE TOGGLE */}
+                    <div className="flex gap-6 bg-gray-50 p-4 rounded-xl border border-gray-200">
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                            <input type="radio" name="scheduleType" value="WHOLE_DAY" checked={newEvent.scheduleType === 'WHOLE_DAY' || !newEvent.scheduleType} onChange={() => setNewEvent({...newEvent, scheduleType: 'WHOLE_DAY'})} className="w-4 h-4 text-amber-600 focus:ring-amber-500" />
+                            Whole Day Event
+                        </label>
+                        <label className="flex items-center gap-2 text-xs font-bold text-gray-700 cursor-pointer">
+                            <input type="radio" name="scheduleType" value="MULTIPLE_SHIFTS" checked={newEvent.scheduleType === 'MULTIPLE_SHIFTS'} onChange={() => setNewEvent({...newEvent, scheduleType: 'MULTIPLE_SHIFTS'})} className="w-4 h-4 text-amber-600 focus:ring-amber-500" />
+                            More Than 1 Shift
+                        </label>
+                    </div>
+
                     <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs h-24" value={newEvent.description} onChange={e => setNewEvent({...newEvent, description: e.target.value})} />
-                    <div className="flex flex-wrap gap-4">
+                   <div className="flex flex-wrap gap-4">
                         <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer"><input type="checkbox" checked={newEvent.registrationRequired} onChange={e => setNewEvent({...newEvent, registrationRequired: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/> Registration Required</label>
                         <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer"><input type="checkbox" checked={newEvent.isVolunteer} onChange={e => setNewEvent({...newEvent, isVolunteer: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/> Volunteer Event</label>
                         <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer"><input type="checkbox" checked={newEvent.attendanceRequired} onChange={e => setNewEvent({...newEvent, attendanceRequired: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/> Attendance Check</label>
                     </div>
+
+                    {/* NEW: MASTERCLASS SELECTOR */}
+                    <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100">
+                        <h4 className="text-xs font-black uppercase text-purple-800 mb-3 flex items-center gap-2"><GraduationCap size={14}/> Link to Masterclass</h4>
+                        <div className="flex flex-wrap gap-3">
+                            {DEFAULT_MASTERCLASS_MODULES.map(mod => (
+                                <label key={mod.id} className="flex items-center gap-1.5 text-[10px] font-bold text-purple-900 cursor-pointer uppercase hover:bg-purple-100 px-2 py-1 rounded-md transition-colors">
+                                    <input type="checkbox" checked={newEvent.masterclassModuleIds?.includes(mod.id)} onChange={e => { const ids = newEvent.masterclassModuleIds || []; if (e.target.checked) setNewEvent({...newEvent, masterclassModuleIds: [...ids, mod.id]}); else setNewEvent({...newEvent, masterclassModuleIds: ids.filter(id => id !== mod.id)}); }} className="rounded text-purple-600 focus:ring-purple-500"/> Mod {mod.id}
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+
                     {newEvent.isVolunteer && (
                         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100">
                             <h4 className="text-xs font-black uppercase text-amber-800 mb-2">Volunteer Shifts</h4>
@@ -765,9 +791,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                          <div className="flex flex-col sm:flex-row gap-6">
                                             <div className="bg-[#3E2723] text-[#FDB813] w-24 h-24 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0 shadow-inner"><span className="text-3xl">{day}</span><span className="text-xs uppercase mt-2 tracking-widest">{month}</span></div>
                                             <div className="flex-1">
-                                                <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] pr-24">{ev.name}</h4>
-                                                <p className="text-xs font-bold text-amber-700 uppercase mt-2 flex items-center gap-2"><MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}</p>
-                                                <p className="text-sm text-gray-600 mt-4 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
+                                               <div className="pr-24">
+                                                    <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
+                                                    {ev.masterclassModuleIds && ev.masterclassModuleIds.length > 0 && (
+                                                        <div className="flex flex-wrap gap-2 mt-2">
+                                                            {ev.masterclassModuleIds.map(mid => (
+                                                                <button key={mid} onClick={() => setView('masterclass')} className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[8px] font-black uppercase flex items-center gap-1 hover:bg-purple-200 transition-colors shadow-sm">
+                                                                    <GraduationCap size={10}/> Masterclass Module {mid}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs font-bold text-amber-700 uppercase mt-3 flex items-center gap-2"><MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}</p>
+                                                <p className="text-sm text-gray-600 mt-3 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
                                                 <div className="mt-6 flex flex-wrap gap-3">
                                                     {ev.registrationRequired && (<button onClick={() => handleRegisterEvent(ev)} className={`px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-sm ${ev.registered?.includes(profile.memberId) ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-[#FDB813] text-[#3E2723] hover:bg-amber-400'}`}>{ev.registered?.includes(profile.memberId) ? 'Registered ✓' : 'Register Now'}</button>)}
                                                     {isAdmin && ev.attendanceRequired && (<button onClick={() => setAttendanceEvent(ev)} className="px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex items-center gap-2 border border-indigo-200"><ClipboardList size={14}/> Open Attendance</button>)}
