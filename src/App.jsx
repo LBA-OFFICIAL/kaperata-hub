@@ -791,7 +791,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                          <div className="flex flex-col sm:flex-row gap-6">
                                             <div className="bg-[#3E2723] text-[#FDB813] w-24 h-24 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0 shadow-inner"><span className="text-3xl">{day}</span><span className="text-xs uppercase mt-2 tracking-widest">{month}</span></div>
                                             <div className="flex-1">
-                                               <div className="pr-24">
+                                              <div className="pr-24">
                                                     <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
                                                     {ev.masterclassModuleIds && ev.masterclassModuleIds.length > 0 && (
                                                         <div className="flex flex-wrap gap-2 mt-2">
@@ -803,10 +803,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                                         </div>
                                                     )}
                                                 </div>
-                                               <p className="text-xs font-bold text-amber-700 uppercase mt-3 flex items-center gap-2 flex-wrap">
-                                                <MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
-                                                {ev.scheduleType === 'MULTIPLE_SHIFTS' && <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md text-[8px] tracking-wider ml-1">MULTIPLE SHIFTS</span>}
-                                            </p>
+                                                <p className="text-xs font-bold text-amber-700 uppercase mt-3 flex items-center gap-2 flex-wrap">
+                                                    <MapPin size={12}/> {ev.venue} • <Clock size={12}/> {ev.startTime} {ev.endTime ? `- ${ev.endTime}` : ''}
+                                                    {ev.scheduleType === 'MULTIPLE_SHIFTS' && <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-md text-[8px] tracking-wider ml-1">MULTIPLE SHIFTS</span>}
+                                                </p>
                                                 <p className="text-sm text-gray-600 mt-3 leading-relaxed whitespace-pre-wrap">{ev.description}</p>
                                                 <div className="mt-6 flex flex-wrap gap-3">
                                                     {ev.registrationRequired && (<button onClick={() => handleRegisterEvent(ev)} className={`px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-sm ${ev.registered?.includes(profile.memberId) ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-[#FDB813] text-[#3E2723] hover:bg-amber-400'}`}>{ev.registered?.includes(profile.memberId) ? 'Registered ✓' : 'Register Now'}</button>)}
