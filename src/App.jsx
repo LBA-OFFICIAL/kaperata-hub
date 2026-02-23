@@ -320,11 +320,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               </div>
           </div>
       )}
-                  
-                  {masterclassData.certTemplate && ( <button onClick={() => window.print()} className="absolute top-4 right-4 bg-white text-[#3E2723] p-3 rounded-full shadow-lg hover:bg-gray-100 print:hidden transition-transform hover:scale-110" title="Print or Save as PDF"><Printer size={20}/></button> )}
-              </div>
-          </div>
-      )}
 
       {attendanceEvent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
