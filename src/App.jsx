@@ -94,6 +94,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const isOfficer = useMemo(() => { if (!profile?.positionCategory) return false; return ['OFFICER', 'EXECOMM', 'COMMITTEE'].includes(String(profile.positionCategory).toUpperCase()); }, [profile?.positionCategory]);
   const isAdmin = useMemo(() => { if (!profile?.positionCategory) return false; return ['OFFICER', 'EXECOMM'].includes(String(profile.positionCategory).toUpperCase()); }, [profile?.positionCategory]);
+  const isSystemAdmin = useMemo(() => profile?.role === 'superadmin', [profile]);
   const isCommitteeHead = useMemo(() => profile.positionCategory === 'Committee' && (profile.specificTitle || '').includes('Head'), [profile]);
   const isExpired = useMemo(() => profile.status === 'expired', [profile.status]);
   const isExemptFromRenewal = useMemo(() => ['OFFICER', 'EXECOMM', 'COMMITTEE', 'ORG ADVISER'].includes(String(profile.positionCategory).toUpperCase()), [profile.positionCategory]);
@@ -231,6 +232,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { if (!isAdmin) return; const validMembers = members.filter(m => m != null); const target = validMembers.find(m => m.memberId === targetId); if (!target) return; let newId = target.memberId; const isL = ['Officer', 'Execomm', 'Committee'].includes(cat); const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId; newId = baseId + (isL ? 'C' : ''); const updates = { positionCategory: cat, specificTitle: specific || cat, memberId: newId, role: ['Officer', 'Execomm'].includes(cat) ? 'admin' : 'member', paymentStatus: isL ? 'exempt' : target.paymentStatus, committee: cat === 'Committee' ? committee : "" }; if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId)); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates }); };
   const initiateRemoveMember = (mid, name) => { setConfirmDelete({ mid, name }); };
   const confirmRemoveMember = async () => { if (!confirmDelete) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid)); logAction("Remove Member", `Removed member: ${confirmDelete.name}`); } catch(e) { console.error(e); } finally { setConfirmDelete(null); } };
+  const handleToggleSuperAdmin = async (memberId, currentRole, name) => { 
+        if (!isSystemAdmin) return; 
+        const newRole = currentRole === 'superadmin' ? 'admin' : 'superadmin'; 
+        if (!confirm(`Are you sure you want to ${newRole === 'superadmin' ? 'GRANT' : 'REVOKE'} System Admin access for ${name}?`)) return; 
+        try { 
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { role: newRole }); 
+            logAction("Toggle Super Admin", `${newRole === 'superadmin' ? 'Granted' : 'Revoked'} admin access for ${name}`); 
+            alert(`Successfully updated access for ${name}.`); 
+        } catch (e) { alert("Failed to update access."); } 
+    }; 
   const handleBulkImportCSV = async (e) => { const file = e.target.files[0]; if (!file) return; setIsImporting(true); const reader = new FileReader(); reader.onload = async (evt) => { try { const text = evt.target.result; const rows = text.split('\n').filter(r => r.trim().length > 0); const batch = writeBatch(db); let count = members.filter(m => m != null).length; for (let i = 1; i < rows.length; i++) { const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim()); if (!name || !email) continue; const mid = generateLBAId(pos, count++); const meta = getMemberIdMeta(); const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'expired', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() }; batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data); } await batch.commit(); logAction("Bulk Import", `Imported ${rows.length - 1} members`); } catch (err) {} finally { setIsImporting(false); e.target.value = ""; } }; reader.readAsText(file); };
   const downloadImportTemplate = () => { const headers = ["Name", "Email", "Program", "PositionCategory", "SpecificTitle"]; const rows = [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]]; generateCSV(headers, rows, "LBA_Import_Template.csv"); };
   const handleRotateSecurityKeys = async () => { const newKeys = { officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(), headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(), commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase() }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys); logAction("Rotate Keys", "Security keys rotated"); };
@@ -254,7 +265,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     { id: 'series', label: 'Barista Diaries', icon: ImageIcon },
     { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
     ...(isOfficer ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList }, { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
-    ...(isAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
+    ...(isSysremAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
@@ -1119,7 +1130,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  </div>
             )}
 
-            {view === 'members' && isOfficer && (
+           {view === 'members' && isOfficer && (
                 <div className="space-y-6 animate-fadeIn text-[#3E2723]">
                     <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
                         <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
@@ -1127,33 +1138,49 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="officers">Officers</option><option value="committee">Committee</option></select>
                             <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                             <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
-                            <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
-                            <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
+                            {isSystemAdmin && (
+                                <>
+                                    <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
+                                    <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
+                                </>
+                            )}
                         </div>
                     </div>
                     
+                    {/* MOBILE REGISTRY */}
                     <div className="md:hidden space-y-4">
                         {paginatedRegistry && paginatedRegistry.map(m => (
                             <div key={m?.memberId || Math.random()} className={`bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm ${m?.status !== 'active' ? 'opacity-70 grayscale' : ''}`}>
                                 <div className="flex justify-between items-start mb-4">
-                                    <div className="flex items-center gap-3"><img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" alt="avatar"/><div><p className="font-black text-xs uppercase">{m?.name || 'Unknown'}</p><p className="text-[10px] font-mono text-gray-500">{m?.memberId || 'No ID'}</p></div></div>
+                                    <div className="flex items-center gap-3"><img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover border-2 border-[#3E2723]" alt="avatar"/><div><p className="font-black text-xs uppercase">{m?.name || 'Unknown'} {m?.role === 'superadmin' && <ShieldCheck size={12} className="inline text-purple-600"/>}</p><p className="text-[10px] font-mono text-gray-500">{m?.memberId || 'No ID'}</p></div></div>
                                     <button onClick={()=>toggleSelectBarista(m?.memberId)}>{selectedBaristas.includes(m?.memberId) ? <CheckCircle2 size={20} className="text-[#FDB813]"/> : <div className="w-5 h-5 border-2 border-amber-100 rounded-full"></div>}</button>
                                 </div>
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-2 gap-2">
-                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Category</label><select className="w-full bg-amber-50 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Title</label><select className="w-full bg-white border border-amber-100 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Category</label><select className="w-full bg-amber-50 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isSystemAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Title</label><select className="w-full bg-white border border-amber-100 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isSystemAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
                                     </div>
-                                    {m?.positionCategory === 'Committee' && (<div><label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Dept</label><select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div>)}
+                                    {m?.positionCategory === 'Committee' && (<div><label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Dept</label><select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isSystemAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div>)}
                                 </div>
                                 <div className="mt-4 pt-4 border-t border-amber-50 flex justify-between items-center">
-                                    <button onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m?.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`} disabled={!isAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
-                                    <div className="flex gap-2"><button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ id: m.id, memberId: m.memberId, currentAccolades: m?.accolades || [] }); }} className="bg-yellow-50 text-yellow-600 p-2 rounded-lg"><Trophy size={16}/></button>{isAdmin && (<><button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="bg-amber-50 text-amber-600 p-2 rounded-lg"><Pen size={16}/></button><button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="bg-red-50 text-red-500 p-2 rounded-lg"><Trash2 size={16}/></button></>)}</div>
+                                    <button onClick={() => isSystemAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m?.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`} disabled={!isSystemAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
+                                    <div className="flex gap-2">
+                                        <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ id: m.id, memberId: m.memberId, currentAccolades: m?.accolades || [] }); }} className="bg-yellow-50 text-yellow-600 p-2 rounded-lg"><Trophy size={16}/></button>
+                                        {isSystemAdmin && (
+                                            <>
+                                                <button onClick={() => handleToggleSuperAdmin(m.memberId, m.role, m.name)} className={`p-2 rounded-lg ${m.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`} title={m.role === 'superadmin' ? 'Revoke Admin' : 'Make Admin'}><ShieldCheck size={16}/></button>
+                                                <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="bg-amber-50 text-amber-600 p-2 rounded-lg"><Pen size={16}/></button>
+                                                <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
+                                                <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="bg-red-50 text-red-500 p-2 rounded-lg"><Trash2 size={16}/></button>
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         ))}
                     </div>
                     
+                    {/* DESKTOP REGISTRY */}
                     <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
                         <table className="w-full text-left uppercase table-fixed">
                             <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
@@ -1163,31 +1190,38 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     <th className="p-4 w-32 text-center">ID</th>
                                     <th className="p-4 w-24 text-center">Status</th>
                                     <th className="p-4 w-40 text-center">Designation</th>
-                                    <th className="p-4 w-32 text-right">Manage</th>
+                                    <th className="p-4 w-40 text-right">Manage</th>
                                 </tr>
                             </thead>
                             <tbody className="text-[#3E2723] divide-y divide-amber-50">
                                 {paginatedRegistry && paginatedRegistry.map(m => (
                                 <tr key={m?.memberId || Math.random()} className={`hover:bg-amber-50/50 ${m?.status !== 'active' ? 'opacity-50 grayscale' : ''}`}>
                                     <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m?.memberId)}>{selectedBaristas.includes(m?.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
-                                    <td className="py-4 px-4"><div className="flex items-center gap-4"><img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" alt="avatar" /><div className="min-w-0"><p className="font-black text-xs truncate">{m?.name || 'Unknown'}</p><p className="text-[8px] opacity-60 truncate">"{m?.nickname || m?.program || ''}"</p><div className="flex flex-wrap gap-1 mt-1">{Array.isArray(m?.accolades) && m.accolades.map((acc, i) => (<span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>))}</div></div></div></td>
+                                    <td className="py-4 px-4"><div className="flex items-center gap-4"><img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" alt="avatar" /><div className="min-w-0"><p className="font-black text-xs truncate">{m?.name || 'Unknown'} {m?.role === 'superadmin' && <ShieldCheck size={12} className="inline text-purple-600"/>}</p><p className="text-[8px] opacity-60 truncate">"{m?.nickname || m?.program || ''}"</p><div className="flex flex-wrap gap-1 mt-1">{Array.isArray(m?.accolades) && m.accolades.map((acc, i) => (<span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>))}</div></div></div></td>
                                     <td className="text-center font-mono font-black text-xs">{m?.memberId || 'N/A'}</td>
                                     <td className="text-center font-black text-[10px] uppercase">
-                                        <button onClick={() => isAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity ${m?.status === 'active' ? (m?.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`} disabled={!isAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
+                                        <button onClick={() => isSystemAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-default ${m?.status === 'active' ? (m?.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`} disabled={!isSystemAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
                                     </td>
                                     <td className="text-center py-2">
                                         <div className="flex flex-col gap-1 items-center">
-                                            <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                            <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                            <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isSystemAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                            <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isSystemAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                                             {m?.positionCategory === 'Committee' && (
-                                                <select className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-1 focus:ring-indigo-400" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
+                                                <select className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isSystemAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
                                             )}
                                         </div>
                                     </td>
                                     <td className="text-right p-4">
                                         <div className="flex items-center justify-end gap-1">
                                             <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ id: m.id, memberId: m.memberId, currentAccolades: m?.accolades || [] }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
-                                            {isAdmin && (<><button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" title="Edit Member Details"><Pen size={14}/></button><button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button><button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button></>)}
+                                            {isSystemAdmin && (
+                                                <>
+                                                    <button onClick={() => handleToggleSuperAdmin(m.memberId, m.role, m.name)} className={`p-2 rounded-lg ${m.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : 'text-gray-400 hover:bg-purple-50 hover:text-purple-600'}`} title={m.role === 'superadmin' ? 'Revoke Admin' : 'Make Admin'}><ShieldCheck size={14}/></button>
+                                                    <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" title="Edit Member Details"><Pen size={14}/></button>
+                                                    <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
+                                                    <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
+                                                </>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>
@@ -1204,7 +1238,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
 
-            {view === 'reports' && isAdmin && (
+            {view === 'reports' && isSystemAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6"><StatIcon icon={TrendingUp} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div></div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
