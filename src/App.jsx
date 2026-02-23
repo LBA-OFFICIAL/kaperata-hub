@@ -765,12 +765,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                         <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Masterclass</h3><p className="text-amber-600 font-bold text-xs uppercase">School of Coffee Excellence</p></div>
                         {(() => {
-                            // Check for mandatory modules 1 and 2
                             const hasMod1 = masterclassData.moduleAttendees?.[1]?.includes(profile.memberId);
                             const hasMod2 = masterclassData.moduleAttendees?.[2]?.includes(profile.memberId);
-                            // Count how many of the optional modules (3, 4, 5) are completed
                             const optionalMods = [3, 4, 5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(profile.memberId)).length;
-                            // Eligible if 1 & 2 are done, PLUS at least 2 optional ones
                             const isEligible = hasMod1 && hasMod2 && optionalMods >= 2;
                             
                             return (
