@@ -298,7 +298,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           
                           <div className="absolute inset-0 w-full h-full">
                               {/* THE NAME - Forced to single line, auto-scales down, changed to LBA Yellow */}
-                              <div className="absolute w-full flex justify-center px-4 md:px-12 text-center" style={{ top: '45%' }}>
+                              <div className="absolute w-full flex justify-center px-4 md:px-12 text-center" style={{ top: '42%' }}>
                                   <h2 
                                     className="font-serif font-black text-[#FDB813] uppercase tracking-wide drop-shadow-md whitespace-nowrap"
                                     style={{ fontSize: 'clamp(1rem, 4vw, 2.5rem)' }}
