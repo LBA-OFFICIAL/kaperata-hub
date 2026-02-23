@@ -297,16 +297,16 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                           <img src={getDirectLink(masterclassData.certTemplate)} alt="Certificate Background" className="absolute inset-0 w-full h-full object-cover" />
                           
                           <div className="absolute inset-0 w-full h-full">
-                              {/* THE NAME - Positioned perfectly in the upper gap */}
-                              <div className="absolute w-full flex justify-center px-10 text-center" style={{ top: '44%' }}>
-                                  <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-widest drop-shadow-md">
+                              {/* THE NAME - Font sizes reduced to be more elegant */}
+                              <div className="absolute w-full flex justify-center px-12 text-center" style={{ top: '44%' }}>
+                                  <h2 className="font-serif text-xl sm:text-2xl md:text-3xl lg:text-4xl font-black text-white uppercase tracking-widest drop-shadow-md leading-tight">
                                       {profile.name}
                                   </h2>
                               </div>
                               
-                              {/* THE DATE - Positioned directly below "Given this" */}
-                              <div className="absolute w-full flex justify-center" style={{ top: '78%' }}>
-                                  <p className="font-serif text-[10px] sm:text-xs md:text-sm text-white/90 font-bold tracking-[0.2em] drop-shadow-sm">
+                              {/* THE DATE - Scaled down slightly to match the "Given this" text */}
+                              <div className="absolute w-full flex justify-center" style={{ top: '75%' }}>
+                                  <p className="font-serif text-[8px] sm:text-[10px] md:text-xs text-white/90 font-bold tracking-[0.2em] drop-shadow-sm">
                                       {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                                   </p>
                               </div>
@@ -315,6 +315,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                   ) : (
                       <div className="bg-white p-8 rounded-2xl text-center max-w-sm"><AlertTriangle size={48} className="mx-auto text-amber-500 mb-4"/><h3 className="font-bold text-xl mb-2">Certificate Template Missing</h3><p className="text-sm text-gray-500">The administration has not uploaded the certificate design yet.</p></div>
                   )}
+                  
+                  {masterclassData.certTemplate && ( <button onClick={() => window.print()} className="absolute top-4 right-4 bg-white text-[#3E2723] p-3 rounded-full shadow-lg hover:bg-gray-100 print:hidden transition-transform hover:scale-110" title="Print or Save as PDF"><Printer size={20}/></button> )}
+              </div>
+          </div>
+      )}
                   
                   {masterclassData.certTemplate && ( <button onClick={() => window.print()} className="absolute top-4 right-4 bg-white text-[#3E2723] p-3 rounded-full shadow-lg hover:bg-gray-100 print:hidden transition-transform hover:scale-110" title="Print or Save as PDF"><Printer size={20}/></button> )}
               </div>
