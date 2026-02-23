@@ -760,11 +760,29 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
 
-            {view === 'masterclass' && (
+         {view === 'masterclass' && (
                 <div className="space-y-8 animate-fadeIn">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
                         <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Masterclass</h3><p className="text-amber-600 font-bold text-xs uppercase">School of Coffee Excellence</p></div>
-                        <button onClick={() => setShowCertificate(true)} className="bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 hover:bg-black transition-colors w-full md:w-auto justify-center"><Award size={16}/> View Certificate</button>
+                        {(() => {
+                            // Check for mandatory modules 1 and 2
+                            const hasMod1 = masterclassData.moduleAttendees?.[1]?.includes(profile.memberId);
+                            const hasMod2 = masterclassData.moduleAttendees?.[2]?.includes(profile.memberId);
+                            // Count how many of the optional modules (3, 4, 5) are completed
+                            const optionalMods = [3, 4, 5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(profile.memberId)).length;
+                            // Eligible if 1 & 2 are done, PLUS at least 2 optional ones
+                            const isEligible = hasMod1 && hasMod2 && optionalMods >= 2;
+                            
+                            return (
+                                <button 
+                                    onClick={() => isEligible ? setShowCertificate(true) : alert("Certificate Locked: You must complete mandatory Modules 1 & 2, PLUS any two modules from Mod 3-5 to unlock your certificate.")} 
+                                    className={`${isEligible ? 'bg-[#3E2723] text-[#FDB813] hover:bg-black' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 transition-colors w-full md:w-auto justify-center shadow-sm`}
+                                >
+                                    {isEligible ? <Award size={16}/> : <Lock size={16}/>} 
+                                    {isEligible ? 'View Certificate' : 'Certificate Locked'}
+                                </button>
+                            );
+                        })()}
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {DEFAULT_MASTERCLASS_MODULES.map(mod => {
