@@ -291,18 +291,31 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fadeIn">
               <div className="relative max-w-4xl w-full flex justify-center">
                   <button onClick={() => setShowCertificate(false)} className="absolute -top-12 right-0 text-white hover:text-amber-400 print:hidden"><X size={32}/></button>
+                  
                   {masterclassData.certTemplate ? (
                       <div className="relative bg-white shadow-2xl overflow-hidden w-full max-w-[800px] aspect-[1.414/1]">
                           <img src={getDirectLink(masterclassData.certTemplate)} alt="Certificate Background" className="absolute inset-0 w-full h-full object-cover" />
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pt-8">
-                              <h2 className="font-serif text-4xl md:text-5xl lg:text-6xl font-black text-[#3E2723] uppercase tracking-widest text-center px-4 drop-shadow-sm">{profile.name}</h2>
-                              <div className="h-24 md:h-32"></div>
-                              <p className="font-mono text-xs md:text-sm text-[#3E2723] font-bold tracking-widest bg-white/40 px-3 py-1 rounded">{new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                          
+                          <div className="absolute inset-0 w-full h-full">
+                              {/* THE NAME - Positioned perfectly in the upper gap */}
+                              <div className="absolute w-full flex justify-center px-10 text-center" style={{ top: '44%' }}>
+                                  <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-black text-white uppercase tracking-widest drop-shadow-md">
+                                      {profile.name}
+                                  </h2>
+                              </div>
+                              
+                              {/* THE DATE - Positioned directly below "Given this" */}
+                              <div className="absolute w-full flex justify-center" style={{ top: '78%' }}>
+                                  <p className="font-serif text-[10px] sm:text-xs md:text-sm text-white/90 font-bold tracking-[0.2em] drop-shadow-sm">
+                                      {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                                  </p>
+                              </div>
                           </div>
                       </div>
                   ) : (
                       <div className="bg-white p-8 rounded-2xl text-center max-w-sm"><AlertTriangle size={48} className="mx-auto text-amber-500 mb-4"/><h3 className="font-bold text-xl mb-2">Certificate Template Missing</h3><p className="text-sm text-gray-500">The administration has not uploaded the certificate design yet.</p></div>
                   )}
+                  
                   {masterclassData.certTemplate && ( <button onClick={() => window.print()} className="absolute top-4 right-4 bg-white text-[#3E2723] p-3 rounded-full shadow-lg hover:bg-gray-100 print:hidden transition-transform hover:scale-110" title="Print or Save as PDF"><Printer size={20}/></button> )}
               </div>
           </div>
