@@ -15,7 +15,7 @@ const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMP
 const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Auditor", "Business Manager", "P.R.O.", "Overall Committee Head"];
 const COMMITTEE_TITLES = ["Committee Head", "Committee Member"];
 const PROGRAMS = ["CAKO", "CLOCA", "CLOHS", "HRA", "ITM/ITTM"];
-const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Org Adviser", "Blacklisted"];
+const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Alumni", "Org Adviser", "Blacklisted"];
 const MONTHS = [{ value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" }, { value: 4, label: "April" }, { value: 5, label: "May" }, { value: 6, label: "June" }, { value: 7, label: "July" }, { value: 8, label: "August" }, { value: 9, label: "September" }, { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }];
 const DEFAULT_MASTERCLASS_MODULES = [{ id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" }, { id: 2, title: "Equipment Familiarization", short: "Equipment" }, { id: 3, title: "Manual Brewing", short: "Brewing" }, { id: 4, title: "Espresso Machine", short: "Espresso" }, { id: 5, title: "Signature Beverage (Advanced)", short: "Sig Bev" }];
 const COMMITTEES_INFO = [
@@ -29,7 +29,7 @@ const SOCIAL_LINKS = { facebook: "https://fb.com/lpubaristas.official", instagra
 const getDirectLink = (url) => { if (!url || typeof url !== 'string') return ""; if (url.includes('drive.google.com')) { const idMatch = url.match(/[-\w]{25,}/); if (idMatch) return `https://lh3.googleusercontent.com/d/${idMatch[0]}`; } return url; };
 const generateCSV = (headers, rows, filename) => { const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); if (link.download !== undefined) { const url = URL.createObjectURL(blob); link.setAttribute("href", url); link.setAttribute("download", filename); link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); } };
 const getMemberIdMeta = () => { const now = new Date(); const month = now.getMonth() + 1; const year = now.getFullYear(); let syStart = year % 100; let syEnd = (year + 1) % 100; if (month < 8) { syStart = (year - 1) % 100; syEnd = year % 100; } return { sy: `${syStart}${syEnd}`, sem: (month >= 8 || month <= 12) && month >= 8 ? "1" : "2" }; };
-const generateLBAId = (category, currentCount = 0) => { const { sy, sem } = getMemberIdMeta(); const padded = String(Number(currentCount) + 1).padStart(4, '0'); const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category); return `LBA${sy}-${sem}${padded}${isLeader ? "C" : ""}`; };
+const generateLBAId = (category, currentCount = 0) => { const { sy, sem } = getMemberIdMeta(); const padded = String(Number(currentCount) + 1).padStart(4, '0'); const isLeader = ['Officer', 'Committee'].includes(category); return `LBA${sy}-${sem}${padded}${isLeader ? "C" : ""}`; };
 const getDailyCashPasskey = () => { const now = new Date(); return `KBA-${now.getDate()}-${(now.getMonth() + 1) + (now.getFullYear() % 100)}`; };
 const formatDate = (dateStr) => { if (!dateStr) return ""; const d = new Date(dateStr); if (isNaN(d.getTime())) return ""; return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); };
 const getEventDay = (dateStr) => { if (!dateStr) return "?"; const d = new Date(dateStr); return isNaN(d.getTime()) ? "?" : d.getDate(); };
@@ -92,19 +92,21 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [view, setView] = useState('home'); const [members, setMembers] = useState([]); const [events, setEvents] = useState([]); const [announcements, setAnnouncements] = useState([]); const [suggestions, setSuggestions] = useState([]); const [committeeApps, setCommitteeApps] = useState([]); const [userApplications, setUserApplications] = useState([]); const [tasks, setTasks] = useState([]); const [projects, setProjects] = useState([]); const [expandedProjectId, setExpandedProjectId] = useState(null); const [logs, setLogs] = useState([]); const [polls, setPolls] = useState([]); const [seriesPosts, setSeriesPosts] = useState([]); const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] }); const [showPollForm, setShowPollForm] = useState(false); const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' }); const [showSeriesForm, setShowSeriesForm] = useState(false); const [editingSeriesId, setEditingSeriesId] = useState(null); const [showProjectForm, setShowProjectForm] = useState(false); const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); const [editingProject, setEditingProject] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' }); const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' }); const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); const [showCertificate, setShowCertificate] = useState(false); const [adminMcModule, setAdminMcModule] = useState(1); const [adminMcSearch, setAdminMcSearch] = useState(''); const [selectedMcMembers, setSelectedMcMembers] = useState([]); const [editingMcCurriculum, setEditingMcCurriculum] = useState(false); const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' }); const [isAnniversary, setIsAnniversary] = useState(false); const [editingMember, setEditingMember] = useState(null); const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' }); const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' }); const [showAccoladeModal, setShowAccoladeModal] = useState(null); const [accoladeText, setAccoladeText] = useState(""); const [showTaskForm, setShowTaskForm] = useState(false); const [newTask, setNewTask] = useState({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: '' }); const [editingTask, setEditingTask] = useState(null); const [renewalRef, setRenewalRef] = useState(''); const [renewalMethod, setRenewalMethod] = useState('gcash'); const [renewalCashKey, setRenewalCashKey] = useState(''); const [newGcashNumber, setNewGcashNumber] = useState(''); const [showEventForm, setShowEventForm] = useState(false); const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); const [editingEvent, setEditingEvent] = useState(null); const [showAnnounceForm, setShowAnnounceForm] = useState(false); const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' }); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const [searchQuery, setSearchQuery] = useState(""); const [selectedBaristas, setSelectedBaristas] = useState([]); const [isImporting, setIsImporting] = useState(false); const [confirmDelete, setConfirmDelete] = useState(null); const fileInputRef = useRef(null); const currentDailyKey = getDailyCashPasskey(); const [settingsForm, setSettingsForm] = useState({ ...profile }); const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' }); const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); const [savingSettings, setSavingSettings] = useState(false); const [financialFilter, setFinancialFilter] = useState('all'); const [isEditingLegacy, setIsEditingLegacy] = useState(false); const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' }); const [suggestionText, setSuggestionText] = useState(""); const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' }); const [submittingApp, setSubmittingApp] = useState(false); const [attendanceEvent, setAttendanceEvent] = useState(null); const [exportFilter, setExportFilter] = useState('all'); const [currentPage, setCurrentPage] = useState(1); const itemsPerPage = 10;
   const [lastVisited, setLastVisited] = useState(() => { try { return JSON.parse(localStorage.getItem('lba_last_visited') || '{}'); } catch { return {}; } });
 
-  const isOfficer = useMemo(() => { if (!profile?.positionCategory) return false; return ['OFFICER', 'EXECOMM', 'COMMITTEE'].includes(String(profile.positionCategory).toUpperCase()); }, [profile?.positionCategory]);
-  const isAdmin = useMemo(() => { if (!profile?.positionCategory) return false; return ['OFFICER', 'EXECOMM'].includes(String(profile.positionCategory).toUpperCase()); }, [profile?.positionCategory]);
-  const isSystemAdmin = useMemo(() => profile?.role === 'superadmin', [profile]);
-  const isCommitteeHead = useMemo(() => profile.positionCategory === 'Committee' && (profile.specificTitle || '').includes('Head'), [profile]);
-  const isExpired = useMemo(() => profile.status === 'expired', [profile.status]);
-  const isExemptFromRenewal = useMemo(() => ['OFFICER', 'EXECOMM', 'COMMITTEE', 'ORG ADVISER'].includes(String(profile.positionCategory).toUpperCase()), [profile.positionCategory]);
+  // 🛡️ THE 4-TIER ACCESS SYSTEM 🛡️
+  const isSuperAdmin = useMemo(() => profile?.role === 'superadmin', [profile?.role]);
+  const isOfficer = useMemo(() => isSuperAdmin || ['OFFICER'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isSuperAdmin]);
+  const isCommitteePlus = useMemo(() => isOfficer || ['COMMITTEE'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isOfficer]);
+  const isCommitteeHead = useMemo(() => String(profile?.positionCategory || '').toUpperCase() === 'COMMITTEE' && String(profile?.specificTitle || '').toUpperCase().includes('HEAD'), [profile?.positionCategory, profile?.specificTitle]);
+  
+  const isExpired = useMemo(() => profile?.status === 'expired', [profile?.status]);
+  const isExemptFromRenewal = useMemo(() => ['OFFICER', 'EXECOMM', 'COMMITTEE', 'ORG ADVISER', 'ALUMNI'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory]);
   const isBirthday = useMemo(() => { if (!profile.birthMonth || !profile.birthDay) return false; const today = new Date(); return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate(); }, [profile]);
 
   const financialStats = useMemo(() => {
     if (!members || !Array.isArray(members)) return { totalPaid: 0, cashCount: 0, gcashCount: 0, exemptCount: 0 };
     const validMembers = members.filter(m => m != null && typeof m === 'object');
     let filtered = validMembers; if (financialFilter !== 'all') { const [sy, sem] = financialFilter.split('-'); filtered = validMembers.filter(m => m?.lastRenewedSY === sy && m?.lastRenewedSem === sem); }
-    const payingMembers = filtered.filter(m => { const isExempt = ['Officer', 'Execomm', 'Committee'].includes(m?.positionCategory) || m?.paymentStatus === 'exempt'; return !isExempt && m?.paymentStatus === 'paid'; });
+    const payingMembers = filtered.filter(m => { const isExempt = ['Officer', 'Committee', 'Alumni', 'Execomm'].includes(m?.positionCategory) || m?.paymentStatus === 'exempt'; return !isExempt && m?.paymentStatus === 'paid'; });
     const cashPayments = payingMembers.filter(m => m?.paymentDetails?.method === 'cash').length; const gcashPayments = payingMembers.filter(m => m?.paymentDetails?.method === 'gcash').length;
     return { totalPaid: payingMembers.length, cashCount: cashPayments, gcashCount: gcashPayments, exemptCount: filtered.length - payingMembers.length };
   }, [members, financialFilter]);
@@ -115,8 +117,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     if (!members || !Array.isArray(members)) return { tier1: [], tier2: [], tier3: [], committees: {} };
     const validMembers = members.filter(m => m != null && typeof m === 'object');
     const sortedMembers = [...validMembers].sort((a, b) => (a?.name || "").localeCompare(b?.name || ""));
-    const hasTitle = (m, title) => (m?.specificTitle || "").toUpperCase().includes(title.toUpperCase());
-    const isCat = (m, cat) => (m?.positionCategory || "").toUpperCase() === cat.toUpperCase();
+    const hasTitle = (m, title) => String(m?.specificTitle || "").toUpperCase().includes(title.toUpperCase());
+    const isCat = (m, cat) => String(m?.positionCategory || "").toUpperCase() === cat.toUpperCase();
     const committeesMap = {}; COMMITTEES_INFO.forEach(c => { committeesMap[c.id] = { heads: sortedMembers.filter(m => m?.committee === c.id && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => m?.committee === c.id && isCat(m, "Committee") && !hasTitle(m, "Head")) }; });
     committeesMap['Unassigned'] = { heads: sortedMembers.filter(m => !m?.committee && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => !m?.committee && isCat(m, "Committee") && !hasTitle(m, "Head")) };
     return { tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")), tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")), tier3: sortedMembers.filter(m => !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")), committees: committeesMap };
@@ -126,10 +128,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   const notifications = useMemo(() => {
       const hasNew = (items, pageKey) => { if (!items || items.length === 0) return false; const lastVisit = lastVisited[pageKey]; if (!lastVisit) return true; return items.some(i => { const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0); return d > new Date(lastVisit); }); };
-      let huntNotify = isOfficer ? committeeApps.some(a => a.status === 'pending') : userApplications.some(a => { const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null; const lastVisit = lastVisited['committee_hunt']; if (!updated) return false; return !lastVisit || updated > new Date(lastVisit); });
+      let huntNotify = isSuperAdmin ? committeeApps.some(a => a.status === 'pending') : userApplications.some(a => { const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null; const lastVisit = lastVisited['committee_hunt']; if (!updated) return false; return !lastVisit || updated > new Date(lastVisit); });
       let regNotify = isOfficer ? hasNew((members || []).map(m => ({ createdAt: m?.joinedDate })), 'members') : false;
       return { events: hasNew(events, 'events'), announcements: hasNew(announcements, 'announcements'), suggestions: hasNew(suggestions, 'suggestions'), committee_hunt: huntNotify, members: regNotify };
-  }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer]);
+  }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer, isSuperAdmin]);
 
   const filteredRegistry = useMemo(() => {
       if (!members || !Array.isArray(members)) return [];
@@ -141,7 +143,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           return nameMatch || idMatch || emailMatch;
       });
       if (exportFilter !== 'all') {
-          if (exportFilter === 'active') filtered = filtered.filter(m => m?.status === 'active'); else if (exportFilter === 'inactive') filtered = filtered.filter(m => m?.status !== 'active'); else if (exportFilter === 'officers') filtered = filtered.filter(m => ['Officer', 'Execomm'].includes(m?.positionCategory)); else if (exportFilter === 'committee') filtered = filtered.filter(m => m?.positionCategory === 'Committee');
+          if (exportFilter === 'active') filtered = filtered.filter(m => m?.status === 'active'); else if (exportFilter === 'inactive') filtered = filtered.filter(m => m?.status !== 'active'); else if (exportFilter === 'officers') filtered = filtered.filter(m => m?.positionCategory === 'Officer'); else if (exportFilter === 'committee') filtered = filtered.filter(m => m?.positionCategory === 'Committee');
       }
       return filtered; 
   }, [members, searchQuery, exportFilter]);
@@ -152,7 +154,28 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   useEffect(() => { setCurrentPage(1); }, [searchQuery, exportFilter]);
 
   const updateLastVisited = (page) => { const newVisits = { ...lastVisited, [page]: new Date().toISOString() }; setLastVisited(newVisits); localStorage.setItem('lba_last_visited', JSON.stringify(newVisits)); };
-  const handleExportCSV = () => { if (!members) return; const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined"]; const rows = members.filter(m => m != null).map(m => [ m?.memberId, m?.name, m?.email, m?.positionCategory, m?.specificTitle, m?.committee || '', m?.status, m?.joinedDate || '' ]); generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`); };
+  const handleExportCSV = () => { 
+      if (!members) return; 
+      const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined", "Volunteer Shifts", "Masterclass", "Accolades"]; 
+      const rows = members.filter(m => m != null).map(m => {
+          const volCount = events.reduce((acc, ev) => acc + (ev.shifts?.filter(s => s.volunteers?.includes(m.memberId)).length || 0), 0);
+          const mcCompleted = [1,2,3,4,5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(m.memberId)).map(id => `Mod ${id}`).join(', ');
+          return [ 
+              m?.memberId, 
+              m?.name, 
+              m?.email, 
+              m?.positionCategory, 
+              m?.specificTitle, 
+              m?.committee || '', 
+              m?.status, 
+              getSafeDateString(m?.joinedDate) || '',
+              volCount,
+              mcCompleted,
+              (m?.accolades || []).join('; ')
+          ];
+      }); 
+      generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`); 
+  };
   const handleBulkEmail = () => { const targets = selectedBaristas.length > 0 ? members.filter(m => m && selectedBaristas.includes(m.memberId)) : members.filter(m => m != null); const emails = targets.map(m => m?.email).filter(e => e).join(','); if (emails) window.location.href = `mailto:?bcc=${emails}`; };
   const toggleSelectAll = () => { if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) { setSelectedBaristas([]); } else { setSelectedBaristas(paginatedRegistry.filter(m => m != null).map(m => m.memberId)); } };
   const toggleSelectBarista = (id) => { if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id)); else setSelectedBaristas(prev => [...prev, id]); };
@@ -163,15 +186,15 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   useEffect(() => {
       if (!user) return;
       const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); if (JSON.stringify(data) !== JSON.stringify(profile)) { setProfile(data); localStorage.setItem('lba_profile', JSON.stringify(data)); } } });
-      let unsubReg = () => {}; if (isOfficer || isAdmin) { unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() })))); }
+      let unsubReg = () => {}; if (isOfficer) { unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() })))); }
       const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)); setSuggestions(data); });
-      let unsubApps = () => {}; if (isAdmin) unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubApps = () => {}; if (isSuperAdmin) unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => setUserApplications(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       let unsubProjects = () => {}; if (isOfficer) unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => setProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       let unsubTasks = () => {}; if (isOfficer) unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-      let unsubLogs = () => {}; if (isAdmin) unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubLogs = () => {}; if (isSuperAdmin) unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => setPolls(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => setSeriesPosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
@@ -179,7 +202,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => { if(s.exists()) { setLegacyContent(s.data()); const data = s.data(); setLegacyForm({ ...data, achievements: data.achievements || [], imageUrl: data.imageUrl || '', galleryUrl: data.galleryUrl || '', imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' } }); if (data.establishedDate) { const today = new Date(); const est = new Date(data.establishedDate); if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) setIsAnniversary(true); } } });
       const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => { if(s.exists()) setMasterclassData(s.data()); else setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); });
       return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubApps(); unsubUserApps(); unsubProjects(); unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); };
-  }, [user, isAdmin, isOfficer, profile.memberId]);
+  }, [user, isSuperAdmin, isOfficer, profile.memberId]);
 
   useEffect(() => { if (attendanceEvent && events.length > 0) { const liveEvent = events.find(e => e.id === attendanceEvent.id); if (liveEvent) setAttendanceEvent(liveEvent); } }, [events]);
   useEffect(() => { const head = document.head; let linkIcon = document.querySelector("link[rel~='icon']"); if (!linkIcon) { linkIcon = document.createElement('link'); linkIcon.rel = 'icon'; head.appendChild(linkIcon); } linkIcon.href = APP_ICON_URL; }, []);
@@ -229,23 +252,47 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleToggleMaintenance = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, maintenanceMode: !hubSettings.maintenanceMode }); logAction("Toggle Maintenance", `Maintenance ${!hubSettings.maintenanceMode ? 'Enabled' : 'Disabled'}`); } catch (err) {} };
   const handleToggleRenewalMode = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, renewalMode: !hubSettings.renewalMode }); logAction("Toggle Renewal", `Renewal Mode ${!hubSettings.renewalMode ? 'ON' : 'OFF'}`); } catch (err) {} };
   const handleToggleAllowedPayment = async () => { const newMode = hubSettings.allowedPayment === 'gcash_only' ? 'both' : 'gcash_only'; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, allowedPayment: newMode }); } catch (err) {} };
-  const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { if (!isAdmin) return; const validMembers = members.filter(m => m != null); const target = validMembers.find(m => m.memberId === targetId); if (!target) return; let newId = target.memberId; const isL = ['Officer', 'Execomm', 'Committee'].includes(cat); const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId; newId = baseId + (isL ? 'C' : ''); const updates = { positionCategory: cat, specificTitle: specific || cat, memberId: newId, role: ['Officer', 'Execomm'].includes(cat) ? 'admin' : 'member', paymentStatus: isL ? 'exempt' : target.paymentStatus, committee: cat === 'Committee' ? committee : "" }; if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId)); await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates }); };
+  
+  const handleToggleSuperAdmin = async (memberId, currentRole, name) => { 
+      if (!isSuperAdmin) return; 
+      const targetCat = members.find(m => m.memberId === memberId)?.positionCategory;
+      const revertRole = targetCat === 'Officer' ? 'admin' : 'member';
+      const newRoleToSet = currentRole === 'superadmin' ? revertRole : 'superadmin'; 
+      if (!confirm(`Are you sure you want to ${newRoleToSet === 'superadmin' ? 'GRANT' : 'REVOKE'} System Admin access for ${name}?`)) return; 
+      try { 
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { role: newRoleToSet }); 
+          logAction("Toggle Super Admin", `${newRoleToSet === 'superadmin' ? 'Granted' : 'Revoked'} admin access for ${name}`); 
+          alert(`Successfully updated access for ${name}.`); 
+      } catch (e) { alert("Failed to update access."); } 
+  };
+
+  const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { 
+      if (!isSuperAdmin) return; 
+      const validMembers = members.filter(m => m != null); 
+      const target = validMembers.find(m => m.memberId === targetId); 
+      if (!target) return; 
+      let newId = target.memberId; 
+      const isL = ['Officer', 'Committee'].includes(cat); 
+      const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId; 
+      newId = baseId + (isL ? 'C' : ''); 
+      const updates = { 
+          positionCategory: cat, 
+          specificTitle: specific || cat, 
+          memberId: newId, 
+          role: cat === 'Officer' ? 'admin' : (target.role === 'superadmin' ? 'superadmin' : 'member'), 
+          paymentStatus: ['Officer', 'Committee', 'Alumni', 'Execomm'].includes(cat) ? 'exempt' : target.paymentStatus, 
+          committee: cat === 'Committee' ? committee : "" 
+      }; 
+      if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId)); 
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates }); 
+  };
+  
   const initiateRemoveMember = (mid, name) => { setConfirmDelete({ mid, name }); };
   const confirmRemoveMember = async () => { if (!confirmDelete) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid)); logAction("Remove Member", `Removed member: ${confirmDelete.name}`); } catch(e) { console.error(e); } finally { setConfirmDelete(null); } };
-  const handleToggleSuperAdmin = async (memberId, currentRole, name) => { 
-        if (!isSystemAdmin) return; 
-        const newRole = currentRole === 'superadmin' ? 'admin' : 'superadmin'; 
-        if (!confirm(`Are you sure you want to ${newRole === 'superadmin' ? 'GRANT' : 'REVOKE'} System Admin access for ${name}?`)) return; 
-        try { 
-            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { role: newRole }); 
-            logAction("Toggle Super Admin", `${newRole === 'superadmin' ? 'Granted' : 'Revoked'} admin access for ${name}`); 
-            alert(`Successfully updated access for ${name}.`); 
-        } catch (e) { alert("Failed to update access."); } 
-    }; 
   const handleBulkImportCSV = async (e) => { const file = e.target.files[0]; if (!file) return; setIsImporting(true); const reader = new FileReader(); reader.onload = async (evt) => { try { const text = evt.target.result; const rows = text.split('\n').filter(r => r.trim().length > 0); const batch = writeBatch(db); let count = members.filter(m => m != null).length; for (let i = 1; i < rows.length; i++) { const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim()); if (!name || !email) continue; const mid = generateLBAId(pos, count++); const meta = getMemberIdMeta(); const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'expired', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() }; batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data); } await batch.commit(); logAction("Bulk Import", `Imported ${rows.length - 1} members`); } catch (err) {} finally { setIsImporting(false); e.target.value = ""; } }; reader.readAsText(file); };
   const downloadImportTemplate = () => { const headers = ["Name", "Email", "Program", "PositionCategory", "SpecificTitle"]; const rows = [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]]; generateCSV(headers, rows, "LBA_Import_Template.csv"); };
   const handleRotateSecurityKeys = async () => { const newKeys = { officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(), headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(), commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase() }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys); logAction("Rotate Keys", "Security keys rotated"); };
-  const handleSanitizeDatabase = async () => { if (!confirm("This will REMOVE DUPLICATES (by Name) and RE-GENERATE Member IDs. Are you sure?")) return; const batch = writeBatch(db); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc')); const snapshot = await getDocs(q); let count = 0; snapshot.docs.forEach((docSnap) => { const data = docSnap.data(); const category = data.positionCategory || "Member"; const meta = getMemberIdMeta(); count++; const padded = String(count).padStart(4, '0'); const isLeader = ['Officer', 'Execomm', 'Committee'].includes(category); const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`; batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId }); }); await batch.commit(); logAction("Sanitize DB", "Executed database sanitization"); alert(`Database sanitized! ${count} records updated.`); } catch (err) { alert("Failed to sanitize: " + err.message); } };
+  const handleSanitizeDatabase = async () => { if (!confirm("This will REMOVE DUPLICATES (by Name) and RE-GENERATE Member IDs. Are you sure?")) return; const batch = writeBatch(db); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc')); const snapshot = await getDocs(q); let count = 0; snapshot.docs.forEach((docSnap) => { const data = docSnap.data(); const category = data.positionCategory || "Member"; const meta = getMemberIdMeta(); count++; const padded = String(count).padStart(4, '0'); const isLeader = ['Officer', 'Committee'].includes(category); const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`; batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId }); }); await batch.commit(); logAction("Sanitize DB", "Executed database sanitization"); alert(`Database sanitized! ${count} records updated.`); } catch (err) { alert("Failed to sanitize: " + err.message); } };
   const handleMigrateToRenewal = async () => { if(!confirm("This will update ALL current members to 'Renewal' status. Proceed?")) return; const batch = writeBatch(db); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry')); const snapshot = await getDocs(q); let count = 0; snapshot.forEach(doc => { const data = doc.data(); if (data.membershipType !== 'renewal') { batch.update(doc.ref, { membershipType: 'renewal' }); count++; } }); if(count > 0) { await batch.commit(); logAction("Migrate Renewal", `Migrated ${count} members to renewal`); alert(`Migration Complete: ${count} members updated to Renewal status.`); } else { alert("No members needed updating."); } } catch (err) { alert("Migration failed."); } };
   const handleToggleStatus = async (memberId, currentStatus) => { if (!confirm(`Change status to ${currentStatus === 'active' ? 'EXPIRED' : 'ACTIVE'}?`)) return; try { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId); const updates = { status: currentStatus === 'active' ? 'expired' : 'active' }; if (currentStatus === 'active') { updates.paymentStatus = 'unpaid'; } await updateDoc(memberRef, updates); logAction("Toggle Status", `Changed ${memberId} to ${updates.status}`); } catch(e) { console.error(e); } };
   const handleRenewalPayment = async (e) => { e.preventDefault(); if (renewalMethod === 'gcash' && !renewalRef) return; if (renewalMethod === 'cash' && !renewalCashKey) return; if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) { return alert("Invalid Cash Key."); } try { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId); const meta = getMemberIdMeta(); await updateDoc(memberRef, { status: 'active', paymentStatus: 'paid', lastRenewedSY: meta.sy, lastRenewedSem: meta.sem, membershipType: 'renewal', paymentDetails: { method: renewalMethod, refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH', date: new Date().toISOString() } }); setRenewalRef(''); setRenewalCashKey(''); alert("Membership renewed successfully! Welcome back."); } catch (err) { alert("Renewal failed. Please try again."); } };
@@ -264,8 +311,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     { id: 'members_corner', label: "Member's Corner", icon: MessageSquare, hasNotification: notifications.suggestions },
     { id: 'series', label: 'Barista Diaries', icon: ImageIcon },
     { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
-    ...(isOfficer ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList }, { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
-    ...(isSysremAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
+    ...(isCommitteePlus ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList } ] : []),
+    ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
+    ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
@@ -273,7 +321,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
-      {hubSettings.maintenanceMode && (<div className="w-full z-[101]"><MaintenanceBanner /></div>)}
+      {hubSettings.maintenanceMode && !isSuperAdmin && (<div className="w-full z-[101]"><MaintenanceBanner /></div>)}
+      {hubSettings.maintenanceMode && isSuperAdmin && (<div className="w-full bg-red-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse border-b-2 border-red-800"><AlertOctagon size={14} /><span>MAINTENANCE MODE IS CURRENTLY ACTIVE</span></div>)}
       
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
@@ -584,7 +633,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           <main className="flex-1 overflow-y-auto p-4 md:p-10 relative custom-scrollbar">
                 <header className="flex justify-between items-center mb-10">
                 <div className="flex items-center gap-4"><button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-[#3E2723]"><Menu size={24}/></button><h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2></div>
-                <div onClick={() => setView('settings')} className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors" title="Edit Profile"><img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover" /><div className="hidden sm:block"><p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || profile.name.split(' ')[0]}</p><p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p></div></div>
+                <div onClick={() => setView('settings')} className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors" title="Edit Profile"><img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover" /><div className="hidden sm:block"><p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || profile.name.split(' ')[0]} {isSuperAdmin && <ShieldCheck size={10} className="inline text-amber-500"/>}</p><p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p></div></div>
                 </header>
 
                 {view === 'home' && (
@@ -657,7 +706,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     <div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center"><p className="text-xs font-bold text-gray-400 uppercase">All caught up!</p><p className="text-[10px] text-gray-300">No new notices to display.</p></div>
                                 : announcements.slice(0, 2).map(ann => (
                                     <div key={ann.id} className="bg-white p-6 rounded-3xl border border-amber-100 shadow-sm relative group hover:shadow-md transition-shadow">
-                                        {isAdmin && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-full text-red-500 hover:text-red-600 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button></div>)}
+                                        {isOfficer && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-full text-red-500 hover:text-red-600 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button></div>)}
                                         <div className="flex justify-between items-start mb-2"><h4 className="font-black text-sm uppercase text-[#3E2723] pr-16">{ann.title}</h4><span className="text-[8px] font-bold text-gray-400 uppercase">{formatDate(ann.date)}</span></div>
                                         <p className="text-xs text-gray-600 line-clamp-2">{ann.content}</p>
                                     </div>
@@ -673,7 +722,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
                                     return (
                                         <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4 hover:shadow-md transition-shadow relative group">
-                                            {isAdmin && (<div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditEvent(ev)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={12}/></button></div>)}
+                                            {isOfficer && (<div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditEvent(ev)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={12}/></button></div>)}
                                             <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0"><span className="text-xs font-black">{day}</span><span className="text-[8px] uppercase">{month}</span></div>
                                             <div className="min-w-0 pr-12"><h4 className="font-black text-xs uppercase truncate">{ev.name}</h4><p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p></div>
                                         </div>
@@ -688,8 +737,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Trophy size={16} className="text-amber-500"/> Trophy Case</h3>
                             <div className="grid grid-cols-3 gap-3">
                                 <div className="flex flex-col items-center gap-1"><div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">☕</div><span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900/60 leading-none">Member</span></div></div>
-                                {['Officer', 'Execomm'].includes(profile.positionCategory) && (<div className="flex flex-col items-center gap-1"><div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🛡️</div><span className="text-[8px] md:text-[10px] font-black uppercase text-indigo-900/60 leading-none">Officer</span></div></div>)}
+                                {['Officer'].includes(profile.positionCategory) && (<div className="flex flex-col items-center gap-1"><div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🛡️</div><span className="text-[8px] md:text-[10px] font-black uppercase text-indigo-900/60 leading-none">Officer</span></div></div>)}
                                 {profile.positionCategory === 'Committee' && (<div className="flex flex-col items-center gap-1"><div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🎗️</div><span className="text-[8px] md:text-[10px] font-black uppercase text-pink-900/60 leading-none">Comm.</span></div></div>)}
+                                {profile.positionCategory === 'Execomm' && (<div className="flex flex-col items-center gap-1"><div title="Execomm" className="w-full aspect-square bg-blue-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">💼</div><span className="text-[8px] md:text-[10px] font-black uppercase text-blue-900/60 leading-none">Execomm</span></div></div>)}
+                                {profile.positionCategory === 'Alumni' && (<div className="flex flex-col items-center gap-1"><div title="Alumni" className="w-full aspect-square bg-slate-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🎓</div><span className="text-[8px] md:text-[10px] font-black uppercase text-slate-900/60 leading-none">Alumni</span></div></div>)}
                                 {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && (<div className="flex flex-col items-center gap-1"><div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🏅</div><span className="text-[8px] md:text-[10px] font-black uppercase text-yellow-900/60 leading-none">Veteran</span></div></div>)}
                                 {volunteerCount > 0 && (<div className="flex flex-col items-center gap-1">{(() => { let tier = { icon: '🤚', label: 'Volunteer', color: 'bg-teal-50 text-teal-900/60' }; if (volunteerCount >= 15) tier = { icon: '👑', label: 'Super Vol.', color: 'bg-rose-100 text-rose-900/60' }; else if (volunteerCount >= 9) tier = { icon: '🚀', label: 'Adv. Vol.', color: 'bg-purple-100 text-purple-900/60' }; else if (volunteerCount >= 4) tier = { icon: '🔥', label: 'Inter. Vol.', color: 'bg-orange-100 text-orange-900/60' }; const textColor = tier.color.split(' ')[1] || 'text-gray-500'; const bgColor = tier.color.split(' ')[0] || 'bg-gray-100'; return (<div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square ${bgColor} rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2`}><div className="text-2xl md:text-3xl mb-1">{tier.icon}</div><span className={`text-[8px] md:text-[10px] font-black uppercase ${textColor} leading-none tracking-tight`}>{tier.label}</span></div>); })()}</div>)}
                                 {(() => {
@@ -730,7 +781,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <div>
                                 <p className="text-lg leading-relaxed whitespace-pre-wrap font-medium text-gray-700">{legacyContent.body}</p>
                                 {legacyContent.galleryUrl && (<a href={legacyContent.galleryUrl} target="_blank" rel="noreferrer" className="inline-block mt-4 text-amber-600 font-bold underline">View Photo Gallery</a>)}
-                                {isAdmin && <button onClick={() => setIsEditingLegacy(true)} className="block mt-4 text-amber-600 text-xs font-bold uppercase hover:underline">Edit Story</button>}
+                                {isOfficer && <button onClick={() => setIsEditingLegacy(true)} className="block mt-4 text-amber-600 text-xs font-bold uppercase hover:underline">Edit Story</button>}
                             </div>
                         )}
                     </div>
@@ -787,7 +838,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             );
                         })}
                     </div>
-                    {isAdmin && (
+                    {isOfficer && (
                         <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-200 mt-8 space-y-4">
                             <h4 className="font-black text-sm uppercase text-amber-800 mb-4 flex items-center gap-2"><Settings2 size={16}/> Admin Controls</h4>
                             <div className="space-y-4">
@@ -850,7 +901,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 <div className="space-y-6 animate-fadeIn">
                      <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">What's Brewing?</h3>
-                        {isAdmin && <button onClick={() => { setEditingEvent(null); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); setShowEventForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Event</button>}
+                        {isCommitteePlus && <button onClick={() => { setEditingEvent(null); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); setShowEventForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Event</button>}
                     </div>
                     <div className="space-y-4">
                         {events.length === 0 ? (
@@ -860,7 +911,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
                                 return (
                                     <div key={ev.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
-                                         {isAdmin && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditEvent(ev)} className="p-2 bg-white border border-amber-100 rounded-xl text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit Event"><Pen size={14}/></button><button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-white border border-red-100 rounded-xl text-red-600 hover:bg-red-50 shadow-sm" title="Delete Event"><Trash2 size={14}/></button></div>)}
+                                         {isCommitteePlus && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditEvent(ev)} className="p-2 bg-white border border-amber-100 rounded-xl text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit Event"><Pen size={14}/></button><button onClick={() => handleDeleteEvent(ev.id)} className="p-2 bg-white border border-red-100 rounded-xl text-red-600 hover:bg-red-50 shadow-sm" title="Delete Event"><Trash2 size={14}/></button></div>)}
                                          <div className="flex flex-col sm:flex-row gap-6">
                                             <div className="bg-[#3E2723] text-[#FDB813] w-24 h-24 rounded-2xl flex flex-col items-center justify-center font-black leading-none shrink-0 shadow-inner"><span className="text-3xl">{day}</span><span className="text-xs uppercase mt-2 tracking-widest">{month}</span></div>
                                             <div className="flex-1">
@@ -907,12 +958,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                                                 </div>
                                                             );
                                                         })}
-                                                        {isAdmin && ev.attendanceRequired && (<button onClick={() => setAttendanceEvent(ev)} className="w-full mt-2 px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex justify-center items-center gap-2 border border-indigo-200"><ClipboardList size={14}/> Open Attendance</button>)}
+                                                        {isCommitteePlus && ev.attendanceRequired && (<button onClick={() => setAttendanceEvent(ev)} className="w-full mt-2 px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex justify-center items-center gap-2 border border-indigo-200"><ClipboardList size={14}/> Open Attendance</button>)}
                                                     </div>
                                                 ) : (
                                                     <div className="mt-6 flex flex-wrap gap-3">
                                                         {ev.registrationRequired && (<button onClick={() => handleRegisterEvent(ev)} className={`px-6 py-3 rounded-xl font-black uppercase text-[10px] transition-all shadow-sm ${ev.registered?.includes(profile.memberId) ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-[#FDB813] text-[#3E2723] hover:bg-amber-400'}`}>{ev.registered?.includes(profile.memberId) ? 'Registered ✓' : 'Register Now'}</button>)}
-                                                        {isAdmin && ev.attendanceRequired && (<button onClick={() => setAttendanceEvent(ev)} className="px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex items-center gap-2 border border-indigo-200"><ClipboardList size={14}/> Open Attendance</button>)}
+                                                        {isCommitteePlus && ev.attendanceRequired && (<button onClick={() => setAttendanceEvent(ev)} className="px-6 py-3 bg-indigo-100 text-indigo-700 rounded-xl font-black uppercase text-[10px] hover:bg-indigo-200 transition-colors flex items-center gap-2 border border-indigo-200"><ClipboardList size={14}/> Open Attendance</button>)}
                                                     </div>
                                                 )}
                                                 
@@ -931,7 +982,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 <div className="space-y-6 animate-fadeIn">
                      <div className="flex justify-between items-center">
                         <h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Grind Report</h3>
-                        {isAdmin && <button onClick={() => { setEditingAnnouncement(null); setNewAnnouncement({ title: '', content: '' }); setShowAnnounceForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Notice</button>}
+                        {isCommitteePlus && <button onClick={() => { setEditingAnnouncement(null); setNewAnnouncement({ title: '', content: '' }); setShowAnnounceForm(true); }} className="bg-[#3E2723] text-[#FDB813] px-4 py-3 rounded-2xl shadow-md hover:bg-black transition-colors font-black uppercase text-[10px] flex items-center gap-2"><Plus size={16}/> New Notice</button>}
                     </div>
                     {announcements.length === 0 ? (
                         <div className="p-10 bg-white rounded-[32px] border border-dashed border-amber-200 text-center"><Bell size={32} className="mx-auto text-amber-300 mb-3"/><p className="text-sm font-black text-amber-900 uppercase">All caught up!</p><p className="text-xs text-amber-700/60 mt-1">No new notices to display.</p></div>
@@ -939,7 +990,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             {announcements.map(ann => (
                                 <div key={ann.id} className="bg-yellow-50 p-8 rounded-[32px] border border-yellow-200 shadow-sm relative group hover:shadow-md transition-shadow">
-                                    {isAdmin && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-xl text-amber-600 border border-amber-100 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-xl text-red-600 border border-red-100 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button></div>)}
+                                    {isCommitteePlus && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-xl text-amber-600 border border-amber-100 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-xl text-red-600 border border-red-100 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button></div>)}
                                     <span className="inline-block bg-[#FDB813] px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest text-[#3E2723] mb-4 shadow-sm">{formatDate(ann.date)}</span>
                                     <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-3 pr-20 leading-tight">{ann.title}</h4>
                                     <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{ann.content}</p>
@@ -955,12 +1006,12 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     <div className="text-center mb-8"><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Member's Corner</h3><p className="text-gray-500 font-bold text-xs uppercase">Your voice, your vote, your community.</p></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="space-y-6">
-                            <div className="flex justify-between items-center"><h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><BarChart2 size={18}/> Community Polls</h4>{isAdmin && <button onClick={() => { setNewPoll({ question: '', options: ['', ''] }); setShowPollForm(true); }} className="bg-amber-100 text-amber-700 p-2 rounded-xl hover:bg-amber-200"><Plus size={16}/></button>}</div>
+                            <div className="flex justify-between items-center"><h4 className="font-black uppercase text-sm flex items-center gap-2 text-[#3E2723]"><BarChart2 size={18}/> Community Polls</h4>{isCommitteePlus && <button onClick={() => { setNewPoll({ question: '', options: ['', ''] }); setShowPollForm(true); }} className="bg-amber-100 text-amber-700 p-2 rounded-xl hover:bg-amber-200"><Plus size={16}/></button>}</div>
                             <div className="space-y-4">
                                 {polls.length === 0 ? (<div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center text-xs text-gray-400">No active polls.</div>) : (
                                     polls.map(poll => (
                                         <div key={poll.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm relative group">
-                                            {isAdmin && <button onClick={() => handleDeletePoll(poll.id)} className="absolute top-4 right-4 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 size={14}/></button>}
+                                            {isCommitteePlus && <button onClick={() => handleDeletePoll(poll.id)} className="absolute top-4 right-4 text-red-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity z-10"><Trash2 size={14}/></button>}
                                             <h5 className="font-bold text-sm text-[#3E2723] mb-4 pr-6">{poll.question}</h5>
                                             <div className="space-y-3">
                                                 {poll.options && poll.options.map(opt => {
@@ -992,7 +1043,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                                 {suggestions.map(s => (
                                     <div key={s.id} className="bg-white p-4 rounded-2xl border border-gray-100 relative group">
-                                        {isAdmin && <button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12}/></button>}
+                                        {isCommitteePlus && <button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12}/></button>}
                                         <p className="text-gray-800 text-xs font-medium italic">"{s.text}"</p>
                                         <p className="text-[8px] font-bold text-gray-400 uppercase mt-2 text-right">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p>
                                     </div>
@@ -1007,13 +1058,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 <div className="space-y-8 animate-fadeIn">
                      <div className="flex justify-between items-end mb-4">
                          <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Barista Diaries</h3><p className="text-gray-500 font-bold text-xs uppercase">Life behind the bar & beyond</p></div>
-                        {(isOfficer || profile.positionCategory === 'Committee') && (<button onClick={() => { setEditingSeriesId(null); setNewSeriesPost({ title: '', imageUrls: [''], caption: '' }); setShowSeriesForm(true); }} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black flex items-center gap-2"><Plus size={16}/> New Post</button>)}
+                        {isCommitteePlus && (<button onClick={() => { setEditingSeriesId(null); setNewSeriesPost({ title: '', imageUrls: [''], caption: '' }); setShowSeriesForm(true); }} className="bg-[#3E2723] text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-black flex items-center gap-2"><Plus size={16}/> New Post</button>)}
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                          {seriesPosts.length === 0 ? (<div className="col-span-full py-20 text-center text-gray-400"><Smile size={48} className="mx-auto mb-4 opacity-50"/><p>No stories yet. Be the first to share!</p></div>) : (
                              seriesPosts.map(post => {
                                  const postImages = post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []);
-                                 const canEdit = isAdmin || profile.memberId === post.authorId;
+                                 const canEdit = isCommitteePlus || profile.memberId === post.authorId;
                                  return (
                                      <div key={post.id} className="bg-white rounded-[32px] overflow-hidden border border-amber-100 shadow-sm hover:shadow-lg transition-shadow group relative">
                                          {canEdit && (<div className="absolute top-4 right-4 z-20 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => handleEditSeries(post)} className="p-2 bg-white/90 backdrop-blur rounded-full text-amber-600 hover:text-amber-800 shadow-md"><Pen size={14}/></button><button onClick={() => handleDeleteSeries(post.id)} className="p-2 bg-white/90 backdrop-blur rounded-full text-red-500 hover:text-red-700 shadow-md"><Trash2 size={14}/></button></div>)}
@@ -1076,9 +1127,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
 
-            {view === 'daily_grind' && isOfficer && (
+            {view === 'daily_grind' && isCommitteePlus && (
                  <div className="space-y-8 animate-fadeIn">
-                    <div className="flex justify-between items-center"><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3><button onClick={() => { setEditingProject(null); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); setShowProjectForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button></div>
+                    <div className="flex justify-between items-center"><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3>{isOfficer && <button onClick={() => { setEditingProject(null); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); setShowProjectForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {projects.map(proj => {
                             const isExpanded = expandedProjectId === proj.id;
@@ -1101,8 +1152,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                                                 <p className="text-xs text-gray-500 max-w-2xl italic pr-4">"{proj.description}"</p>
                                                 <div className="flex gap-2 shrink-0">
-                                                    {(isAdmin || profile.memberId === proj.projectHeadId) && (<><button onClick={(e) => { e.stopPropagation(); handleEditProject(proj); }} className="bg-amber-100 text-amber-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-200 flex items-center gap-1"><Pen size={12}/> Edit Board</button>{isAdmin && <button onClick={async (e) => { e.stopPropagation(); if(confirm('Delete this project board?')) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', proj.id)); } }} className="bg-red-100 text-red-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-200 flex items-center gap-1"><Trash2 size={12}/></button>}</>)}
-                                                    {(isAdmin || isCommitteeHead || profile.memberId === proj.projectHeadId) && (<button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id }); setShowTaskForm(true); }} className="bg-[#3E2723] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-black flex items-center gap-1"><Plus size={12}/> Add Task</button>)}
+                                                    {(isOfficer || profile.memberId === proj.projectHeadId) && (<><button onClick={(e) => { e.stopPropagation(); handleEditProject(proj); }} className="bg-amber-100 text-amber-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-200 flex items-center gap-1"><Pen size={12}/> Edit Board</button>{isOfficer && <button onClick={async (e) => { e.stopPropagation(); if(confirm('Delete this project board?')) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', proj.id)); } }} className="bg-red-100 text-red-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-200 flex items-center gap-1"><Trash2 size={12}/></button>}</>)}
+                                                    {(isCommitteePlus || profile.memberId === proj.projectHeadId) && (<button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: proj.id }); setShowTaskForm(true); }} className="bg-[#3E2723] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-black flex items-center gap-1"><Plus size={12}/> Add Task</button>)}
                                                 </div>
                                              </div>
                                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1112,7 +1163,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                                          <div className="space-y-3 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
                                                              {projectTasks.filter(t => t.status === status).map(task => (
                                                                  <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
-                                                                     <div className="flex justify-between items-start mb-1"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span><div className="flex gap-1"><button onClick={() => handleEditTask(task)} className="text-amber-500 hover:text-amber-700 p-1"><Pen size={12}/></button>{isAdmin && <button onClick={() => handleDeleteTask(task.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={12}/></button>}</div></div>
+                                                                     <div className="flex justify-between items-start mb-1"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span><div className="flex gap-1"><button onClick={() => handleEditTask(task)} className="text-amber-500 hover:text-amber-700 p-1"><Pen size={12}/></button>{isOfficer && <button onClick={() => handleDeleteTask(task.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={12}/></button>}</div></div>
                                                                      <details className="mt-2 text-[10px] cursor-pointer"><summary className="font-bold text-amber-600 mb-2 outline-none list-none flex items-center gap-1 hover:text-amber-800 transition-colors"><ChevronRight size={12} className="inline-block transition-transform duration-200"/> View Output & Details</summary><div className="pl-3 py-2 border-l-2 border-amber-100 space-y-3 cursor-default">{task.description && <p className="text-gray-600 italic leading-relaxed">{task.description}</p>}{task.link && (<a href={task.link.startsWith('http') ? task.link : `https://${task.link}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1.5 rounded-lg w-fit"><Link2 size={10}/> Open Reference / Output</a>)}{task.notes && <div className="bg-amber-50 p-2 rounded-lg text-amber-900 border border-amber-100 font-medium">Feedback: {task.notes}</div>}</div></details>
                                                                      <div className="flex gap-1 border-t border-gray-100 pt-2 mt-2">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-gray-200 text-gray-600 transition-colors">Revert</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-amber-200 text-amber-800 transition-colors">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-green-200 text-green-800 transition-colors">Serve</button>}</div>
                                                                  </div>
@@ -1130,7 +1181,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                  </div>
             )}
 
-           {view === 'members' && isOfficer && (
+            {view === 'members' && isOfficer && (
                 <div className="space-y-6 animate-fadeIn text-[#3E2723]">
                     <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
                         <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
@@ -1138,7 +1189,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                             <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="officers">Officers</option><option value="committee">Committee</option></select>
                             <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                             <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
-                            {isSystemAdmin && (
+                            {isSuperAdmin && (
                                 <>
                                     <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={handleBulkImportCSV} />
                                     <button onClick={()=>fileInputRef.current.click()} className="bg-indigo-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Import</button>
@@ -1147,7 +1198,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         </div>
                     </div>
                     
-                    {/* MOBILE REGISTRY */}
                     <div className="md:hidden space-y-4">
                         {paginatedRegistry && paginatedRegistry.map(m => (
                             <div key={m?.memberId || Math.random()} className={`bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm ${m?.status !== 'active' ? 'opacity-70 grayscale' : ''}`}>
@@ -1157,20 +1207,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 </div>
                                 <div className="space-y-3">
                                     <div className="grid grid-cols-2 gap-2">
-                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Category</label><select className="w-full bg-amber-50 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isSystemAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
-                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Title</label><select className="w-full bg-white border border-amber-100 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isSystemAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Category</label><select className="w-full bg-amber-50 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isSuperAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select></div>
+                                        <div><label className="text-[8px] font-bold text-gray-400 uppercase">Title</label><select className="w-full bg-white border border-amber-100 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isSuperAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
                                     </div>
-                                    {m?.positionCategory === 'Committee' && (<div><label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Dept</label><select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isSystemAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div>)}
+                                    {m?.positionCategory === 'Committee' && (<div><label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Dept</label><select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isSuperAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div>)}
                                 </div>
                                 <div className="mt-4 pt-4 border-t border-amber-50 flex justify-between items-center">
-                                    <button onClick={() => isSystemAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m?.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`} disabled={!isSystemAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
+                                    <button onClick={() => isSuperAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m?.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`} disabled={!isSuperAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
                                     <div className="flex gap-2">
                                         <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ id: m.id, memberId: m.memberId, currentAccolades: m?.accolades || [] }); }} className="bg-yellow-50 text-yellow-600 p-2 rounded-lg"><Trophy size={16}/></button>
-                                        {isSystemAdmin && (
+                                        <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={16}/></button>
+                                        {isSuperAdmin && (
                                             <>
-                                                <button onClick={() => handleToggleSuperAdmin(m.memberId, m.role, m.name)} className={`p-2 rounded-lg ${m.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400'}`} title={m.role === 'superadmin' ? 'Revoke Admin' : 'Make Admin'}><ShieldCheck size={16}/></button>
+                                                <button onClick={() => handleToggleSuperAdmin(m.memberId, m.role, m.name)} className={`p-2 rounded-lg ${m.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-400 hover:bg-purple-50 hover:text-purple-600'}`} title={m.role === 'superadmin' ? 'Revoke Admin' : 'Make Admin'}><ShieldCheck size={16}/></button>
                                                 <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="bg-amber-50 text-amber-600 p-2 rounded-lg"><Pen size={16}/></button>
-                                                <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
                                                 <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="bg-red-50 text-red-500 p-2 rounded-lg"><Trash2 size={16}/></button>
                                             </>
                                         )}
@@ -1180,7 +1230,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         ))}
                     </div>
                     
-                    {/* DESKTOP REGISTRY */}
                     <div className="hidden md:block bg-white rounded-[40px] border border-amber-100 shadow-xl overflow-hidden">
                         <table className="w-full text-left uppercase table-fixed">
                             <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
@@ -1200,25 +1249,25 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     <td className="py-4 px-4"><div className="flex items-center gap-4"><img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" alt="avatar" /><div className="min-w-0"><p className="font-black text-xs truncate">{m?.name || 'Unknown'} {m?.role === 'superadmin' && <ShieldCheck size={12} className="inline text-purple-600"/>}</p><p className="text-[8px] opacity-60 truncate">"{m?.nickname || m?.program || ''}"</p><div className="flex flex-wrap gap-1 mt-1">{Array.isArray(m?.accolades) && m.accolades.map((acc, i) => (<span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>))}</div></div></div></td>
                                     <td className="text-center font-mono font-black text-xs">{m?.memberId || 'N/A'}</td>
                                     <td className="text-center font-black text-[10px] uppercase">
-                                        <button onClick={() => isSystemAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-default ${m?.status === 'active' ? (m?.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`} disabled={!isSystemAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
+                                        <button onClick={() => isSuperAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-default ${m?.status === 'active' ? (m?.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`} disabled={!isSuperAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
                                     </td>
                                     <td className="text-center py-2">
                                         <div className="flex flex-col gap-1 items-center">
-                                            <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isSystemAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                            <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isSystemAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
+                                            <select className="bg-amber-50 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.positionCategory || "Member"} onChange={e=>handleUpdatePosition(m.memberId, e.target.value, m.specificTitle, m.committee)} disabled={!isSuperAdmin}>{POSITION_CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                            <select className="bg-white border border-amber-100 text-[8px] font-black p-1 rounded outline-none w-32 disabled:opacity-50" value={m?.specificTitle || "Member"} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, e.target.value, m.committee)} disabled={!isSuperAdmin}><option value="Member">Member</option><option value="Org Adviser">Org Adviser</option>{OFFICER_TITLES.map(t=><option key={t} value={t}>{t}</option>)}{COMMITTEE_TITLES.map(t=><option key={t} value={t}>{t}</option>)}</select>
                                             {m?.positionCategory === 'Committee' && (
-                                                <select className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isSystemAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
+                                                <select className="bg-indigo-50 border border-indigo-200 text-indigo-800 text-[8px] font-black p-1 rounded outline-none w-32 focus:ring-1 focus:ring-indigo-400 disabled:opacity-50" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isSuperAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select>
                                             )}
                                         </div>
                                     </td>
                                     <td className="text-right p-4">
                                         <div className="flex items-center justify-end gap-1">
                                             <button onClick={() => { setAccoladeText(""); setShowAccoladeModal({ id: m.id, memberId: m.memberId, currentAccolades: m?.accolades || [] }); }} className="text-yellow-500 p-2 hover:bg-yellow-50 rounded-lg" title="Award Accolade"><Trophy size={14}/></button>
-                                            {isSystemAdmin && (
+                                            <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
+                                            {isSuperAdmin && (
                                                 <>
                                                     <button onClick={() => handleToggleSuperAdmin(m.memberId, m.role, m.name)} className={`p-2 rounded-lg ${m.role === 'superadmin' ? 'bg-purple-100 text-purple-700' : 'text-gray-400 hover:bg-purple-50 hover:text-purple-600'}`} title={m.role === 'superadmin' ? 'Revoke Admin' : 'Make Admin'}><ShieldCheck size={14}/></button>
                                                     <button onClick={() => { setEditingMember(m); setEditMemberForm({ joinedDate: getSafeDateString(m.joinedDate) }); }} className="text-amber-500 p-2 hover:bg-amber-50 rounded-lg" title="Edit Member Details"><Pen size={14}/></button>
-                                                    <button onClick={() => handleResetPassword(m.memberId, m.email, m.name)} className="text-blue-500 p-2 hover:bg-blue-50 rounded-lg" title="Reset Password"><RefreshCcw size={14}/></button>
                                                     <button onClick={()=>initiateRemoveMember(m.memberId, m.name)} className="text-red-500 p-2 hover:bg-red-50 rounded-lg"><Trash2 size={14}/></button>
                                                 </>
                                             )}
@@ -1238,7 +1287,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
 
-            {view === 'reports' && isSystemAdmin && (
+            {view === 'reports' && isSuperAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6"><StatIcon icon={TrendingUp} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div></div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -1248,6 +1297,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p><p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p></div>
                     </div>
                     <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between"><div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div><div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div></div>
+                    
                     <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white shadow-xl">
                         <div className="flex justify-between items-center mb-6"><h4 className="font-serif text-2xl font-black uppercase text-[#FDB813]">Security Vault</h4><Lock size={24} className="text-[#FDB813]"/></div>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -1258,12 +1308,14 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         </div>
                         <button onClick={handleRotateSecurityKeys} className="w-full mt-6 bg-red-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2"><RefreshCcw size={14}/> Rotate Security Keys</button>
                     </div>
+
                     <div className="bg-white p-8 rounded-[40px] border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
                         <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><ClipboardList size={16}/> Operations Log</h4>
                         <div className="space-y-2">
                             {logs && logs.length > 0 ? ( logs.map(log => ( <div key={log.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl text-xs"><div><span className="font-bold text-[#3E2723] block">{log.action}</span><span className="text-gray-500">{log.details}</span></div><div className="text-right"><span className="block font-bold text-amber-700">{log.actor}</span><span className="text-[9px] text-gray-400">{log.timestamp?.toDate ? formatDate(log.timestamp.toDate()) : 'Just now'}</span></div></div> )) ) : ( <p className="text-center text-gray-400 text-xs py-4">No recent activity recorded.</p> )}
                         </div>
                     </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
                             <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
@@ -1281,27 +1333,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                  <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
                                  <button onClick={handleRecoverLostData} className="w-full bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100"><LifeBuoy size={14}/> Recover Lost Data</button>
                              </div>
-                        </div>
-                    </div>
-                    <div className="bg-white p-10 rounded-[50px] border border-amber-100 shadow-xl">
-                        <h4 className="font-serif text-xl font-black uppercase mb-4 text-[#3E2723]">Committee Applications</h4>
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                            {committeeApps && committeeApps.length > 0 ? (
-                                committeeApps.map(app => (
-                                    <div key={app.id} className="p-4 bg-amber-50 rounded-2xl text-xs border border-amber-100">
-                                        <div className="flex justify-between items-start mb-2"><div><p className="font-black text-sm text-[#3E2723]">{app.name}</p><p className="text-[10px] font-mono text-gray-500">{app.memberId}</p></div><span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{app.status === 'for_interview' ? 'Interview' : app.status}</span></div>
-                                        <p className="text-amber-700 font-bold mb-3">{app.committee} • {app.role}</p>
-                                        <div className="flex gap-2 pt-3 border-t border-amber-200/50">
-                                            <button onClick={() => initiateAppAction(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold hover:bg-blue-200 transition-colors">Interview</button>
-                                            <button onClick={() => initiateAppAction(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600 transition-colors">Accept</button>
-                                            <button onClick={() => initiateAppAction(app, 'denied')} className="flex-1 py-2 bg-gray-200 text-gray-600 rounded-lg font-bold hover:bg-gray-300 transition-colors">Deny</button>
-                                            <button onClick={() => handleDeleteApp(app.id)} className="p-2 text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
-                                            <a href={`mailto:${app.email}`} className="p-2 text-blue-400 hover:text-blue-600" title="Email Applicant"><Mail size={14}/></a>
-                                        </div>
-                                        <p className="text-[8px] text-gray-400 uppercase mt-2 text-right">Applied: {formatDate(app.createdAt?.toDate ? app.createdAt.toDate() : new Date())}</p>
-                                    </div>
-                                ))
-                            ) : (<p className="text-xs text-gray-500 italic">No applications found.</p>)}
                         </div>
                     </div>
                 </div>
