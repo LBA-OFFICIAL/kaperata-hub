@@ -1,5 +1,6 @@
 import React from 'react';
-import { User, Shield, IdCard } from 'lucide-react';
+// Changed IdCard to Contact to fix the export error
+import { User, Shield, Contact } from 'lucide-react';
 
 const MemberCard = ({ member }) => {
   return (
@@ -17,7 +18,8 @@ const MemberCard = ({ member }) => {
           <p className="text-[10px] font-bold text-amber-500 uppercase mb-2">{member?.specificTitle || member?.positionCategory}</p>
           
           <div className="flex items-center gap-2 text-gray-400">
-            <IdCard size={12} />
+            {/* Using Contact instead of IdCard */}
+            <Contact size={12} />
             <span className="text-[10px] font-mono font-bold tracking-tighter">{member?.memberId}</span>
           </div>
         </div>
