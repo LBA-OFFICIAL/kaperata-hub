@@ -125,7 +125,12 @@ const Login = ({ onLoginSuccess, initialError }) => {
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#FDFBF7] p-4 text-[#3E2723]">
       <div className="bg-white p-10 rounded-[48px] shadow-2xl max-w-md w-full border-t-[12px] border-[#3E2723]">
         <div className="flex flex-col items-center mb-10 text-center">
-          <img src={getDirectLink(ORG_LOGO_URL)} alt="LBA" className="w-32 h-32 object-contain mb-4" />
+          <img 
+  src={getDirectLink(ORG_LOGO_URL) || "/fallback-logo.png"} 
+  alt="LBA Logo" 
+  className="w-32 h-32 object-contain mb-4" 
+  onError={(e) => { e.target.src = "https://via.placeholder.com/150?text=LBA+LOGO" }}
+/>
           <h1 className="font-serif text-xl font-black uppercase">LPU Baristas' Association</h1>
           <p className="text-[#FDB813] font-black tracking-[0.3em] text-[10px] bg-[#3E2723] px-4 py-1 rounded-full mt-2 uppercase">KAPERATA HUB</p>
         </div>
