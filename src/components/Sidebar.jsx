@@ -1,10 +1,12 @@
 import React from 'react';
 import { 
   Home, Info, BookOpen, GraduationCap, Users, Calendar, 
-  Bell, Heart, Camera, Search, CheckSquare, Database, LogOut 
+  Bell, Heart, Camera, Search, CheckSquare, Database, LogOut,
+  ShieldAlert // Added an icon for the Terminal
 } from 'lucide-react';
 
-const Sidebar = ({ view, setView, logout, mobileMenuOpen, setMobileMenuOpen }) => {
+const Sidebar = ({ view, setView, logout, mobileMenuOpen, setMobileMenuOpen, isSystemAdmin }) => {
+  // Base menu items available to everyone
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home },
     { id: 'about', label: 'About', icon: Info },
@@ -19,6 +21,11 @@ const Sidebar = ({ view, setView, logout, mobileMenuOpen, setMobileMenuOpen }) =
     { id: 'daily_grind', label: 'Tasks', icon: CheckSquare },
     { id: 'members', label: 'Registry', icon: Database },
   ];
+
+  // Safely add the Terminal option only if you are the Superadmin
+  if (isSystemAdmin) {
+    menuItems.push({ id: 'reports', label: 'Terminal', icon: ShieldAlert });
+  }
 
   return (
     <>
