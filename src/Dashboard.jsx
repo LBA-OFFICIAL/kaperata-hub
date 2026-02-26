@@ -4,23 +4,23 @@ import React, { useState, useContext } from 'react';
 import { HubProvider, HubContext } from './contexts/HubContext';
 
 // Components
-import Sidebar from './components/Sidebar';
-import MaintenanceBanner from './components/MaintenanceBanner';
-import DataPrivacyFooter from './components/DataPrivacyFooter';
+import Sidebar from './components/Sidebar.jsx';
+import MaintenanceBanner from './components/MaintenanceBanner.jsx';
+import DataPrivacyFooter from './components/DataPrivacyFooter.jsx';
 
 // Views
-import HomeView from './views/HomeView';
-import MasteryView from './views/MasteryView';
-import AboutView from './views/AboutView';
-import MasterclassView from './views/MasterclassView';
-import TeamView from './views/TeamView';
-import EventView from './views/EventView';
-import AnnouncementsView from './views/AnnouncementsView';
-import MemberCornerView from './views/MemberCornerView';
-import SeriesView from './views/SeriesView';
-import CommitteeHuntView from './views/CommitteeHuntView';
-import TaskBarView from './views/TaskBarView';
-import RegistryView from './views/RegistryView';
+import HomeView from './views/HomeView.jsx';
+import MasteryView from './views/MasteryView.jsx';
+import AboutView from './views/AboutView.jsx';
+import MasterclassView from './views/MasterclassView.jsx';
+import TeamView from './views/TeamView.jsx';
+import EventView from './views/EventView.jsx';
+import AnnouncementsView from './views/AnnouncementsView.jsx';
+import MemberCornerView from './views/MemberCornerView.jsx';
+import SeriesView from './views/SeriesView.jsx';
+import CommitteeHuntView from './views/CommitteeHuntView.jsx';
+import TaskBarView from './views/TaskBarView.jsx';
+import RegistryView from './views/RegistryView.jsx';
 // Note: You can create a simple SettingsView.jsx later or leave a placeholder!
 
 // --- INTERNAL WRAPPER ---
