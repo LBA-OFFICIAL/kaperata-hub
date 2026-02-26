@@ -21,19 +21,20 @@ import SeriesView from './views/SeriesView.jsx';
 import CommitteeHuntView from './views/CommitteeHuntView.jsx';
 import TaskBarView from './views/TaskBarView.jsx';
 import RegistryView from './views/RegistryView.jsx';
+import TerminalView from './views/TerminalView.jsx'; // Added TerminalView
 
 // --- INTERNAL DASHBOARD WRAPPER ---
-const DashboardContent = ({ logout }) => {
+const DashboardContent = ({ logout, isSystemAdmin }) => {
   const [view, setView] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   
-  const { hubSettings, isSuperAdmin, profile } = useContext(HubContext);
+  const { hubSettings, profile, secureKeys, committeeApps, logs } = useContext(HubContext);
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
       
       {/* Maintenance Banner Logic */}
-      {hubSettings?.maintenanceMode && <MaintenanceBanner isSuperAdmin={isSuperAdmin} />}
+      {hubSettings?.maintenanceMode && <MaintenanceBanner isSuperAdmin={isSystemAdmin} />}
       
       <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden relative">
         
@@ -43,7 +44,8 @@ const DashboardContent = ({ logout }) => {
           setView={setView} 
           logout={logout} 
           mobileMenuOpen={mobileMenuOpen} 
-          setMobileMenuOpen={setMobileMenuOpen} 
+          setMobileMenuOpen={setMobileMenuOpen}
+          isSystemAdmin={isSystemAdmin} // Passed prop to Sidebar
         />
 
         {/* Main Content Area */}
@@ -88,6 +90,18 @@ const DashboardContent = ({ logout }) => {
             {view === 'committee_hunt' && <CommitteeHuntView />}
             {view === 'daily_grind' && <TaskBarView />}
             {view === 'members' && <RegistryView />}
+            
+            {/* Terminal / Admin View */}
+            {view === 'reports' && isSystemAdmin && (
+              <TerminalView 
+                committeeApps={committeeApps}
+                logs={logs}
+                secureKeys={secureKeys}
+                currentDailyKey={hubSettings?.dailyKey || "---"}
+                handleRotateSecurityKeys={() => console.log("Feature coming soon")}
+              />
+            )}
+
             {view === 'settings' && (
                 <div className="p-10 text-center bg-white rounded-[40px] border-2 border-dashed border-amber-200">
                     <p className="font-black uppercase text-amber-900">Settings View Coming Soon</p>
@@ -103,10 +117,10 @@ const DashboardContent = ({ logout }) => {
 };
 
 // --- EXPORTED ROOT COMPONENT ---
-export default function Dashboard({ user, profile, setProfile, logout }) {
+export default function Dashboard({ user, profile, setProfile, logout, isSystemAdmin }) {
   return (
     <HubProvider profile={profile}>
-      <DashboardContent logout={logout} />
+      <DashboardContent logout={logout} isSystemAdmin={isSystemAdmin} />
     </HubProvider>
   );
 }
