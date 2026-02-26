@@ -9,16 +9,16 @@ const Sidebar = ({ view, setView, logout, mobileMenuOpen, setMobileMenuOpen, isS
   // Base menu items available to everyone
   const menuItems = [
     { id: 'home', label: 'Home', icon: Home },
-    { id: 'about', label: 'About', icon: Info },
+    { id: 'about', label: 'About Us', icon: Info },
     { id: 'masterclass', label: 'Masterclass', icon: BookOpen },
-    { id: 'mastery', label: 'Mastery', icon: GraduationCap },
-    { id: 'team', label: 'The Team', icon: Users },
-    { id: 'events', label: 'Events', icon: Calendar },
-    { id: 'announcements', label: 'Notices', icon: Bell },
-    { id: 'members_corner', label: 'Corner', icon: Heart },
-    { id: 'series', label: 'Diaries', icon: Camera },
-    { id: 'committee_hunt', label: 'Hunt', icon: Search },
-    { id: 'daily_grind', label: 'Tasks', icon: CheckSquare },
+    { id: 'mastery', label: 'Mastery Program', icon: GraduationCap },
+    { id: 'team', label: 'Brew Crew', icon: Users },
+    { id: 'events', label: 'What's Brewing?', icon: Calendar },
+    { id: 'announcements', label: 'The Grind Report', icon: Bell },
+    { id: 'members_corner', label: 'Member's Corner', icon: Heart },
+    { id: 'series', label: 'Barista Diaries', icon: Camera },
+    { id: 'committee_hunt', label: 'Committee Hunt', icon: Search },
+    { id: 'daily_grind', label: 'The Task Bar', icon: CheckSquare },
     { id: 'members', label: 'Registry', icon: Database },
   ];
 
