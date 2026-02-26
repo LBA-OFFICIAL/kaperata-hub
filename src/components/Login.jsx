@@ -60,7 +60,8 @@ const Login = ({ onLoginSuccess, initialError }) => {
 
       const newProfile = await runTransaction(db, async (transaction) => {
         const counterSnap = await transaction.get(counterRef);
-        const nextCount = (counterSnap.exists() ? counterSnap.data().memberCount || 0 : 0) + 1;
+        // FIX: renamed to registrationCount to avoid redeclaration
+        const registrationCount = (counterSnap.exists() ? counterSnap.data().memberCount || 0 : 0) + 1;
         
         let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid';
         if (inputKey) {
@@ -70,7 +71,7 @@ const Login = ({ onLoginSuccess, initialError }) => {
           else if (uk === secureKeys?.commKey?.toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
         }
 
-        const assignedId = generateLBAId(pc, nextCount - 1);
+        const assignedId = generateLBAId(pc, registrationCount - 1);
         const meta = getMemberIdMeta();
         const profileData = {
           uid: currentUser.uid,
@@ -92,7 +93,7 @@ const Login = ({ onLoginSuccess, initialError }) => {
         };
 
         transaction.set(doc(registryRef, assignedId), profileData);
-        transaction.set(counterRef, { memberCount: nextCount }, { merge: true });
+        transaction.set(counterRef, { memberCount: registrationCount }, { merge: true });
         return profileData;
       });
 
