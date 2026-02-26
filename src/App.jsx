@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { getFirestore, collection, query, where, onSnapshot, doc, setDoc, updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, orderBy, writeBatch, arrayUnion, arrayRemove, runTransaction } from 'firebase/firestore'; 
-import { Users, Calendar, Award, Bell, LogOut, Home, Plus, ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Download, Lock, BadgeCheck, MapPin, Pen, Send, MessageSquare, TrendingUp, Mail, Trash2, Search, CheckCircle2, Settings2, ChevronRight, Facebook, Instagram, LifeBuoy, Banknote, AlertTriangle, AlertCircle, History, Cake, User, Trophy, Clock, Briefcase, Music, Database, Image as ImageIcon, RefreshCcw, GraduationCap, AlertOctagon, FileText, FileBarChart, ClipboardList, CheckSquare2, ExternalLink as Link2, BarChart2, Smile, UserCheck, Printer } from 'lucide-react';
+import { Users, Calendar, Award, Bell, LogOut, Home, Plus, ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Download, Lock, BadgeCheck, MapPin, Pen, Send, MessageSquare, TrendingUp, Mail, Trash2, Search, CheckCircle2, Settings2, ChevronRight, Facebook, Instagram, LifeBuoy, Banknote, AlertTriangle, AlertCircle, History, Cake, User, Trophy, Clock, Briefcase, Music, Database, Image as ImageIcon, RefreshCcw, GraduationCap, AlertOctagon, FileText, FileBarChart, ClipboardList, CheckSquare2, ExternalLink as Link2, BarChart2, Smile, UserCheck, Printer, Target } from 'lucide-react';
 
 let firebaseConfig;
 if (typeof __firebase_config !== 'undefined') { try { firebaseConfig = JSON.parse(__firebase_config); } catch (e) { firebaseConfig = {}; } } 
@@ -18,6 +18,10 @@ const PROGRAMS = ["CAKO", "CLOCA", "CLOHS", "HRA", "ITM/ITTM"];
 const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Alumni", "Org Adviser", "Blacklisted"];
 const MONTHS = [{ value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" }, { value: 4, label: "April" }, { value: 5, label: "May" }, { value: 6, label: "June" }, { value: 7, label: "July" }, { value: 8, label: "August" }, { value: 9, label: "September" }, { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }];
 const DEFAULT_MASTERCLASS_MODULES = [{ id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" }, { id: 2, title: "Equipment Familiarization", short: "Equipment" }, { id: 3, title: "Manual Brewing", short: "Brewing" }, { id: 4, title: "Espresso Machine", short: "Espresso" }, { id: 5, title: "Signature Beverage (Advanced)", short: "Sig Bev" }];
+
+// MASTERY PROGRAM CONSTANTS
+const DEFAULT_MASTERY = { paths: [], status: 'Not Started', startDate: '', milestones: { Brewer: {Q1:false, Q2:false, Q3:false, Q4:false}, Artist: {Q1:false, Q2:false, Q3:false, Q4:false}, Alchemist: {Q1:false, Q2:false, Q3:false, Q4:false} } };
+
 const COMMITTEES_INFO = [
   { id: "Arts", title: "Arts & Design", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80", description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.", roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"] },
   { id: "Media", title: "Media & Documentation", image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80", description: "Capturing the moments. We handle photography, videography, and highlights of every event.", roles: ["Photography", "Videography", "Editing"] },
@@ -90,12 +94,16 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 
 const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [view, setView] = useState('home'); const [members, setMembers] = useState([]); const [events, setEvents] = useState([]); const [announcements, setAnnouncements] = useState([]); const [suggestions, setSuggestions] = useState([]); const [committeeApps, setCommitteeApps] = useState([]); const [userApplications, setUserApplications] = useState([]); const [tasks, setTasks] = useState([]); const [projects, setProjects] = useState([]); const [expandedProjectId, setExpandedProjectId] = useState(null); const [logs, setLogs] = useState([]); const [polls, setPolls] = useState([]); const [seriesPosts, setSeriesPosts] = useState([]); const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] }); const [showPollForm, setShowPollForm] = useState(false); const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' }); const [showSeriesForm, setShowSeriesForm] = useState(false); const [editingSeriesId, setEditingSeriesId] = useState(null); const [showProjectForm, setShowProjectForm] = useState(false); const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); const [editingProject, setEditingProject] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' }); const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' }); const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); const [showCertificate, setShowCertificate] = useState(false); const [adminMcModule, setAdminMcModule] = useState(1); const [adminMcSearch, setAdminMcSearch] = useState(''); const [selectedMcMembers, setSelectedMcMembers] = useState([]); const [editingMcCurriculum, setEditingMcCurriculum] = useState(false); const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' }); const [isAnniversary, setIsAnniversary] = useState(false); const [editingMember, setEditingMember] = useState(null); const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' }); const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' }); const [showAccoladeModal, setShowAccoladeModal] = useState(null); const [accoladeText, setAccoladeText] = useState(""); const [showTaskForm, setShowTaskForm] = useState(false); const [newTask, setNewTask] = useState({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: '' }); const [editingTask, setEditingTask] = useState(null); const [renewalRef, setRenewalRef] = useState(''); const [renewalMethod, setRenewalMethod] = useState('gcash'); const [renewalCashKey, setRenewalCashKey] = useState(''); const [newGcashNumber, setNewGcashNumber] = useState(''); const [showEventForm, setShowEventForm] = useState(false); const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); const [editingEvent, setEditingEvent] = useState(null); const [showAnnounceForm, setShowAnnounceForm] = useState(false); const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' }); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const [searchQuery, setSearchQuery] = useState(""); const [selectedBaristas, setSelectedBaristas] = useState([]); const [isImporting, setIsImporting] = useState(false); const [confirmDelete, setConfirmDelete] = useState(null); const fileInputRef = useRef(null); const currentDailyKey = getDailyCashPasskey(); const [settingsForm, setSettingsForm] = useState({ ...profile }); const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' }); const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); const [savingSettings, setSavingSettings] = useState(false); const [financialFilter, setFinancialFilter] = useState('all'); const [isEditingLegacy, setIsEditingLegacy] = useState(false); const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' }); const [suggestionText, setSuggestionText] = useState(""); const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' }); const [submittingApp, setSubmittingApp] = useState(false); const [attendanceEvent, setAttendanceEvent] = useState(null); const [exportFilter, setExportFilter] = useState('all'); const [currentPage, setCurrentPage] = useState(1); const itemsPerPage = 10;
+  
+  // Mastery Program Admin States
+  const [adminMasteryMemberId, setAdminMasteryMemberId] = useState('');
+
   const [lastVisited, setLastVisited] = useState(() => { try { return JSON.parse(localStorage.getItem('lba_last_visited') || '{}'); } catch { return {}; } });
 
   // 🛡️ THE 4-TIER ACCESS SYSTEM 🛡️
   const isSuperAdmin = useMemo(() => profile?.role === 'superadmin', [profile?.role]);
   const isOfficer = useMemo(() => isSuperAdmin || ['OFFICER'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isSuperAdmin]);
-  const isCommitteePlus = useMemo(() => isOfficer || ['COMMITTEE'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isOfficer]);
+  const isCommitteePlus = useMemo(() => isOfficer || ['COMMITTEE'].includes(String(profile?.positionCategory || '').toUpperCase()) || (String(profile?.positionCategory || '').toUpperCase() === 'COMMITTEE' && String(profile?.specificTitle || '').toUpperCase().includes('HEAD')), [profile?.positionCategory, isOfficer]);
   const isCommitteeHead = useMemo(() => String(profile?.positionCategory || '').toUpperCase() === 'COMMITTEE' && String(profile?.specificTitle || '').toUpperCase().includes('HEAD'), [profile?.positionCategory, profile?.specificTitle]);
   
   const isExpired = useMemo(() => profile?.status === 'expired', [profile?.status]);
@@ -154,6 +162,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   useEffect(() => { setCurrentPage(1); }, [searchQuery, exportFilter]);
 
   const updateLastVisited = (page) => { const newVisits = { ...lastVisited, [page]: new Date().toISOString() }; setLastVisited(newVisits); localStorage.setItem('lba_last_visited', JSON.stringify(newVisits)); };
+  
   const handleExportCSV = () => { 
       if (!members) return; 
       const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined", "Volunteer Shifts", "Masterclass", "Accolades"]; 
@@ -161,21 +170,13 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           const volCount = events.reduce((acc, ev) => acc + (ev.shifts?.filter(s => s.volunteers?.includes(m.memberId)).length || 0), 0);
           const mcCompleted = [1,2,3,4,5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(m.memberId)).map(id => `Mod ${id}`).join(', ');
           return [ 
-              m?.memberId, 
-              m?.name, 
-              m?.email, 
-              m?.positionCategory, 
-              m?.specificTitle, 
-              m?.committee || '', 
-              m?.status, 
-              getSafeDateString(m?.joinedDate) || '',
-              volCount,
-              mcCompleted,
-              (m?.accolades || []).join('; ')
+              m?.memberId, m?.name, m?.email, m?.positionCategory, m?.specificTitle, m?.committee || '', 
+              m?.status, getSafeDateString(m?.joinedDate) || '', volCount, mcCompleted, (m?.accolades || []).join('; ')
           ];
       }); 
       generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`); 
   };
+  
   const handleBulkEmail = () => { const targets = selectedBaristas.length > 0 ? members.filter(m => m && selectedBaristas.includes(m.memberId)) : members.filter(m => m != null); const emails = targets.map(m => m?.email).filter(e => e).join(','); if (emails) window.location.href = `mailto:?bcc=${emails}`; };
   const toggleSelectAll = () => { if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) { setSelectedBaristas([]); } else { setSelectedBaristas(paginatedRegistry.filter(m => m != null).map(m => m.memberId)); } };
   const toggleSelectBarista = (id) => { if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id)); else setSelectedBaristas(prev => [...prev, id]); };
@@ -192,8 +193,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)); setSuggestions(data); });
       let unsubApps = () => {}; if (isSuperAdmin) unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => setUserApplications(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-      let unsubProjects = () => {}; if (isOfficer) unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => setProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-      let unsubTasks = () => {}; if (isOfficer) unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubProjects = () => {}; if (isCommitteePlus) unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => setProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubTasks = () => {}; if (isCommitteePlus) unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       let unsubLogs = () => {}; if (isSuperAdmin) unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => setPolls(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => setSeriesPosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
@@ -202,7 +203,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => { if(s.exists()) { setLegacyContent(s.data()); const data = s.data(); setLegacyForm({ ...data, achievements: data.achievements || [], imageUrl: data.imageUrl || '', galleryUrl: data.galleryUrl || '', imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' } }); if (data.establishedDate) { const today = new Date(); const est = new Date(data.establishedDate); if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) setIsAnniversary(true); } } });
       const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => { if(s.exists()) setMasterclassData(s.data()); else setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); });
       return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubApps(); unsubUserApps(); unsubProjects(); unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); };
-  }, [user, isSuperAdmin, isOfficer, profile.memberId]);
+  }, [user, isSuperAdmin, isOfficer, isCommitteePlus, profile.memberId]);
 
   useEffect(() => { if (attendanceEvent && events.length > 0) { const liveEvent = events.find(e => e.id === attendanceEvent.id); if (liveEvent) setAttendanceEvent(liveEvent); } }, [events]);
   useEffect(() => { const head = document.head; let linkIcon = document.querySelector("link[rel~='icon']"); if (!linkIcon) { linkIcon = document.createElement('link'); linkIcon.rel = 'icon'; head.appendChild(linkIcon); } linkIcon.href = APP_ICON_URL; }, []);
@@ -301,10 +302,47 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleRemoveAccolade = async (accoladeToRemove) => { if(!confirm("Remove this accolade?")) return; try { const docId = showAccoladeModal.id || showAccoladeModal.memberId; const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); await updateDoc(memberRef, { accolades: arrayRemove(accoladeToRemove) }); const updated = showAccoladeModal.currentAccolades.filter(a => a !== accoladeToRemove); setShowAccoladeModal(prev => ({...prev, currentAccolades: updated})); logAction("Remove Accolade", `Removed '${accoladeToRemove}' from ${docId}`); } catch(e) { alert("Failed to remove accolade"); } };
   const handleResetPassword = async (memberId, email, name) => { if (!confirm(`Reset password for ${name}?`)) return; const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase(); const subject = "LBA Password Reset Request"; const body = `Dear ${name},\n\nWe received a request to reset the password associated with your membership account at LPU Baristas' Association.\nTo regain access to your account, please use the following credentials. For security purposes, we recommend you copy and paste these details directly to avoid errors.\n\nMember ID: ${memberId}\nTemporary Password: ${tempPassword}\n\nHow to Access Your Account:\nClick the link below to access the secure login portal:\n${window.location.origin}\n\nEnter your Member ID and the Temporary Password provided above.\nOnce logged in, you will be prompted to create a new, permanent password immediately.\n\nPlease Note:\nThis temporary password will expire in 1 hour (manual enforcement required).\nIf you did not request this password reset, please contact our support team immediately at lbaofficial.pr@gmail.com and do not click the link above.\n\nThank you,\nThe LPU Baristas' Association Support Team\n${window.location.origin}`; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { password: tempPassword }); window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; logAction("Reset Password", `Reset password for ${memberId}`); alert("Password reset! Opening email client..."); } catch (err) { alert("Failed to reset password."); } };
 
+  // MASTERY PROGRAM FUNCTIONS
+  const handleSelectPaths = async (pathsToSelect) => {
+      if (!confirm(`Are you sure you want to commit to: ${pathsToSelect.join(', ')}?`)) return;
+      try {
+          const newMastery = { paths: pathsToSelect, status: 'Trainee', startDate: new Date().toISOString(), milestones: DEFAULT_MASTERY.milestones };
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), { mastery: newMastery });
+          setProfile(prev => ({ ...prev, mastery: newMastery }));
+          alert("Welcome to the Mastery Program!");
+      } catch (e) { alert("Failed to save selection."); }
+  };
+  
+  const handleToggleMilestone = async (targetMemberId, currentMasteryData, track, quarter) => {
+      if (!isOfficer) return;
+      const updatedMilestones = { ...currentMasteryData.milestones };
+      updatedMilestones[track][quarter] = !updatedMilestones[track][quarter];
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetMemberId), { 'mastery.milestones': updatedMilestones });
+          logAction("Update Mastery", `Updated ${track} ${quarter} for ${targetMemberId}`);
+      } catch (e) { alert("Failed to update milestone."); }
+  };
+
+  const calculateEligibleCertificate = (masteryData) => {
+      if (!masteryData || !masteryData.paths || masteryData.paths.length === 0) return null;
+      const m = masteryData.milestones;
+      const checkTrack = (t) => m[t]?.Q1 && m[t]?.Q2 && m[t]?.Q3 && m[t]?.Q4;
+      const hasBrewer = checkTrack('Brewer');
+      const hasArtist = checkTrack('Artist');
+      const hasAlchemist = checkTrack('Alchemist');
+      
+      if (hasBrewer && hasArtist && hasAlchemist) return { type: 'TYPE_D_MASTER', title: 'Master of the Craft', color: 'Gold' };
+      if (hasBrewer) return { type: 'TYPE_A_BREWER', title: 'Certified Craft Brewer', color: 'Bronze' };
+      if (hasArtist) return { type: 'TYPE_B_ARTIST', title: 'Certified Latte Artist', color: 'Silver' };
+      if (hasAlchemist) return { type: 'TYPE_C_ALCHEMIST', title: 'Certified Beverage Alchemist', color: 'Copper' };
+      return null;
+  };
+
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: Home },
     { id: 'about', label: 'Legacy Story', icon: History },
     { id: 'masterclass', label: 'Masterclass', icon: GraduationCap },
+    { id: 'mastery', label: 'Mastery Program', icon: Sparkles },
     { id: 'team', label: 'Brew Crew', icon: Users },
     { id: 'events', label: "What's Brewing?", icon: Calendar, hasNotification: notifications.events },
     { id: 'announcements', label: 'Grind Report', icon: Bell, hasNotification: notifications.announcements },
@@ -706,7 +744,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     <div className="p-6 bg-white rounded-3xl border border-dashed border-gray-200 text-center"><p className="text-xs font-bold text-gray-400 uppercase">All caught up!</p><p className="text-[10px] text-gray-300">No new notices to display.</p></div>
                                 : announcements.slice(0, 2).map(ann => (
                                     <div key={ann.id} className="bg-white p-6 rounded-3xl border border-amber-100 shadow-sm relative group hover:shadow-md transition-shadow">
-                                        {isOfficer && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-full text-red-500 hover:text-red-600 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button></div>)}
+                                        {isCommitteePlus && (<div className="absolute top-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditAnnouncement(ann)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={14}/></button><button onClick={() => handleDeleteAnnouncement(ann.id)} className="p-2 bg-white rounded-full text-red-500 hover:text-red-600 hover:bg-red-50 shadow-sm" title="Delete"><Trash2 size={14}/></button></div>)}
                                         <div className="flex justify-between items-start mb-2"><h4 className="font-black text-sm uppercase text-[#3E2723] pr-16">{ann.title}</h4><span className="text-[8px] font-bold text-gray-400 uppercase">{formatDate(ann.date)}</span></div>
                                         <p className="text-xs text-gray-600 line-clamp-2">{ann.content}</p>
                                     </div>
@@ -722,7 +760,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     const { day, month } = getEventDateParts(ev.startDate, ev.endDate);
                                     return (
                                         <div key={ev.id} className="bg-white p-4 rounded-3xl border border-amber-100 flex items-center gap-4 hover:shadow-md transition-shadow relative group">
-                                            {isOfficer && (<div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditEvent(ev)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={12}/></button></div>)}
+                                            {isCommitteePlus && (<div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10"><button onClick={() => handleEditEvent(ev)} className="p-2 bg-white rounded-full text-amber-500 hover:text-amber-600 hover:bg-amber-50 shadow-sm" title="Edit"><Pen size={12}/></button></div>)}
                                             <div className="bg-[#3E2723] text-[#FDB813] w-12 h-12 rounded-xl flex flex-col items-center justify-center font-black leading-tight shrink-0"><span className="text-xs font-black">{day}</span><span className="text-[8px] uppercase">{month}</span></div>
                                             <div className="min-w-0 pr-12"><h4 className="font-black text-xs uppercase truncate">{ev.name}</h4><p className="text-[10px] text-gray-500 truncate">{ev.venue} • {ev.startTime}</p></div>
                                         </div>
@@ -745,6 +783,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                 {volunteerCount > 0 && (<div className="flex flex-col items-center gap-1">{(() => { let tier = { icon: '🤚', label: 'Volunteer', color: 'bg-teal-50 text-teal-900/60' }; if (volunteerCount >= 15) tier = { icon: '👑', label: 'Super Vol.', color: 'bg-rose-100 text-rose-900/60' }; else if (volunteerCount >= 9) tier = { icon: '🚀', label: 'Adv. Vol.', color: 'bg-purple-100 text-purple-900/60' }; else if (volunteerCount >= 4) tier = { icon: '🔥', label: 'Inter. Vol.', color: 'bg-orange-100 text-orange-900/60' }; const textColor = tier.color.split(' ')[1] || 'text-gray-500'; const bgColor = tier.color.split(' ')[0] || 'bg-gray-100'; return (<div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square ${bgColor} rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2`}><div className="text-2xl md:text-3xl mb-1">{tier.icon}</div><span className={`text-[8px] md:text-[10px] font-black uppercase ${textColor} leading-none tracking-tight`}>{tier.label}</span></div>); })()}</div>)}
                                 {(() => {
                                     const myBadges = [];
+                                    
+                                    // Mastery Certifications
+                                    const mCert = calculateEligibleCertificate(profile.mastery);
+                                    if (mCert) {
+                                        const certStyles = {
+                                            'Gold': 'from-yellow-300 to-yellow-50 text-yellow-900',
+                                            'Silver': 'from-slate-300 to-slate-50 text-slate-800',
+                                            'Bronze': 'from-amber-400 to-amber-100 text-amber-900',
+                                            'Copper': 'from-orange-400 to-orange-100 text-orange-900'
+                                        };
+                                        myBadges.push(<div key="mastery-cert" className="flex flex-col items-center gap-1"><div title={mCert.title} className={`w-full aspect-square bg-gradient-to-br ${certStyles[mCert.color] || certStyles['Gold']} rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 shadow-sm`}><div className="text-2xl md:text-3xl mb-1">🏅</div><span className="text-[8px] md:text-[10px] font-black uppercase leading-none tracking-tight line-clamp-2">{mCert.title.split(' ').pop()}</span></div></div>);
+                                    }
+
+                                    // Masterclass Modules
                                     DEFAULT_MASTERCLASS_MODULES.forEach(mod => {
                                         if (masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId)) {
                                             const details = masterclassData.moduleDetails?.[mod.id] || {}; const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"]; const iconToUse = details.icon || defaultIcons[mod.id-1]; const displayTitle = details.title || mod.short; 
@@ -755,7 +807,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                                     const has2 = masterclassData.moduleAttendees?.[2]?.includes(profile.memberId);
                                     const optMods = [3, 4, 5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(profile.memberId)).length;
                                     if (has1 && has2 && optMods >= 2) { 
-                                        myBadges.unshift(<div key="mc-master" className="flex flex-col items-center gap-1"><div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 shadow-lg border-2 border-white"><div className="text-2xl md:text-3xl mb-1">🎓</div><span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900 leading-none">Master</span></div></div>); 
+                                        myBadges.unshift(<div key="mc-master" className="flex flex-col items-center gap-1"><div title="Certified Masterclass Graduate" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 shadow-lg border-2 border-white"><div className="text-2xl md:text-3xl mb-1">🎓</div><span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900 leading-none">Graduate</span></div></div>); 
                                     }
                                     return myBadges;
                                 })()}
@@ -765,6 +817,112 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                   </div>
                 )}
+
+            {view === 'mastery' && (
+                <div className="space-y-8 animate-fadeIn">
+                    <div className="text-center bg-[#3E2723] text-white p-10 rounded-[48px] relative overflow-hidden">
+                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                        <div className="relative z-10">
+                            <Sparkles size={40} className="mx-auto text-[#FDB813] mb-4"/>
+                            <h3 className="font-serif text-4xl font-black uppercase mb-2">Mastery Program</h3>
+                            <p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Elevate Your Craft. Choose your path and achieve mastery.</p>
+                        </div>
+                    </div>
+
+                    {(!profile.mastery || !profile.mastery.paths || profile.mastery.paths.length === 0) ? (
+                        <div className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm text-center">
+                            <h4 className="font-black text-xl text-[#3E2723] uppercase mb-6">Choose Your Path</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                <div className="p-6 rounded-3xl border-2 border-amber-200 hover:bg-amber-50 transition-colors cursor-pointer group">
+                                    <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">☕</div><h5 className="font-black text-lg uppercase text-[#3E2723]">Brewer</h5><p className="text-xs text-gray-500 mt-2">Master the art of extraction, TDS, and recipe creation.</p>
+                                </div>
+                                <div className="p-6 rounded-3xl border-2 border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer group">
+                                    <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">🎨</div><h5 className="font-black text-lg uppercase text-[#3E2723]">Artist</h5><p className="text-xs text-gray-500 mt-2">Perfect your pours, symmetry, and advanced latte art.</p>
+                                </div>
+                                <div className="p-6 rounded-3xl border-2 border-orange-200 hover:bg-orange-50 transition-colors cursor-pointer group">
+                                    <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">🧪</div><h5 className="font-black text-lg uppercase text-[#3E2723]">Alchemist</h5><p className="text-xs text-gray-500 mt-2">Develop signature beverages and flavor pairings.</p>
+                                </div>
+                            </div>
+                            <button onClick={() => handleSelectPaths(['Brewer', 'Artist', 'Alchemist'])} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-full font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg hover:shadow-xl">Embark on the Master Track (Triple Crown)</button>
+                            <p className="text-xs text-gray-400 mt-4">Or contact an officer to enroll in a single specialist track.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {profile.mastery.paths.map(track => {
+                                    const ms = profile.mastery.milestones[track] || {};
+                                    const progress = Object.values(ms).filter(v => v).length;
+                                    const percent = (progress / 4) * 100;
+                                    return (
+                                        <div key={track} className="bg-white p-8 rounded-[32px] border border-amber-100 shadow-sm relative overflow-hidden">
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div><h4 className="font-serif text-2xl font-black uppercase text-[#3E2723]">{track} Path</h4><p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Status: {progress === 4 ? 'Completed' : 'In Progress'}</p></div>
+                                                <div className="text-right"><span className="text-2xl font-black text-amber-600">{progress}/4</span><p className="text-[8px] uppercase font-bold text-gray-400">Milestones</p></div>
+                                            </div>
+                                            <div className="w-full bg-gray-100 rounded-full h-2 mb-8"><div className="bg-[#3E2723] h-2 rounded-full transition-all duration-1000" style={{ width: `${percent}%` }}></div></div>
+                                            <div className="grid grid-cols-4 gap-2 text-center">
+                                                {['Q1', 'Q2', 'Q3', 'Q4'].map((q, i) => (
+                                                    <div key={q} className={`p-3 rounded-2xl flex flex-col items-center justify-center gap-2 border-2 ${ms[q] ? 'bg-green-50 border-green-200 text-green-700' : 'bg-gray-50 border-gray-100 text-gray-400'}`}>
+                                                        {ms[q] ? <CheckCircle2 size={18}/> : <Lock size={18}/>}
+                                                        <span className="text-[10px] font-black">{q}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Eligibility Box */}
+                            {calculateEligibleCertificate(profile.mastery) && (
+                                <div className="bg-gradient-to-r from-amber-500 to-yellow-400 p-8 rounded-[32px] text-white flex items-center justify-between shadow-lg">
+                                    <div><h4 className="font-serif text-2xl font-black uppercase mb-1">Graduation Ready</h4><p className="text-sm font-medium">You have met the requirements for certification!</p></div>
+                                    <div className="bg-white text-amber-600 px-6 py-3 rounded-full font-black uppercase text-xs flex items-center gap-2 shadow-sm"><Award size={16}/> Certificate Unlocked in Trophy Case</div>
+                                </div>
+                            )}
+
+                            {/* Admin Checkoff Panel */}
+                            {isOfficer && (
+                                <div className="bg-amber-50 p-8 rounded-[32px] border border-amber-200 mt-12">
+                                    <h4 className="font-black text-sm uppercase text-amber-800 mb-6 flex items-center gap-2"><Settings2 size={18}/> Trainer Controls</h4>
+                                    <div className="flex flex-col md:flex-row gap-4 mb-6">
+                                        <select className="p-4 rounded-xl border border-amber-200 text-xs font-bold uppercase flex-1 outline-none" value={adminMasteryMemberId} onChange={e => setAdminMasteryMemberId(e.target.value)}>
+                                            <option value="">Select Trainee...</option>
+                                            {members.filter(m => m != null && m.mastery && m.mastery.paths?.length > 0).map(m => (<option key={m.memberId} value={m.memberId}>{m.name} ({m.memberId})</option>))}
+                                        </select>
+                                    </div>
+                                    
+                                    {adminMasteryMemberId && (() => {
+                                        const trainee = members.find(m => m.memberId === adminMasteryMemberId);
+                                        if (!trainee || !trainee.mastery) return null;
+                                        return (
+                                            <div className="bg-white p-6 rounded-2xl border border-amber-100 shadow-sm space-y-6">
+                                                <div className="border-b border-gray-100 pb-4"><h5 className="font-black text-[#3E2723] uppercase text-lg">{trainee.name}</h5><p className="text-xs text-gray-500 font-bold uppercase tracking-widest mt-1">Enrolled: {trainee.mastery.paths.join(', ')}</p></div>
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                    {trainee.mastery.paths.map(track => (
+                                                        <div key={track} className="space-y-3">
+                                                            <h6 className="text-[10px] font-black uppercase text-gray-400 border-b pb-2">{track} Track</h6>
+                                                            {['Q1', 'Q2', 'Q3', 'Q4'].map(q => {
+                                                                const isDone = trainee.mastery.milestones[track][q];
+                                                                return (
+                                                                    <div key={q} className="flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100 hover:border-amber-200 transition-colors">
+                                                                        <span className="text-xs font-bold text-gray-700">{q} Milestone</span>
+                                                                        <button onClick={() => handleToggleMilestone(trainee.memberId, trainee.mastery, track, q)} className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-colors ${isDone ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600 hover:bg-amber-100 hover:text-amber-800'}`}>{isDone ? 'Approved ✓' : 'Approve'}</button>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {view === 'about' && (
                 <div className="space-y-8 animate-fadeIn text-[#3E2723]">
@@ -1043,7 +1201,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                                 {suggestions.map(s => (
                                     <div key={s.id} className="bg-white p-4 rounded-2xl border border-gray-100 relative group">
-                                        {isCommitteePlus && <button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12}/></button>}
+                                        {isOfficer && <button onClick={() => handleDeleteSuggestion(s.id)} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12}/></button>}
                                         <p className="text-gray-800 text-xs font-medium italic">"{s.text}"</p>
                                         <p className="text-[8px] font-bold text-gray-400 uppercase mt-2 text-right">{s.createdAt?.toDate ? formatDate(s.createdAt.toDate()) : "Just now"}</p>
                                     </div>
@@ -1286,7 +1444,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                 </div>
             )}
-
             {view === 'reports' && isSuperAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6"><StatIcon icon={TrendingUp} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div></div>
