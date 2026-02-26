@@ -1,4 +1,3 @@
-// --- CONSTANTS ---
 export const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
 export const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMPvN_dIM3fIwY";
 export const OFFICER_TITLES = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Auditor", "Business Manager", "P.R.O.", "Overall Committee Head"];
@@ -54,13 +53,17 @@ export const getDirectLink = (url) => {
   if (!url || typeof url !== 'string') return ""; 
   if (url.includes('drive.google.com')) { 
     const idMatch = url.match(/[-\w]{25,}/); 
-    if (idMatch) return `https://lh3.googleusercontent.com/d/$${idMatch[0]}`; 
+    // FIXED: Corrected backtick template literal
+    if (idMatch) return `https://lh3.googleusercontent.com/d/$$${idMatch[0]}`; 
   } 
   return url; 
 };
 
 export const generateCSV = (headers, rows, filename) => { 
-  const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n'); 
+  const csvContent = [
+    headers.join(','), 
+    ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
+  ].join('\n'); 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); 
   const link = document.createElement("a"); 
   if (link.download !== undefined) { 
@@ -81,11 +84,15 @@ export const getMemberIdMeta = () => {
   const year = now.getFullYear(); 
   let syStart = year % 100; 
   let syEnd = (year + 1) % 100; 
+  // Academic Year usually shifts in August
   if (month < 8) { 
     syStart = (year - 1) % 100; 
     syEnd = year % 100; 
   } 
-  return { sy: `${syStart}${syEnd}`, sem: (month >= 8 || month <= 12) && month >= 8 ? "1" : "2" }; 
+  return { 
+    sy: `${syStart}${syEnd}`, 
+    sem: (month >= 8 || month <= 12) && month >= 8 ? "1" : "2" 
+  }; 
 };
 
 export const generateLBAId = (category, currentCount = 0) => { 
