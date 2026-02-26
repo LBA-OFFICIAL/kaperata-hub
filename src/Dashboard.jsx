@@ -1,29 +1,107 @@
-import React, { useState } from 'react';
-// We will create these files next!
-// import Sidebar from './components/Sidebar';
-// import HomeView from './views/HomeView';
-// import EventView from './views/EventView';
+import React, { useState, useContext } from 'react';
 
-const Dashboard = ({ user, profile, setProfile, logout }) => {
-  // This state controls which page we are looking at
+// Context & State
+import { HubProvider, HubContext } from './contexts/HubContext';
+
+// Components
+import Sidebar from './components/Sidebar';
+import MaintenanceBanner from './components/MaintenanceBanner';
+import DataPrivacyFooter from './components/DataPrivacyFooter';
+
+// Views
+import HomeView from './views/HomeView';
+import MasteryView from './views/MasteryView';
+import AboutView from './views/AboutView';
+import MasterclassView from './views/MasterclassView';
+import TeamView from './views/TeamView';
+import EventView from './views/EventView';
+import AnnouncementsView from './views/AnnouncementsView';
+import MemberCornerView from './views/MemberCornerView';
+import SeriesView from './views/SeriesView';
+import CommitteeHuntView from './views/CommitteeHuntView';
+import TaskBarView from './views/TaskBarView';
+import RegistryView from './views/RegistryView';
+// Note: You can create a simple SettingsView.jsx later or leave a placeholder!
+
+// --- INTERNAL WRAPPER ---
+// We use an internal component so we can use "useContext" inside the HubProvider
+const DashboardContent = ({ logout }) => {
   const [view, setView] = useState('home');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  
+  const { hubSettings, isSuperAdmin, profile } = useContext(HubContext);
 
   return (
-    <div className="flex min-h-screen bg-[#FDFBF7] text-[#3E2723] font-sans relative overflow-hidden">
+    <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
       
-      {/* 1. Your Sidebar Navigation */}
-      {/* <Sidebar view={view} setView={setView} logout={logout} profile={profile} /> */}
+      {/* 1. Global Maintenance Banners */}
+      {hubSettings.maintenanceMode && <MaintenanceBanner isSuperAdmin={isSuperAdmin} />}
+      
+      <div className="flex-1 flex flex-col md:flex-row min-w-0 overflow-hidden relative">
+        
+        {/* 2. Sidebar Navigation */}
+        <Sidebar 
+          view={view} 
+          setView={setView} 
+          logout={logout} 
+          mobileMenuOpen={mobileMenuOpen} 
+          setMobileMenuOpen={setMobileMenuOpen} 
+        />
 
-      {/* 2. Your Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-10 relative custom-scrollbar">
-        
-        {/* We will route your views here */}
-        {view === 'home' && <div>Home View Placeholder</div>}
-        {view === 'events' && <div>Events View Placeholder</div>}
-        
-      </main>
+        {/* 3. Main Content Area */}
+        <main className="flex-1 overflow-y-auto p-4 md:p-10 relative custom-scrollbar">
+          
+          {/* Header Bar */}
+          <header className="flex justify-between items-center mb-10">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-[#3E2723]">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+              </button>
+              <h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2>
+            </div>
+            
+            <div onClick={() => setView('settings')} className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors">
+              <img 
+                src={profile.photoUrl || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} 
+                className="w-10 h-10 rounded-full object-cover" 
+                alt="Profile"
+              />
+              <div className="hidden sm:block">
+                <p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || profile.name.split(' ')[0]}</p>
+                <p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p>
+              </div>
+            </div>
+          </header>
+
+          {/* 4. View Switcher */}
+          <div className="pb-20">
+            {view === 'home' && <HomeView />}
+            {view === 'about' && <AboutView />}
+            {view === 'masterclass' && <MasterclassView />}
+            {view === 'mastery' && <MasteryView />}
+            {view === 'team' && <TeamView />}
+            {view === 'events' && <EventView />}
+            {view === 'announcements' && <AnnouncementsView />}
+            {view === 'members_corner' && <MemberCornerView />}
+            {view === 'series' && <SeriesView />}
+            {view === 'committee_hunt' && <CommitteeHuntView />}
+            {view === 'daily_grind' && <TaskBarView />}
+            {view === 'members' && <RegistryView />}
+            {view === 'settings' && <div className="p-10 text-center bg-white rounded-3xl border border-dashed">Settings View Coming Soon</div>}
+          </div>
+
+          <DataPrivacyFooter />
+        </main>
+      </div>
     </div>
   );
 };
 
-export default Dashboard;
+// --- EXPORTED COMPONENT ---
+export default function Dashboard({ user, profile, setProfile, logout }) {
+  return (
+    <HubProvider profile={profile}>
+      <DashboardContent logout={logout} />
+    </HubProvider>
+  );
+}
