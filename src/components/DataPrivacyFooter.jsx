@@ -12,12 +12,11 @@ const DataPrivacyFooter = () => {
         <p className="text-[10px] text-gray-400 leading-relaxed uppercase font-bold px-4">
           By using the KAPErata Hub, you agree to our internal data handling policies. 
           Your information is used strictly for organization records and member identification. 
-          The LBA ensures that your personal data is protected and used responsibly.
         </p>
         <div className="mt-6 flex gap-4 text-[9px] font-black text-amber-500 uppercase tracking-tighter">
           <span>&copy; 2026 LBA-OFFICIAL</span>
           <span>•</span>
-          <span>Version 1.2.0-Alpha</span>
+          <span>Version 1.2.0</span>
         </div>
       </div>
     </footer>
