@@ -40,90 +40,83 @@ const Login = ({ onLoginSuccess, initialError }) => {
     return () => { unsubOps(); unsubKeys(); };
   }, []);
 
-  const handleAuth = async (e) => {
-    e.preventDefault();
-    if (loading) return;
-    setError('');
-    setLoading(true);
-    setStatusMessage('Authenticating...');
-    
-    try {
-      let currentUser = auth.currentUser;
-      if (!currentUser) {
-        const result = await signInAnonymously(auth);
-        currentUser = result.user;
-      }
+ const handleAuth = async (e) => {
+  e.preventDefault();
+  if (loading) return;
+  setError('');
+  setLoading(true);
+  setStatusMessage('Authenticating...');
 
-      if (authMode === 'register') {
-        if (!hubSettings.registrationOpen) throw new Error("Registration closed.");
-        if (password !== confirmPassword) throw new Error("Passwords mismatch.");
+  try {
+    let currentUser = auth.currentUser;
+    if (!currentUser) {
+      const result = await signInAnonymously(auth);
+      currentUser = result.user;
+    }
+
+    if (authMode === 'register') {
+      const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+      const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
+
+      const newProfile = await runTransaction(db, async (transaction) => {
+        const counterSnap = await transaction.get(counterRef);
+        const nextCount = (counterSnap.exists() ? counterSnap.data().memberCount || 0 : 0) + 1;
         
         let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid';
         if (inputKey) {
-           const uk = inputKey.trim().toUpperCase();
-           if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; }
-           else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
-           else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
-           else throw new Error("Invalid key.");
+          const uk = inputKey.trim().toUpperCase();
+          if (uk === secureKeys?.officerKey?.toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; }
+          else if (uk === secureKeys?.headKey?.toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; }
+          else if (uk === secureKeys?.commKey?.toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; }
         }
 
-        const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
-        const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
-        
-        const newProfile = await runTransaction(db, async (transaction) => {
-          const counterSnap = await transaction.get(counterRef);
-          const nextCount = (counterSnap.exists() ? counterSnap.data().memberCount || 0 : 0) + 1;
-          const assignedId = generateLBAId(pc, nextCount - 1);
-          const meta = getMemberIdMeta();
+        const assignedId = generateLBAId(pc, nextCount - 1);
+        const meta = getMemberIdMeta();
+        const profileData = {
+          uid: currentUser.uid,
+          name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(),
+          email: email.toLowerCase(),
+          password,
+          program,
+          birthMonth: parseInt(birthMonth),
+          birthDay: parseInt(birthDay),
+          positionCategory: pc,
+          specificTitle: st,
+          memberId: assignedId,
+          role,
+          status: 'active',
+          paymentStatus: pay,
+          lastRenewedSem: meta.sem,
+          lastRenewedSY: meta.sy,
+          joinedDate: new Date().toISOString()
+        };
 
-          const profileData = {
-            uid: currentUser.uid,
-            name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(),
-            email: email.toLowerCase(),
-            password,
-            program,
-            birthMonth: parseInt(birthMonth),
-            birthDay: parseInt(birthDay),
-            positionCategory: pc,
-            specificTitle: st,
-            memberId: assignedId,
-            role,
-            status: 'active',
-            paymentStatus: pay,
-            lastRenewedSem: meta.sem,
-            lastRenewedSY: meta.sy,
-            membershipType: membershipType,
-            joinedDate: new Date().toISOString()
-          };
+        transaction.set(doc(registryRef, assignedId), profileData);
+        transaction.set(counterRef, { memberCount: nextCount }, { merge: true });
+        return profileData;
+      });
 
-          if (pc !== 'Member' || pay === 'exempt') {
-            transaction.set(doc(registryRef, assignedId), profileData);
-            transaction.set(counterRef, { memberCount: nextCount }, { merge: true });
-          }
-          return profileData;
-        });
-
-        if (pc !== 'Member' || newProfile.paymentStatus === 'exempt') {
-          onLoginSuccess(newProfile);
-        } else {
-          setPendingProfile(newProfile);
-          setAuthMode('payment');
-        }
-      } else if (authMode === 'login') {
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1));
-        const snap = await getDocs(q);
-        if (snap.empty) throw new Error("ID not found.");
-        const userData = snap.docs[0].data();
-        if (userData.password !== password) throw new Error("Incorrect password.");
-        onLoginSuccess(userData);
+      if (newProfile.paymentStatus === 'exempt') {
+        onLoginSuccess(newProfile);
+      } else {
+        setPendingProfile(newProfile);
+        setAuthMode('payment');
       }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-      setStatusMessage('');
+    } else if (authMode === 'login') {
+      const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1));
+      const snap = await getDocs(q);
+      if (snap.empty) throw new Error("ID not found.");
+      const userData = snap.docs[0].data();
+      if (userData.password !== password) throw new Error("Incorrect password.");
+      onLoginSuccess(userData);
     }
-  };
+  } catch (err) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+    setStatusMessage('');
+  }
+};
 
   const activeBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]";
   const inactiveBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900";
