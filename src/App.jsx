@@ -833,18 +833,18 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                         <div className="bg-white p-8 rounded-[40px] border border-amber-100 shadow-sm text-center">
                             <h4 className="font-black text-xl text-[#3E2723] uppercase mb-6">Choose Your Path</h4>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                <div className="p-6 rounded-3xl border-2 border-amber-200 hover:bg-amber-50 transition-colors cursor-pointer group">
+                                <div onClick={() => handleSelectPaths(['Brewer'])} className="p-6 rounded-3xl border-2 border-amber-200 hover:bg-amber-50 transition-colors cursor-pointer group">
                                     <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">☕</div><h5 className="font-black text-lg uppercase text-[#3E2723]">Brewer</h5><p className="text-xs text-gray-500 mt-2">Master the art of extraction, TDS, and recipe creation.</p>
                                 </div>
-                                <div className="p-6 rounded-3xl border-2 border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer group">
+                                <div onClick={() => handleSelectPaths(['Artist'])} className="p-6 rounded-3xl border-2 border-slate-200 hover:bg-slate-50 transition-colors cursor-pointer group">
                                     <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">🎨</div><h5 className="font-black text-lg uppercase text-[#3E2723]">Artist</h5><p className="text-xs text-gray-500 mt-2">Perfect your pours, symmetry, and advanced latte art.</p>
                                 </div>
-                                <div className="p-6 rounded-3xl border-2 border-orange-200 hover:bg-orange-50 transition-colors cursor-pointer group">
+                                <div onClick={() => handleSelectPaths(['Alchemist'])} className="p-6 rounded-3xl border-2 border-orange-200 hover:bg-orange-50 transition-colors cursor-pointer group">
                                     <div className="text-4xl mb-4 group-hover:scale-110 transition-transform">🧪</div><h5 className="font-black text-lg uppercase text-[#3E2723]">Alchemist</h5><p className="text-xs text-gray-500 mt-2">Develop signature beverages and flavor pairings.</p>
                                 </div>
                             </div>
                             <button onClick={() => handleSelectPaths(['Brewer', 'Artist', 'Alchemist'])} className="bg-[#3E2723] text-[#FDB813] px-8 py-4 rounded-full font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg hover:shadow-xl">Embark on the Master Track (Triple Crown)</button>
-                            <p className="text-xs text-gray-400 mt-4">Or contact an officer to enroll in a single specialist track.</p>
+                            <p className="text-xs text-gray-400 mt-4">Select a single track above to specialize, or embark on the Master Track to pursue all three!</p>
                         </div>
                     ) : (
                         <div className="space-y-6">
@@ -1444,6 +1444,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                     </div>
                 </div>
             )}
+
             {view === 'reports' && isSuperAdmin && (
                 <div className="space-y-10 animate-fadeIn text-[#3E2723]">
                     <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6"><StatIcon icon={TrendingUp} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div></div>
