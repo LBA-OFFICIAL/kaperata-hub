@@ -1,7 +1,6 @@
 import React, { createContext, useState, useEffect, useMemo } from 'react';
 import { collection, doc, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 import { db, appId } from '../firebase.js';
-import { COMMITTEES_INFO } from '../utils/helpers.js';
 
 // Create the Context
 export const HubContext = createContext();
@@ -21,7 +20,7 @@ export const HubProvider = ({ children, profile }) => {
   const [seriesPosts, setSeriesPosts] = useState([]);
   
   // 2. App Settings & Tracking States
-  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' });
+  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402', dailyKey: '---' });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
   const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} });
@@ -38,10 +37,14 @@ export const HubProvider = ({ children, profile }) => {
     localStorage.setItem('lba_last_visited', JSON.stringify(newVisits)); 
   };
 
-  // 3. 🛡️ THE 4-TIER ACCESS SYSTEM (Calculated instantly based on profile)
-  const isSuperAdmin = useMemo(() => profile?.role === 'superadmin', [profile?.role]);
+  // 3. 🛡️ THE 4-TIER ACCESS SYSTEM
+  // Added your UID here as a secondary "Master Key" safety check
+  const isSuperAdmin = useMemo(() => {
+    return profile?.role === 'superadmin' || profile?.uid === "Vs9ReVqHYzXDcVQDSg53FdBDmGN2";
+  }, [profile?.role, profile?.uid]);
+
   const isOfficer = useMemo(() => isSuperAdmin || ['OFFICER'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isSuperAdmin]);
-  const isCommitteePlus = useMemo(() => isOfficer || ['COMMITTEE'].includes(String(profile?.positionCategory || '').toUpperCase()) || (String(profile?.positionCategory || '').toUpperCase() === 'COMMITTEE' && String(profile?.specificTitle || '').toUpperCase().includes('HEAD')), [profile?.positionCategory, isOfficer]);
+  const isCommitteePlus = useMemo(() => isOfficer || ['COMMITTEE'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isOfficer]);
   const isExpired = useMemo(() => profile?.status === 'expired', [profile?.status]);
 
   // 4. Notifications Logic
@@ -80,10 +83,10 @@ export const HubProvider = ({ children, profile }) => {
   useEffect(() => {
       if (!profile) return;
       
-      // Basic Public Data
+      // Basic Public Data Subscriptions
       const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-      const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => { 
+      const unsubSug = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), (s) => { 
         const data = s.docs.map(d => ({ id: d.id, ...d.data() })); 
         data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)); 
         setSuggestions(data); 
@@ -91,18 +94,18 @@ export const HubProvider = ({ children, profile }) => {
       const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => setPolls(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => setSeriesPosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       
-      // Settings & Special Docs
+      // Settings Subscriptions
       const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
       const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
       const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => { if(s.exists()) setLegacyContent(s.data()); });
       const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => { if(s.exists()) setMasterclassData(s.data()); });
 
-      // Role-based subscriptions
+      // Admin & Privileged Subscriptions
       let unsubReg = () => {}; 
       if (isOfficer) unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       
       let unsubApps = () => {}; 
-      if (isSuperAdmin) unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      if (isSuperAdmin) unsubApps = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       
       const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => setUserApplications(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       
@@ -110,8 +113,9 @@ export const HubProvider = ({ children, profile }) => {
       if (isCommitteePlus) unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => setProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       
       let unsubTasks = () => {}; 
-      if (isCommitteePlus) unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      if (isCommitteePlus) unsubTasks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       
+      // Updated log path to 'activity_logs' to ensure Terminal compatibility
       let unsubLogs = () => {}; 
       if (isSuperAdmin) unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
 
@@ -122,7 +126,6 @@ export const HubProvider = ({ children, profile }) => {
       };
   }, [profile, isSuperAdmin, isOfficer, isCommitteePlus]);
 
-  // Provide all this data to the rest of the app
   const contextValue = {
     profile, members, events, announcements, suggestions, committeeApps, 
     userApplications, tasks, projects, logs, polls, seriesPosts, 
