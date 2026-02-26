@@ -7,6 +7,8 @@ import Dashboard from './Dashboard.jsx';
 import TerminalView from './views/TerminalView';
 
 export default function App() {
+  const SUPER_ADMIN_UID = "Vs9ReVqHYzXDcVQDSg53FdBDmGN2";
+  const isSystemAdmin = user?.uid === SUPER_ADMIN_UID || user?.role === 'admin';
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
