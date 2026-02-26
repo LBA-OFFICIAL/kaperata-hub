@@ -9,7 +9,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // YOUR SUPERADMIN MASTER KEY
+  // YOUR PERMANENT MASTER KEY
   const SUPER_ADMIN_UID = "Vs9ReVqHYzXDcVQDSg53FdBDmGN2";
   const isSystemAdmin = user?.uid === SUPER_ADMIN_UID || profile?.role === 'admin';
 
@@ -19,9 +19,7 @@ export default function App() {
       if (currentUser) {
         setUser(currentUser);
         const savedProfile = localStorage.getItem('lba_profile');
-        if (savedProfile) {
-          setProfile(JSON.parse(savedProfile));
-        }
+        if (savedProfile) setProfile(JSON.parse(savedProfile));
       } else {
         setUser(null);
         setProfile(null);
@@ -44,24 +42,12 @@ export default function App() {
     setProfile(null);
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-[#3E2723]"></div>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-4 border-[#3E2723]"></div></div>;
 
   return (
     <>
       {user && profile ? (
-        <Dashboard 
-          user={user} 
-          profile={profile} 
-          setProfile={setProfile} 
-          logout={handleLogout} 
-          isSystemAdmin={isSystemAdmin} 
-        />
+        <Dashboard user={user} profile={profile} logout={handleLogout} isSystemAdmin={isSystemAdmin} />
       ) : (
         <Login onLoginSuccess={handleLoginSuccess} />
       )}
