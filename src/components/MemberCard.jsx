@@ -1,5 +1,4 @@
-import React from 'react';// Changed IdCard to Contact to fix the export error
-import { User, Shield, Contact } from 'lucide-react';
+import React from 'react';
 
 const MemberCard = ({ member }) => {
   return (
