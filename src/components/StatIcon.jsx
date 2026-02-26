@@ -1,20 +1,17 @@
 import React from 'react';
 
-const StatIcon = ({ icon: Icon, variant = 'default' }) => { 
-  const colors = { 
-    amber: 'bg-amber-100 text-amber-600', 
-    indigo: 'bg-indigo-100 text-indigo-600', 
-    green: 'bg-green-100 text-green-600', 
-    blue: 'bg-blue-100 text-blue-600', 
-    red: 'bg-red-100 text-red-600', 
-    default: 'bg-gray-100 text-gray-600' 
-  }; 
-  
+const StatIcon = ({ icon: Icon, label, value, colorClass = "bg-amber-100 text-amber-900" }) => {
   return (
-    <div className={`p-3 rounded-2xl ${colors[variant] || colors.default}`}>
-      <Icon size={24} />
+    <div className="flex items-center gap-4 p-6 bg-white rounded-[32px] border border-amber-50 shadow-sm">
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${colorClass}`}>
+        <Icon size={20} />
+      </div>
+      <div>
+        <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{label}</p>
+        <p className="text-2xl font-serif font-black text-[#3E2723]">{value}</p>
+      </div>
     </div>
-  ); 
+  );
 };
 
 export default StatIcon;
