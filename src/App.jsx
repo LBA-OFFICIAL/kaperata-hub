@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, appId } from './firebase';
+import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
 import Login from './components/Login.jsx';
 import Dashboard from './Dashboard.jsx';
 
@@ -10,9 +9,8 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // The Master Key Logic
+  // YOUR SUPERADMIN MASTER KEY
   const SUPER_ADMIN_UID = "Vs9ReVqHYzXDcVQDSg53FdBDmGN2";
-  // We check BOTH the Firebase UID and the Profile Role
   const isSystemAdmin = user?.uid === SUPER_ADMIN_UID || profile?.role === 'admin';
 
   useEffect(() => {
@@ -20,14 +18,9 @@ export default function App() {
       setLoading(true);
       if (currentUser) {
         setUser(currentUser);
-        
-        // 1. Try to get profile from localStorage
         const savedProfile = localStorage.getItem('lba_profile');
         if (savedProfile) {
           setProfile(JSON.parse(savedProfile));
-        } else {
-          // 2. If not in localStorage, you might need to fetch it from Firestore here
-          // For now, we rely on Login.jsx setting the profile on success
         }
       } else {
         setUser(null);
@@ -45,14 +38,10 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      localStorage.removeItem('lba_profile');
-      setUser(null);
-      setProfile(null);
-    } catch (error) {
-      console.error("Logout Error:", error);
-    }
+    await signOut(auth);
+    localStorage.removeItem('lba_profile');
+    setUser(null);
+    setProfile(null);
   };
 
   if (loading) {
