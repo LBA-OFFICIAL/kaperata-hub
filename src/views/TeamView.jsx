@@ -1,7 +1,7 @@
 import React, { useContext, useMemo } from 'react';
 import { HubContext } from '../contexts/HubContext';
 import { COMMITTEES_INFO, getMemberIdMeta } from '../utils/helpers';
-import MemberCard from '../components/MemberCard';
+import MemberCard from '../components/MemberCardNew';
 
 const TeamView = () => {
   const { members } = useContext(HubContext);
