@@ -1,19 +1,26 @@
 import React from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { Lock } from 'lucide-react';
 
 const DataPrivacyFooter = () => {
   return (
-    <div className="w-full py-8 mt-12 border-t border-amber-900/10 text-[#3E2723]/40 text-center">
-      <div className="flex items-center justify-center gap-2 mb-2 font-black uppercase text-[10px] tracking-widest">
-        <ShieldCheck size={12} /> Data Privacy Statement
+    <footer className="mt-20 py-10 border-t border-amber-100/50">
+      <div className="flex flex-col items-center text-center max-w-2xl mx-auto">
+        <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center text-amber-600 mb-4">
+          <Lock size={16} />
+        </div>
+        <h5 className="text-[11px] font-black uppercase text-[#3E2723] mb-2 tracking-widest">Data Privacy Notice</h5>
+        <p className="text-[10px] text-gray-400 leading-relaxed uppercase font-bold px-4">
+          By using the KAPErata Hub, you agree to our internal data handling policies. 
+          Your information is used strictly for organization records and member identification. 
+          The LBA ensures that your personal data is protected and used responsibly.
+        </p>
+        <div className="mt-6 flex gap-4 text-[9px] font-black text-amber-500 uppercase tracking-tighter">
+          <span>&copy; 2026 LBA-OFFICIAL</span>
+          <span>•</span>
+          <span>Version 1.2.0-Alpha</span>
+        </div>
       </div>
-      <p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">
-        LPU Baristas' Association (LBA) is committed to protecting your personal data strictly for membership management.
-      </p>
-      <div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider">
-        <span>© {new Date().getFullYear()} LBA</span>
-      </div>
-    </div>
+    </footer>
   );
 };
 
