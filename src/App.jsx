@@ -4,6 +4,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import Login from './components/Login.jsx';
 import Dashboard from './Dashboard.jsx';
+import TerminalView from './views/TerminalView';
 
 export default function App() {
   const [user, setUser] = useState(null);
