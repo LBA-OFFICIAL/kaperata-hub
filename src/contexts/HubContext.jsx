@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useMemo } from 'react';
 import { collection, doc, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
-import { db, appId } from '../firebase';
-import { COMMITTEES_INFO } from '../utils/helpers';
+import { db, appId } from '../firebase.js';
+import { COMMITTEES_INFO } from '../utils/helpers.js';
 
 // Create the Context
 export const HubContext = createContext();
