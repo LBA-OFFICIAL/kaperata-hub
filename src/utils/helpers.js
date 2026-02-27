@@ -1,8 +1,8 @@
 // --- LBA BRANDING & CONFIGURATION ---
 
 // Defaulting to LPU Seal - Replace these strings with your own GDrive links if preferred
-export const ORG_LOGO_URL = "https://manila.lpu.edu.ph/wp-content/uploads/2023/04/LPU-Manila-Seal.png";
-export const APP_ICON_URL = "https://manila.lpu.edu.ph/wp-content/uploads/2023/04/LPU-Manila-Seal.png";
+export const ORG_LOGO_URL = "https://drive.google.com/file/d/14kDHPLQdRKu0faFRvQy2ZZm0qu8gkAIL/view?usp=drive_link";
+export const APP_ICON_URL = "https://drive.google.com/file/d/14kDHPLQdRKu0faFRvQy2ZZm0qu8gkAIL/view?usp=drive_link";
 
 export const OFFICER_TITLES = [
   "President", "Vice President", "Secretary", "Assistant Secretary", 
