@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { getAuth, sendPasswordResetEmail } from 'firebase/auth';
-import { db, appId } from '../firebase';
-import { getDirectLink, formatDate } from '../utils/helpers';
+import { db, appId } from '../firebase'; // Correct: Go up to src
+import { getDirectLink, formatDate } from '../utils/helpers'; // Correct: Go up to src, then into utils
 import { Save, User, Camera, Mail, ShieldCheck, CheckCircle2, KeyRound, Calendar } from 'lucide-react';
 
 const ProfileSettingsView = ({ profile }) => {
