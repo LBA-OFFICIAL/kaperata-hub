@@ -11,7 +11,7 @@ const TerminalView = ({
 
   return (
     <div className="space-y-10 animate-fadeIn">
-      {/* 1. SUMMARY CARDS */}
+      {/* SUMMARY STATS WORKING */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-6 rounded-3xl border-2 border-amber-100 text-center shadow-sm">
           <p className="text-[10px] font-black uppercase text-gray-400">Total Registry</p>
@@ -31,7 +31,7 @@ const TerminalView = ({
         </div>
       </div>
 
-      {/* 2. DAILY KEY & DYNAMIC DROPDOWN */}
+      {/* DAILY KEY & SEMESTER DROPDOWN */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] flex items-center justify-between shadow-xl">
           <div className="flex items-center gap-4 text-[#3E2723]"><Banknote size={32}/><h4 className="font-serif text-2xl font-black uppercase">Daily Key</h4></div>
@@ -51,12 +51,12 @@ const TerminalView = ({
               </select>
               <ChevronDown className="absolute right-3 top-3" size={16} />
             </div>
-            <button onClick={() => handleDownloadReport(selectedSem)} className="bg-[#3E2723] text-[#FDB813] px-6 rounded-xl font-black uppercase text-[10px]">Export</button>
+            <button onClick={() => handleDownloadReport?.(selectedSem)} className="bg-[#3E2723] text-[#FDB813] px-6 rounded-xl font-black uppercase text-[10px]">Export</button>
           </div>
         </div>
       </div>
 
-      {/* 3. SECURITY VAULT (INDIVIDUAL RESET) */}
+      {/* MASTER KEY ROTATION FOR ALL ROLES */}
       <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white">
         <h4 className="font-serif text-2xl font-black uppercase text-[#FDB813] mb-6">Security Vault</h4>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -74,7 +74,7 @@ const TerminalView = ({
         </div>
       </div>
 
-      {/* 4. SYSTEM CONTROLS (RESTORED GCASH TOGGLE) */}
+      {/* SYSTEM CONTROLS & GCASH TOGGLE */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 space-y-4 shadow-sm">
           <h4 className="font-black uppercase text-sm mb-2 flex items-center gap-2"><Settings2 size={18}/> System Controls</h4>
@@ -89,6 +89,27 @@ const TerminalView = ({
         <div className="bg-white p-8 rounded-[40px] border-2 border-gray-100 overflow-y-auto max-h-[350px]">
           <h4 className="font-black uppercase text-sm mb-4">Operations Log</h4>
           <div className="space-y-2">{logs.map(log => (<div key={log.id} className="text-[10px] p-3 bg-gray-50 rounded-xl border border-gray-100"><strong>{log.action}</strong>: {log.details}</div>))}</div>
+        </div>
+      </div>
+
+      {/* COMMITTEE HUNT WITH INTERVIEW BUTTON */}
+      <div className="bg-white p-10 rounded-[50px] border-2 border-amber-50">
+        <h4 className="font-serif text-2xl font-black uppercase mb-6">Committee Applications</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {committeeApps.map(app => (
+            <div key={app.id} className="p-5 bg-amber-50/50 rounded-3xl border border-amber-100">
+              <div className="flex justify-between items-start mb-4">
+                <div><p className="font-black text-sm">{app.name}</p><p className="text-[9px] uppercase text-amber-700 font-bold">{app.committee} • {app.role}</p></div>
+                <span className={`px-2 py-1 rounded-full text-[8px] font-black uppercase ${app.status === 'for_interview' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'}`}>{app.status === 'for_interview' ? 'Interview' : app.status}</span>
+              </div>
+              <div className="flex gap-2">
+                <button onClick={() => initiateAppAction(app, 'for_interview')} className="flex-1 py-2 bg-blue-100 text-blue-700 rounded-lg font-bold text-[9px]">INTERVIEW</button>
+                <button onClick={() => initiateAppAction(app, 'accepted')} className="flex-1 py-2 bg-green-500 text-white rounded-lg font-bold text-[9px]">ACCEPT</button>
+                <button onClick={() => initiateAppAction(app, 'denied')} className="flex-1 py-2 bg-red-500 text-white rounded-lg font-black text-[9px]">DENY</button>
+                <a href={`mailto:${app.email}`} className="p-2 bg-amber-100 text-[#3E2723] rounded-lg hover:bg-amber-200"><Mail size={16}/></a>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
