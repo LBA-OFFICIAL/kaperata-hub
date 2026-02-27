@@ -20,6 +20,8 @@ export const HubProvider = ({ children, profile }) => {
   const [hubSettings, setHubSettings] = useState({ registrationOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' });
   const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '', bypassKey: '' });
   const [legacyContent, setLegacyContent] = useState({ body: "", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
+  
+  // FIXED: Added back the live listener for Masterclass data
   const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} });
   
   const [lastVisited, setLastVisited] = useState(() => { 
@@ -33,7 +35,6 @@ export const HubProvider = ({ children, profile }) => {
     localStorage.setItem('lba_last_visited', JSON.stringify(newVisits)); 
   };
 
-  // ACCESS SYSTEM
   const isSuperAdmin = useMemo(() => {
     return profile?.role === 'superadmin' || profile?.uid === "Vs9ReVqHYzXDcVQDSg53FdBDmGN2";
   }, [profile?.role, profile?.uid]);
@@ -42,7 +43,6 @@ export const HubProvider = ({ children, profile }) => {
   const isCommitteePlus = useMemo(() => isOfficer || ['COMMITTEE'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isOfficer]);
   const isExpired = useMemo(() => profile?.status === 'expired', [profile?.status]);
 
-  // NOTIFICATIONS
   const notifications = useMemo(() => {
     const hasNew = (items, pageKey) => { 
       if (!items || items.length === 0) return false; 
@@ -58,17 +58,15 @@ export const HubProvider = ({ children, profile }) => {
     };
   }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer, isSuperAdmin]);
 
-  // FIREBASE SUBSCRIPTIONS
   useEffect(() => {
     if (!profile) return;
     
-    // Public Listeners
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
     const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => s.exists() && setMasterclassData(s.data()));
 
-    // Admin/Officer Listeners
     let unsubReg = () => {}; 
     if (isOfficer) unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
     
@@ -78,7 +76,7 @@ export const HubProvider = ({ children, profile }) => {
     let unsubLogs = () => {}; 
     if (isSuperAdmin) unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-    return () => { unsubOps(); unsubKeys(); unsubEvents(); unsubAnn(); unsubReg(); unsubApps(); unsubLogs(); };
+    return () => { unsubOps(); unsubKeys(); unsubEvents(); unsubAnn(); unsubMC(); unsubReg(); unsubApps(); unsubLogs(); };
   }, [profile, isSuperAdmin, isOfficer]);
 
   const contextValue = { profile, members, events, announcements, suggestions, committeeApps, userApplications, tasks, projects, logs, polls, seriesPosts, hubSettings, secureKeys, legacyContent, masterclassData, isSuperAdmin, isOfficer, isCommitteePlus, isExpired, notifications, updateLastVisited };
