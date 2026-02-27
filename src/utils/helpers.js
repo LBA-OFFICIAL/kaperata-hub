@@ -1,7 +1,8 @@
 // --- LBA BRANDING & CONFIGURATION ---
 
-export const ORG_LOGO_URL = "https://lh3.googleusercontent.com/d/1aYqARgJoEpHjqWJONprViSsEUAYHNqUL";
-export const APP_ICON_URL = "https://lh3.googleusercontent.com/d/1_MAy5RIPYHLuof-DoKcMPvN_dIM3fIwY";
+// Defaulting to LPU Seal - Replace these strings with your own GDrive links if preferred
+export const ORG_LOGO_URL = "https://manila.lpu.edu.ph/wp-content/uploads/2023/04/LPU-Manila-Seal.png";
+export const APP_ICON_URL = "https://manila.lpu.edu.ph/wp-content/uploads/2023/04/LPU-Manila-Seal.png";
 
 export const OFFICER_TITLES = [
   "President", "Vice President", "Secretary", "Assistant Secretary", 
@@ -9,12 +10,8 @@ export const OFFICER_TITLES = [
 ];
 
 export const COMMITTEE_TITLES = ["Committee Head", "Committee Member"];
-
 export const PROGRAMS = ["CAKO", "CLOCA", "CLOHS", "HRA", "ITM/ITTM"];
-
-export const POSITION_CATEGORIES = [
-  "Member", "Officer", "Committee", "Execomm", "Alumni", "Org Adviser", "Blacklisted"
-];
+export const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Alumni", "Org Adviser", "Blacklisted"];
 
 export const MONTHS = [
   { value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" }, 
@@ -32,9 +29,7 @@ export const DEFAULT_MASTERCLASS_MODULES = [
 ];
 
 export const DEFAULT_MASTERY = { 
-  paths: [], 
-  status: 'Not Started', 
-  startDate: '', 
+  paths: [], status: 'Not Started', startDate: '', 
   milestones: { 
     Brewer: {Q1:false, Q2:false, Q3:false, Q4:false}, 
     Artist: {Q1:false, Q2:false, Q3:false, Q4:false}, 
@@ -43,34 +38,10 @@ export const DEFAULT_MASTERY = {
 };
 
 export const COMMITTEES_INFO = [
-  { 
-    id: "Arts", 
-    title: "Arts & Design", 
-    image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80", 
-    description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.", 
-    roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"] 
-  },
-  { 
-    id: "Media", 
-    title: "Media & Documentation", 
-    image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80", 
-    description: "Capturing the moments. We handle photography, videography, and highlights of every event.", 
-    roles: ["Photography", "Videography", "Editing"] 
-  },
-  { 
-    id: "Events", 
-    title: "Events & Logistics", 
-    image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80", 
-    description: "The backbone of operations. We plan flows, manage logistics, and ensure smooth gatherings.", 
-    roles: ["Program Flow", "Logistics", "Crowd Control"] 
-  },
-  { 
-    id: "PR", 
-    title: "Public Relations", 
-    image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", 
-    description: "The voice of the association. We manage social media, engagement, and external partners.", 
-    roles: ["Social Media", "Copywriting", "External Partnerships"] 
-  }
+  { id: "Arts", title: "Arts & Design", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80", description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.", roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"] },
+  { id: "Media", title: "Media & Documentation", image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80", description: "Capturing the moments. We handle photography, videography, and highlights of every event.", roles: ["Photography", "Videography", "Editing"] },
+  { id: "Events", title: "Events & Logistics", image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80", description: "The backbone of operations. We plan flows, manage logistics, and ensure smooth gatherings.", roles: ["Program Flow", "Logistics", "Crowd Control"] },
+  { id: "PR", title: "Public Relations", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", description: "The voice of the association. We manage social media, engagement, and external partners.", roles: ["Social Media", "Copywriting", "External Partnerships"] }
 ];
 
 export const SOCIAL_LINKS = { 
@@ -81,29 +52,20 @@ export const SOCIAL_LINKS = {
   pr_email: "lbaofficial.pr@gmail.com" 
 };
 
-
 // --- CORE UTILITY FUNCTIONS ---
 
-/**
- * Converts a Google Drive share link into a direct image stream link.
- */
 export const getDirectLink = (url) => { 
   if (!url || typeof url !== 'string') return ""; 
+  // Handle GDrive Direct Link Engine
   if (url.includes('drive.google.com')) { 
     const idMatch = url.match(/[-\w]{25,}/); 
-    if (idMatch) return `https://drive.google.com/uc?id=${idMatch[0]}`; 
+    if (idMatch) return `https://drive.google.com/uc?export=view&id=${idMatch[0]}`; 
   } 
   return url; 
 };
 
-/**
- * Handles CSV Generation and Download
- */
 export const generateCSV = (headers, rows, filename) => { 
-  const csvContent = [
-    headers.join(','), 
-    ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))
-  ].join('\n'); 
+  const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n'); 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); 
   const link = document.createElement("a"); 
   if (link.download !== undefined) { 
@@ -118,30 +80,15 @@ export const generateCSV = (headers, rows, filename) => {
   } 
 };
 
-/**
- * Calculates the current Academic Year and Semester
- */
 export const getMemberIdMeta = () => { 
   const now = new Date(); 
   const month = now.getMonth() + 1; 
   const year = now.getFullYear(); 
-  let syStart = year % 100; 
-  let syEnd = (year + 1) % 100; 
-  
-  // Shift Academic Year in August (Standard PH School Cycle)
-  if (month < 8) { 
-    syStart = (year - 1) % 100; 
-    syEnd = year % 100; 
-  } 
-  return { 
-    sy: `${syStart}${syEnd}`, 
-    sem: (month >= 8 || month <= 12) && month >= 8 ? "1" : "2" 
-  }; 
+  let syStart = year % 100; let syEnd = (year + 1) % 100; 
+  if (month < 8) { syStart = (year - 1) % 100; syEnd = year % 100; } 
+  return { sy: `${syStart}${syEnd}`, sem: (month >= 8 || month <= 12) && month >= 8 ? "1" : "2" }; 
 };
 
-/**
- * Generates LBA-specific Member IDs
- */
 export const generateLBAId = (category, currentCount = 0) => { 
   const { sy, sem } = getMemberIdMeta(); 
   const padded = String(Number(currentCount) + 1).padStart(4, '0'); 
@@ -149,18 +96,12 @@ export const generateLBAId = (category, currentCount = 0) => {
   return `LBA${sy}-${sem}${padded}${isLeader ? "C" : ""}`; 
 };
 
-/**
- * Generates a rotating Daily Passkey for Cash Transactions
- */
 export const getDailyCashPasskey = () => { 
   const now = new Date(); 
   return `KBA-${now.getDate()}-${(now.getMonth() + 1) + (now.getFullYear() % 100)}`; 
 };
 
-
-// --- DATE FORMATTERS (FIRESTORE COMPATIBLE) ---
-
-
+// --- DATE FORMATTERS ---
 
 export const formatDate = (dateInput) => { 
   if (!dateInput) return ""; 
@@ -186,14 +127,9 @@ export const getEventDateParts = (startInput, endInput) => {
   const start = startInput?.toDate ? startInput.toDate() : new Date(startInput); 
   const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase(); 
   const startDay = start.getDate(); 
-  
   if (!endInput || startInput === endInput) return { day: `${startDay}`, month: startMonth }; 
-  
   const end = endInput?.toDate ? endInput.toDate() : new Date(endInput); 
   const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase(); 
   const endDay = end.getDate(); 
-  
-  return startMonth === endMonth 
-    ? { day: `${startDay}-${endDay}`, month: startMonth } 
-    : { day: `${startDay}-${endDay}`, month: `${startMonth}/${endMonth}` }; 
+  return startMonth === endMonth ? { day: `${startDay}-${endDay}`, month: startMonth } : { day: `${startDay}-${endDay}`, month: `${startMonth}/${endMonth}` }; 
 };
