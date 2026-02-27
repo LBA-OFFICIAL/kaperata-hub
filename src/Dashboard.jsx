@@ -1,8 +1,8 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, appId } from './firebase';
+import { auth, db, appId } from './firebase'; // Correct: same folder
 import { HubProvider, HubContext } from './contexts/HubContext.jsx';
-import { getDirectLink } from './utils/helpers';
+import { getDirectLink } from './utils/helpers'; // Correct: same folder -> utils
 
 // Layout Components
 import Sidebar from './components/Sidebar.jsx';
