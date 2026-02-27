@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { signInAnonymously } from 'firebase/auth';
 import { collection, doc, onSnapshot, getDocs, query, where, limit, runTransaction } from 'firebase/firestore';
-import { auth, db, appId } from './firebase'; // Ensure this path is correct
+import { auth, db, appId } from '../firebase'; // Correct: Go up to src
 import { 
   ORG_LOGO_URL, PROGRAMS, MONTHS,
   getDirectLink, getMemberIdMeta, generateLBAId 
-} from './utils/helpers';
+} from '../utils/helpers'
 import { Loader2, Coffee, User, Lock, Mail, BadgeCheck } from 'lucide-react';
 
 const Login = ({ onLoginSuccess, initialError }) => {
