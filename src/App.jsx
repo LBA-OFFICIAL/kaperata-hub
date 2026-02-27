@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { auth } from './firebase';
+import { auth, db, appId } from './firebase'; // Correct: same folder
+import { getDirectLink } from './utils/helpers'; // Correct: same folder -> utils
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Login from './components/Login.jsx';
 import Dashboard from './Dashboard.jsx';
