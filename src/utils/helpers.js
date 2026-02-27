@@ -46,15 +46,14 @@ export const SOCIAL_LINKS = {
   pr_email: "lbaofficial.pr@gmail.com" 
 };
 
-
 // --- UTILITY FUNCTIONS ---
 
+// FIXED: Repaired backticks and Google Drive direct link logic
 export const getDirectLink = (url) => { 
   if (!url || typeof url !== 'string') return ""; 
   if (url.includes('drive.google.com')) { 
     const idMatch = url.match(/[-\w]{25,}/); 
-    // FIXED: Corrected backtick template literal
-    if (idMatch) return `https://lh3.googleusercontent.com/d/$$${idMatch[0]}`; 
+    if (idMatch) return `https://drive.google.com/uc?export=view&id=${idMatch[0]}`; 
   } 
   return url; 
 };
@@ -84,7 +83,6 @@ export const getMemberIdMeta = () => {
   const year = now.getFullYear(); 
   let syStart = year % 100; 
   let syEnd = (year + 1) % 100; 
-  // Academic Year usually shifts in August
   if (month < 8) { 
     syStart = (year - 1) % 100; 
     syEnd = year % 100; 
@@ -111,32 +109,32 @@ export const getDailyCashPasskey = () => {
 
 export const formatDate = (dateStr) => { 
   if (!dateStr) return ""; 
-  const d = new Date(dateStr); 
+  const d = dateStr.toDate ? dateStr.toDate() : new Date(dateStr); 
   if (isNaN(d.getTime())) return ""; 
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); 
 };
 
 export const getEventDay = (dateStr) => { 
   if (!dateStr) return "?"; 
-  const d = new Date(dateStr); 
+  const d = dateStr.toDate ? dateStr.toDate() : new Date(dateStr); 
   return isNaN(d.getTime()) ? "?" : d.getDate(); 
 };
 
 export const getEventMonth = (dateStr) => { 
   if (!dateStr) return "???"; 
-  const d = new Date(dateStr); 
+  const d = dateStr.toDate ? dateStr.toDate() : new Date(dateStr); 
   return isNaN(d.getTime()) ? "???" : d.toLocaleString('default', { month: 'short' }).toUpperCase(); 
 };
 
 export const getEventDateParts = (startStr, endStr) => { 
   if (!startStr) return { day: '?', month: '?' }; 
-  const start = new Date(startStr); 
+  const start = startStr.toDate ? startStr.toDate() : new Date(startStr); 
   const startMonth = start.toLocaleString('default', { month: 'short' }).toUpperCase(); 
   const startDay = start.getDate(); 
   
   if (!endStr || startStr === endStr) return { day: `${startDay}`, month: startMonth }; 
   
-  const end = new Date(endStr); 
+  const end = endStr.toDate ? endStr.toDate() : new Date(endStr); 
   const endMonth = end.toLocaleString('default', { month: 'short' }).toUpperCase(); 
   const endDay = end.getDate(); 
   
