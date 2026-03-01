@@ -1,71 +1,65 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { HubContext, HubProvider } from './contexts/HubContext.jsx';
 
-// --- VIEW IMPORTS ---
+// Core Components (Must exist in /components)
 import Sidebar from './components/Sidebar.jsx';
-import HomeView from './views/HomeView.jsx';
-import EventView from './views/EventView.jsx';                   // Label: What's Brewing
-import AboutView from './views/AboutView.jsx';                   // Label: About Us
-import TeamView from './views/TeamView.jsx';                     // Label: Brew Crew
-import MemberCornerView from './views/MemberCornerView.jsx';     // Label: Member's Corner
-import SeriesView from './views/SeriesView.jsx';                 // Label: Barista Diaries
-import MasterclassView from './views/MasterclassView.jsx';       // Label: Masterclass
-import MasteryView from './views/MasteryView.jsx';               // Label: Mastery Program
-import CommitteeHuntView from './views/CommitteeHuntView.jsx';   // Label: Committee Hunt
-import AnnouncementsView from './views/AnnouncementsView.jsx';   // Label: The Grind Report
-import ProfileSettingsView from './views/ProfileSettingsView.jsx'; 
 
-// Restricted Views
-import RegistryView from './views/RegistryView.jsx';             
-import TerminalView from './views/TerminalView.jsx';             
-import TaskBarView from './views/TaskBarView.jsx';               
+// View Components (Must exist in /views)
+import HomeView from './views/HomeView.jsx';
+import EventView from './views/EventView.jsx';
+import AboutView from './views/AboutView.jsx';
+import TeamView from './views/TeamView.jsx';
+import MemberCornerView from './views/MemberCornerView.jsx';
+import SeriesView from './views/SeriesView.jsx';
+import MasterclassView from './views/MasterclassView.jsx';
+import MasteryView from './views/MasteryView.jsx';
+import CommitteeHuntView from './views/CommitteeHuntView.jsx';
+import AnnouncementsView from './views/AnnouncementsView.jsx';
+import ProfileSettingsView from './views/ProfileSettingsView.jsx';
+import RegistryView from './views/RegistryView.jsx';
+import TerminalView from './views/TerminalView.jsx';
+import TaskBarView from './views/TaskBarView.jsx';
 
 const DashboardContent = ({ isSystemAdmin, logout }) => {
   const [view, setView] = useState('home');
   const { profile, members, hubSettings, committeeApps } = useContext(HubContext) || {};
 
-  // --- ACCESS TIERS ---
+  // --- PERMISSION CHECKS ---
+  // 1. Full Admin (Super Admin UID)
+  const isSuperAdmin = isSystemAdmin === true;
   
-  // 1. Can Edit Content (Officers, Committee Heads, System Admin)
-  const canEditContent = isSystemAdmin || 
-                         profile?.role === 'officer' || 
-                         profile?.role === 'committee-head';
-
-  // 2. Can Access Task Bar (Officers, Committee Heads, System Admin)
-  const canAccessTaskBar = canEditContent;
-
-  // 3. Can Access Registry/Terminal (System Admin Only)
-  const canAccessFullAdmin = isSystemAdmin === true;
+  // 2. Staff/Officer (Can see Taskbar & Edit Content)
+  const isStaff = isSuperAdmin || 
+                  profile?.role === 'officer' || 
+                  profile?.role === 'committee-head' || 
+                  profile?.role === 'execomm';
 
   return (
     <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
-      <Sidebar view={view} setView={setView} logout={logout} isSystemAdmin={isSystemAdmin} />
+      <Sidebar view={view} setView={setView} logout={logout} isSystemAdmin={isSuperAdmin} />
 
       <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
         
-        {/* --- TIER 1: PUBLIC CONTENT --- */}
-        {/* Note: We pass 'canEdit' to views where they can Create/Delete/Edit */}
+        {/* --- PUBLIC TIERS --- */}
         {view === 'home' && <HomeView />}
-        {view === 'whats-brewing' && <EventView canEdit={canEditContent} />}
-        {view === 'barista-diaries' && <SeriesView canEdit={canEditContent} />}
-        {view === 'the-grind-report' && <AnnouncementsView canEdit={canEditContent} />}
-        
-        {/* Standard Views */}
+        {view === 'whats-brewing' && <EventView canEdit={isStaff} />}
         {view === 'about-us' && <AboutView />}
         {view === 'brew-crew' && <TeamView />}
         {view === 'members-corner' && <MemberCornerView />}
+        {view === 'barista-diaries' && <SeriesView canEdit={isStaff} />}
         {view === 'masterclass' && <MasterclassView />}
         {view === 'mastery-program' && <MasteryView />}
         {view === 'committee-hunt' && <CommitteeHuntView />}
+        {view === 'the-grind-report' && <AnnouncementsView canEdit={isStaff} />}
         {view === 'profile-settings' && <ProfileSettingsView />}
 
-        {/* --- TIER 2: TASK BAR (Officers & Heads) --- */}
+        {/* --- STAFF TIER (Task Bar) --- */}
         {view === 'task-bar' && (
-          canAccessTaskBar ? <TaskBarView /> : <AccessDenied />
+          isStaff ? <TaskBarView /> : <div className="text-red-500 text-[10px] font-black uppercase">Clearance Required</div>
         )}
 
-        {/* --- TIER 3: SYSTEM ADMIN ONLY --- */}
-        {canAccessFullAdmin && (
+        {/* --- ADMIN TIER (Registry & Terminal) --- */}
+        {isSuperAdmin ? (
           <>
             {view === 'registry' && <RegistryView members={members} />}
             {view === 'terminal' && (
@@ -76,23 +70,17 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
               />
             )}
           </>
+        ) : (
+          (view === 'registry' || view === 'terminal') && (
+            <div className="text-red-500 text-[10px] font-black uppercase text-center mt-20">
+              Restricted to System Admin
+            </div>
+          )
         )}
-
-        {/* Security Fallback for Registry/Terminal if non-admin clicks them */}
-        {!canAccessFullAdmin && (view === 'registry' || view === 'terminal') && <AccessDenied />}
       </main>
     </div>
   );
 };
-
-// Simple reusable helper for denied access
-const AccessDenied = () => (
-  <div className="h-full flex items-center justify-center">
-    <p className="text-[10px] font-black uppercase text-red-500 tracking-widest">
-      Clearance Required: Restricted Access
-    </p>
-  </div>
-);
 
 const Dashboard = (props) => (
   <HubProvider>
