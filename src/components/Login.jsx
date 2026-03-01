@@ -36,10 +36,11 @@ const Login = ({ onLoginSuccess, initialError }) => {
     });
   }, []);
 
-  const handleAuth = async (e) => {
+ const handleAuth = async (e) => {
     e.preventDefault();
     setError('');
 
+    // --- REGISTRATION STEP 1 TRANSITION ---
     if (authMode === 'register' && regStep === 1) {
       if (formData.pass !== formData.confirm) return setError("Passwords do not match!");
       if (!formData.prog) return setError("Please select your program.");
@@ -49,13 +50,19 @@ const Login = ({ onLoginSuccess, initialError }) => {
 
     setLoading(true);
     try {
+      // 1. Ensure an Anonymous Auth Session exists for both Login and Register
+      let currentUser = auth.currentUser;
+      if (!currentUser) {
+        const result = await signInAnonymously(auth);
+        currentUser = result.user;
+      }
+
       if (authMode === 'register') {
-        // Validate Cash Key before proceeding
+        // --- REGISTRATION FLOW ---
         if (payMethod === 'Cash' && cashKeyInput.toUpperCase() !== getDailyCashPasskey().toUpperCase()) {
           throw new Error("Invalid Cash Key. Ask the Officer in charge.");
         }
 
-        const currentUser = (await signInAnonymously(auth)).user;
         const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
         
         const profile = await runTransaction(db, async (tx) => {
@@ -89,36 +96,40 @@ const Login = ({ onLoginSuccess, initialError }) => {
           tx.set(counterRef, { memberCount: count + 1 }, { merge: true });
           return data;
         });
+
+        localStorage.setItem('lba_profile', JSON.stringify(profile));
         onLoginSuccess(profile);
+
       } else {
-  // LOGIN LOGIC
-  console.log("Attempting login for ID:", memberIdInput.trim().toUpperCase());
-  
-  const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
-  const q = query(
-    registryRef, 
-    where('memberId', '==', memberIdInput.trim().toUpperCase()), 
-    limit(1)
-  );
+        // --- LOGIN FLOW ---
+        const cleanedId = memberIdInput.trim().toUpperCase();
+        console.log("Attempting login for ID:", cleanedId);
+        
+        const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+        const q = query(registryRef, where('memberId', '==', cleanedId), limit(1));
+        const snap = await getDocs(q);
+        
+        if (snap.empty) throw new Error("Barista ID not found. Did you register yet?");
 
-  const snap = await getDocs(q);
-  
-  if (snap.empty) {
-    console.error("No document found in registry for this ID.");
-    throw new Error("Barista ID not found. Did you register yet?");
-  }
+        const userDoc = snap.docs[0];
+        const userData = userDoc.data();
 
-  const user = snap.docs[0].data();
-  console.log("User found:", user.name);
+        if (userData.password !== loginPass) throw new Error("Incorrect password. Double-check your keys.");
 
-  if (user.password !== loginPass) {
-    throw new Error("Incorrect password. Double-check your keys.");
-  }
+        // CRITICAL: UID Re-linking
+        // If the current browser session UID is different from the stored UID, update it.
+        if (userData.uid !== currentUser.uid) {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', userDoc.id), { 
+            uid: currentUser.uid 
+          });
+          userData.uid = currentUser.uid;
+        }
 
-  // If we reach here, success!
-  onLoginSuccess(user);
-}
+        localStorage.setItem('lba_profile', JSON.stringify(userData));
+        onLoginSuccess(userData);
+      }
     } catch (err) { 
+      console.error("Auth Error:", err);
       setError(err.message); 
     } finally { 
       setLoading(false); 
