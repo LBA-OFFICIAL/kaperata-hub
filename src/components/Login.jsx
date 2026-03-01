@@ -91,14 +91,33 @@ const Login = ({ onLoginSuccess, initialError }) => {
         });
         onLoginSuccess(profile);
       } else {
-        // Login Logic
-        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1));
-        const snap = await getDocs(q);
-        if (snap.empty) throw new Error("Barista ID not found.");
-        const user = snap.docs[0].data();
-        if (user.password !== loginPass) throw new Error("Incorrect password.");
-        onLoginSuccess(user);
-      }
+  // LOGIN LOGIC
+  console.log("Attempting login for ID:", memberIdInput.trim().toUpperCase());
+  
+  const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+  const q = query(
+    registryRef, 
+    where('memberId', '==', memberIdInput.trim().toUpperCase()), 
+    limit(1)
+  );
+
+  const snap = await getDocs(q);
+  
+  if (snap.empty) {
+    console.error("No document found in registry for this ID.");
+    throw new Error("Barista ID not found. Did you register yet?");
+  }
+
+  const user = snap.docs[0].data();
+  console.log("User found:", user.name);
+
+  if (user.password !== loginPass) {
+    throw new Error("Incorrect password. Double-check your keys.");
+  }
+
+  // If we reach here, success!
+  onLoginSuccess(user);
+}
     } catch (err) { 
       setError(err.message); 
     } finally { 
