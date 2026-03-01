@@ -1,42 +1,100 @@
-import React from 'react';
+import React, { useState, useContext } from 'react';
+import { HubContext, HubProvider } from './contexts/HubContext.jsx';
 
-// We are NOT importing Sidebar or Context yet. 
-// This is a pure "Emergency" test.
+// Core Layout
+import Sidebar from './components/Sidebar.jsx';
 
-const Dashboard = ({ isSystemAdmin, logout }) => {
+// 1. IMPORT ALL 14 VIEW COMPONENTS (Matching your filenames)
+import HomeView from './views/HomeView.jsx';
+import EventView from './views/EventView.jsx';                   // What's Brewing?
+import AboutView from './views/AboutView.jsx';                   // About Us
+import TeamView from './views/TeamView.jsx';                     // Brew Crew
+import MemberCornerView from './views/MemberCornerView.jsx';     // Member's Corner
+import SeriesView from './views/SeriesView.jsx';                 // Barista Diaries
+import MasterclassView from './views/MasterclassView.jsx';       // Masterclass
+import MasteryView from './views/MasteryView.jsx';               // Mastery Program
+import CommitteeHuntView from './views/CommitteeHuntView.jsx';   // Committee Hunt
+import AnnouncementsView from './views/AnnouncementsView.jsx';   // The Grind Report
+import ProfileSettingsView from './views/ProfileSettingsView.jsx'; 
+import RegistryView from './views/RegistryView.jsx';             // Registry
+import TerminalView from './views/TerminalView.jsx';             // Terminal
+import TaskBarView from './views/TaskBarView.jsx';               // The Task Bar
+
+const DashboardContent = ({ isSystemAdmin, logout }) => {
+  const [view, setView] = useState('home');
+  // Adding the missing mobile state that Sidebar needs
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const { profile, members, hubSettings, committeeApps } = useContext(HubContext) || {};
+
+  // --- ACCESS TIERS ---
+  const isSuperAdmin = isSystemAdmin === true;
+  const isStaff = isSuperAdmin || 
+                  ['officer', 'committee-head', 'execomm'].includes(profile?.role?.toLowerCase());
+
   return (
-    <div style={{ 
-      height: '100vh', 
-      width: '100vw', 
-      backgroundColor: '#FDFBF7', 
-      display: 'flex', 
-      flexDirection: 'column',
-      alignItems: 'center', 
-      justifyContent: 'center',
-      fontFamily: 'sans-serif' 
-    }}>
-      <div style={{ padding: '40px', backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center' }}>
-        <h1 style={{ color: '#3E2723', margin: '0' }}>☕ LBA Hub Emergency Mode</h1>
-        <p style={{ color: '#A8875C', fontWeight: 'bold', fontSize: '12px', marginTop: '10px' }}>THE DASHBOARD FILE IS WORKING</p>
-        
-        <div style={{ marginTop: '30px', textAlign: 'left', fontSize: '13px', color: '#5D4037' }}>
-          <p>If you see this screen, the problem is likely one of these:</p>
-          <ul style={{ lineHeight: '1.6' }}>
-            <li><strong>Sidebar.jsx:</strong> Check if it has an <code>export default Sidebar</code>.</li>
-            <li><strong>HubContext.jsx:</strong> Check for typos in your Firebase paths.</li>
-            <li><strong>Firebase.js:</strong> Check if your <code>db</code> or <code>appId</code> are exported correctly.</li>
-          </ul>
-        </div>
+    <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
+      {/* Sidebar now gets the mobile states it requires to function */}
+      <Sidebar 
+        view={view} 
+        setView={setView} 
+        logout={logout} 
+        isSystemAdmin={isSuperAdmin}
+        mobileMenuOpen={mobileMenuOpen}
+        setMobileMenuOpen={setMobileMenuOpen}
+      />
 
-        <button 
-          onClick={logout}
-          style={{ marginTop: '20px', padding: '10px 20px', borderRadius: '10px', border: 'none', backgroundColor: '#3E2723', color: 'white', cursor: 'pointer' }}
-        >
-          Test Logout Button
-        </button>
-      </div>
+      <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
+        
+        {/* TIER 1: PUBLIC ACCESS (Everyone) */}
+        {view === 'home' && <HomeView />}
+        {view === 'about' && <AboutView />}
+        {view === 'events' && <EventView canEdit={isStaff} />}
+        {view === 'announcements' && <AnnouncementsView canEdit={isStaff} />}
+        {view === 'members_corner' && <MemberCornerView />}
+        {view === 'series' && <SeriesView canEdit={isStaff} />}
+        {view === 'masterclass' && <MasterclassView />}
+        {view === 'mastery' && <MasteryView />}
+        {view === 'team' && <TeamView />}
+        {view === 'committee_hunt' && <CommitteeHuntView />}
+        {view === 'profile' && <ProfileSettingsView />}
+
+        {/* TIER 2: STAFF ACCESS (Task Bar) */}
+        {view === 'daily_grind' && (
+          isStaff ? <TaskBarView /> : <AccessDenied />
+        )}
+
+        {/* TIER 3: ADMIN ACCESS (Registry & Terminal) */}
+        {isSuperAdmin ? (
+          <>
+            {view === 'members' && <RegistryView members={members} />}
+            {view === 'reports' && (
+              <TerminalView 
+                registry={members} 
+                hubSettings={hubSettings} 
+                committeeApps={committeeApps} 
+              />
+            )}
+          </>
+        ) : (
+          (view === 'members' || view === 'reports') && <AccessDenied />
+        )}
+
+      </main>
     </div>
   );
 };
+
+const AccessDenied = () => (
+  <div className="h-full flex items-center justify-center">
+    <p className="text-[10px] font-black uppercase text-red-500 tracking-widest">Access Restricted</p>
+  </div>
+);
+
+const Dashboard = (props) => (
+  <HubProvider>
+    <DashboardContent {...props} />
+  </HubProvider>
+);
 
 export default Dashboard;
