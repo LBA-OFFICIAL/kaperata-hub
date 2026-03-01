@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, appId } from './firebase'; 
+import { auth } from './firebase'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Login from './components/Login.jsx';
 import Dashboard from './Dashboard.jsx';
@@ -10,13 +10,12 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   const SUPER_ADMIN_UID = "Vs9ReVqHYzXDcVQDSg53FdBDmGN2";
-  const isSystemAdmin = user?.uid === SUPER_ADMIN_UID || profile?.role === 'admin';
 
+  // Effect to handle initial load and Auth changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
-        // Sync profile from local storage if it exists
         const savedProfile = localStorage.getItem('lba_profile');
         if (savedProfile) {
           setProfile(JSON.parse(savedProfile));
@@ -32,12 +31,11 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (userProfile) => {
-    // 1. Force update the user from Auth in case the listener is slow
-    setUser(auth.currentUser);
-    // 2. Set the profile
-    setProfile(userProfile);
-    // 3. Save for persistence
+    // 1. Immediate save to device
     localStorage.setItem('lba_profile', JSON.stringify(userProfile));
+    // 2. Immediate state update
+    setProfile(userProfile);
+    setUser(auth.currentUser);
   };
 
   const handleLogout = async () => {
@@ -47,6 +45,14 @@ export default function App() {
     setProfile(null);
   };
 
+  // --- THE STRENGTHENED BRIDGE ---
+  // We check LocalStorage directly as a fallback to prevent the "Login Screen Hang"
+  const activeProfile = profile || JSON.parse(localStorage.getItem('lba_profile'));
+  const activeUser = user || auth.currentUser;
+  
+  const isAuthenticated = !!(activeUser && activeProfile);
+  const isSystemAdmin = activeUser?.uid === SUPER_ADMIN_UID || activeProfile?.role === 'admin';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
@@ -55,16 +61,12 @@ export default function App() {
     );
   }
 
-  // THE KEY FIX: If we have a profile but user is still "linking", 
-  // we check auth.currentUser directly to break the "hang".
-  const isAuthenticated = (user || auth.currentUser) && profile;
-
   return (
     <>
       {isAuthenticated ? (
         <Dashboard 
-          user={user || auth.currentUser} 
-          profile={profile} 
+          user={activeUser} 
+          profile={activeProfile} 
           logout={handleLogout} 
           isSystemAdmin={isSystemAdmin} 
         />
