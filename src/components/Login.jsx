@@ -236,7 +236,7 @@ const Login = ({ onLoginSuccess, initialError }) => {
         </form>
 
         <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setRegStep(1); }} className="w-full mt-8 text-[10px] font-black uppercase tracking-widest text-amber-800 underline decoration-2 underline-offset-4 text-center">
-          {authMode === 'login' ? 'New Barista? Join Us' : 'Already a Member? Login'}
+          {authMode === 'login' ? 'Not Yet Registered? Brew With Us!' : 'Already a Member? Login'}
         </button>
       </div>
     </div>
