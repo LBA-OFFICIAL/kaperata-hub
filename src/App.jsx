@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { auth, db, appId } from './firebase'; // Correct: same folder
-import { getDirectLink } from './utils/helpers'; // Correct: same folder -> utils
+import { auth, db, appId } from './firebase'; 
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import Login from './components/Login.jsx';
 import Dashboard from './Dashboard.jsx';
@@ -10,17 +9,18 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // YOUR PERMANENT MASTER KEY
   const SUPER_ADMIN_UID = "Vs9ReVqHYzXDcVQDSg53FdBDmGN2";
   const isSystemAdmin = user?.uid === SUPER_ADMIN_UID || profile?.role === 'admin';
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setLoading(true);
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         setUser(currentUser);
+        // Sync profile from local storage if it exists
         const savedProfile = localStorage.getItem('lba_profile');
-        if (savedProfile) setProfile(JSON.parse(savedProfile));
+        if (savedProfile) {
+          setProfile(JSON.parse(savedProfile));
+        }
       } else {
         setUser(null);
         setProfile(null);
@@ -32,7 +32,11 @@ export default function App() {
   }, []);
 
   const handleLoginSuccess = (userProfile) => {
+    // 1. Force update the user from Auth in case the listener is slow
+    setUser(auth.currentUser);
+    // 2. Set the profile
     setProfile(userProfile);
+    // 3. Save for persistence
     localStorage.setItem('lba_profile', JSON.stringify(userProfile));
   };
 
@@ -43,12 +47,27 @@ export default function App() {
     setProfile(null);
   };
 
-  if (loading) return <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-t-4 border-[#3E2723]"></div></div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#FDFBF7] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-[#3E2723]"></div>
+      </div>
+    );
+  }
+
+  // THE KEY FIX: If we have a profile but user is still "linking", 
+  // we check auth.currentUser directly to break the "hang".
+  const isAuthenticated = (user || auth.currentUser) && profile;
 
   return (
     <>
-      {user && profile ? (
-        <Dashboard user={user} profile={profile} logout={handleLogout} isSystemAdmin={isSystemAdmin} />
+      {isAuthenticated ? (
+        <Dashboard 
+          user={user || auth.currentUser} 
+          profile={profile} 
+          logout={handleLogout} 
+          isSystemAdmin={isSystemAdmin} 
+        />
       ) : (
         <Login onLoginSuccess={handleLoginSuccess} />
       )}
