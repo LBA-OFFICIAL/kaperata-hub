@@ -103,9 +103,14 @@ export const generateLBAId = (category, currentCount = 0) => {
 
 export const getDailyCashPasskey = () => { 
   const now = new Date(); 
-  return `KBA-${now.getDate()}-${(now.getMonth() + 1) + (now.getFullYear() % 100)}`; 
+  const d = now.getDate();
+  const m = now.getMonth() + 1;
+  const y = String(now.getFullYear()).slice(-2);
+  
+  // String concatenation prevents math errors (e.g., 3 + 26 = 29)
+  // For today (March 1, 2026), this will result in: KBA-1-326
+  return `KBA-${d}-${m}${y}`; 
 };
-
 // --- 3. DATE FORMATTERS ---
 
 export const formatDate = (dateInput) => { 
