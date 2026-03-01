@@ -1,8 +1,8 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { doc, setDoc, deleteDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db, appId } from './firebase'; // Correct: same folder
+import { auth, db, appId } from './firebase'; 
 import { HubProvider, HubContext } from './contexts/HubContext.jsx';
-import { getDirectLink } from './utils/helpers'; // Correct: same folder -> utils
+import { getDirectLink } from './utils/helpers'; 
 
 // Layout Components
 import Sidebar from './components/Sidebar.jsx';
@@ -30,10 +30,10 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { hubSettings, profile, secureKeys, committeeApps, logs, members, masterclassData } = useContext(HubContext);
 
-  // Stats Logic for Summary Report (Case-Insensitive)
+  // Stats Logic for Summary Report (Checking paymentStatus)
   const financialStats = useMemo(() => ({
-    totalPaid: members?.filter(m => String(m.status || '').toLowerCase() === 'paid').length || 0,
-    exemptCount: members?.filter(m => String(m.status || '').toLowerCase() === 'exempt').length || 0
+    totalPaid: members?.filter(m => String(m.paymentStatus || '').toLowerCase() === 'paid').length || 0,
+    exemptCount: members?.filter(m => String(m.category || '').toLowerCase() === 'org adviser').length || 0
   }), [members]);
 
   // Semester Logic for Dynamic Dropdown
@@ -47,7 +47,8 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
     return [...new Set(sems)].sort().reverse();
   }, [members]);
 
-  // Firebase Handlers
+  // --- FIREBASE HANDLERS ---
+
   const handleUpdateSetting = async (field, val) => {
     try {
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { [field]: val }, { merge: true });
@@ -62,6 +63,20 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
     } catch (err) { console.error("Key rotation failed", err); }
   };
 
+  const handleVerifyMember = async (memberDocId) => {
+    try {
+      const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberDocId);
+      await updateDoc(memberRef, {
+        paymentStatus: 'paid',
+        verifiedAt: serverTimestamp(),
+        verifiedBy: profile?.name || 'Admin'
+      });
+    } catch (err) {
+      console.error("Verification failed", err);
+      alert("Could not verify payment. Check console.");
+    }
+  };
+
   const handleDownloadReport = (semLabel) => {
     if (!members) return;
     const data = semLabel === 'all' ? members : members.filter(m => {
@@ -71,8 +86,8 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
         return label === semLabel;
     });
     
-    const headers = "Name,MemberID,Status,JoinedDate\n";
-    const rows = data.map(m => `${m.name},${m.memberId},${m.status},${m.joinedDate?.toDate ? m.joinedDate.toDate().toLocaleDateString() : 'N/A'}`).join("\n");
+    const headers = "Name,MemberID,Status,Method,JoinedDate\n";
+    const rows = data.map(m => `"${m.name}","${m.memberId}","${m.paymentStatus}","${m.paymentMethod}","${m.joinedDate?.toDate ? m.joinedDate.toDate().toLocaleDateString() : 'N/A'}"`).join("\n");
     const blob = new Blob([headers + rows], { type: 'text/csv' });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
@@ -82,10 +97,8 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col md:flex-row overflow-hidden text-[#3E2723] font-sans">
-      {/* MAINTENANCE BANNER */}
       {hubSettings?.maintenanceMode && <MaintenanceBanner isSuperAdmin={isSystemAdmin} />}
       
-      {/* SIDEBAR NAVIGATION */}
       <Sidebar 
         view={view} 
         setView={setView} 
@@ -96,7 +109,6 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
       />
 
       <main className="flex-1 overflow-y-auto p-4 md:p-10 custom-scrollbar relative">
-        {/* TOP HEADER */}
         <header className="flex justify-between items-center mb-10">
           <button 
             onClick={() => setMobileMenuOpen(true)} 
@@ -109,7 +121,6 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
           
           <h2 className="font-serif text-2xl md:text-3xl font-black uppercase tracking-tighter">KAPErata Hub</h2>
           
-          {/* PROFILE AVATAR (RECONNECTED TO SETTINGS) */}
           <button 
             onClick={() => setView('settings')}
             className="flex items-center gap-3 bg-white p-2 pr-6 rounded-full border border-amber-100 shadow-sm hover:border-amber-400 transition-all cursor-pointer group"
@@ -129,7 +140,6 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
           </button>
         </header>
 
-        {/* MAIN VIEW AREA (ALL COMPONENTS RECONNECTED) */}
         <div className="pb-20">
           {view === 'home' && <HomeView profile={profile} masterclassData={masterclassData} />}
           {view === 'settings' && <ProfileSettingsView profile={profile} />}
@@ -154,12 +164,14 @@ const DashboardContent = ({ logout, isSystemAdmin }) => {
               hubSettings={hubSettings}
               availableSemesters={availableSemesters}
               currentDailyKey={hubSettings?.dailyKey || "---"}
+              registry={members} // Passing the full list of members
               handleToggleMaintenance={() => handleUpdateSetting('maintenanceMode', !hubSettings.maintenanceMode)}
               handleToggleRegistration={() => handleUpdateSetting('registrationOpen', !hubSettings.registrationOpen)}
               handleToggleRenewalMode={() => handleUpdateSetting('renewalMode', !hubSettings.renewalMode)}
               handleTogglePayment={() => handleUpdateSetting('allowedPayment', hubSettings.allowedPayment === 'gcash_only' ? 'cash_gcash' : 'gcash_only')}
               handleRotateKey={handleRotateKey}
               handleDownloadReport={handleDownloadReport}
+              handleVerifyMember={handleVerifyMember} // Passing the verify function
               initiateAppAction={async (app, status) => await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id), { status, statusUpdatedAt: serverTimestamp() })}
               handleDeleteApp={async (id) => window.confirm("Delete permanently?") && await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id))}
             />
