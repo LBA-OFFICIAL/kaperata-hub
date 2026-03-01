@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signInAnonymously } from 'firebase/auth';
-import { collection, doc, onSnapshot, getDocs, query, where, limit, runTransaction } from 'firebase/firestore';
+import { collection, doc, onSnapshot, getDocs, query, where, limit, runTransaction, updateDoc } from 'firebase/firestore';
 import { auth, db, appId } from '../firebase';
 import { 
   ORG_LOGO_URL, PROGRAMS, MONTHS, getDirectLink, 
