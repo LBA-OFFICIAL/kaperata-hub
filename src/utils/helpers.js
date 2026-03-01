@@ -54,9 +54,11 @@ export const SOCIAL_LINKS = {
 
 export const getDirectLink = (url) => { 
   if (!url || typeof url !== 'string') return ""; 
+  
   if (url.includes('drive.google.com')) { 
     const idMatch = url.match(/[-\w]{25,}/); 
-    if (idMatch) return `https://drive.google.com/uc?export=view&id=${idMatch[0]}`; 
+    // The thumbnail endpoint is significantly more stable for <img> tags
+    if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[0]}&sz=w1000`; 
   } 
   return url; 
 };
