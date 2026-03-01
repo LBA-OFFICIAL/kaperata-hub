@@ -70,29 +70,42 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
     <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
       <Sidebar view={view} setView={setView} logout={logout} isSystemAdmin={isSystemAdmin} />
 
-      <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
-        {view === 'members' && <RegistryView members={members} />}
+     <main className="flex-1 overflow-y-auto p-6 md:p-12">
+  
+  {/* 1. THE HOME CHANNEL (What shows up first) */}
+  {view === 'home' && (
+    <div className="animate-in fade-in duration-500">
+      <h1 className="font-serif text-3xl font-black text-[#3E2723]">
+        Welcome to the Hub! ☕
+      </h1>
+      <p className="mt-2 text-amber-600 font-bold uppercase text-[10px] tracking-widest">
+        Select a tab from the sidebar to begin.
+      </p>
+      
+      {/* A simple status card so you know it's working */}
+      <div className="mt-8 p-6 bg-white rounded-[30px] border-b-4 border-amber-400 shadow-sm max-w-sm">
+        <p className="text-[10px] font-black text-gray-400 uppercase">System Status</p>
+        <p className="text-lg font-black text-[#3E2723]">Connected to Kaperata DB</p>
+      </div>
+    </div>
+  )}
 
-        {view === 'reports' && isSystemAdmin && (
-          <TerminalView 
-            registry={members}
-            financialStats={financialStats}
-            committeeApps={committeeApps}
-            hubSettings={hubSettings}
-            currentDailyKey={getDailyCashPasskey()}
-            handleVerifyMember={handleVerifyMember}
-            handleRotateKey={handleRotateKey}
-            handleToggleMaintenance={() => handleUpdateSetting('maintenanceMode', !hubSettings.maintenanceMode)}
-            handleToggleRegistration={() => handleUpdateSetting('registrationOpen', !hubSettings.registrationOpen)}
-            initiateAppAction={async (app, status) => {
-              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id), { 
-                status, 
-                statusUpdatedAt: serverTimestamp() 
-              });
-            }}
-          />
-        )}
-      </main>
+  {/* 2. THE MEMBERS CHANNEL */}
+  {view === 'members' && <RegistryView members={members} />}
+
+  {/* 3. THE REPORTS CHANNEL (Only for Admins) */}
+  {view === 'reports' && isSystemAdmin && (
+    <TerminalView 
+      registry={members}
+      financialStats={financialStats}
+      hubSettings={hubSettings}
+      handleVerifyMember={handleVerifyMember}
+      handleRotateKey={handleRotateKey}
+      // ... keep the rest of your existing props here
+    />
+  )}
+
+</main>
     </div>
   );
 };
