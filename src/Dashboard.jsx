@@ -1,10 +1,10 @@
 import React, { useState, useContext, useMemo } from 'react';
 import { HubContext, HubProvider } from './contexts/HubContext.jsx';
 
-// Core Components (Must exist in /components)
+// --- CORE LAYOUT ---
 import Sidebar from './components/Sidebar.jsx';
 
-// View Components (Must exist in /views)
+// --- ALL 14 VIEW IMPORTS ---
 import HomeView from './views/HomeView.jsx';
 import EventView from './views/EventView.jsx';
 import AboutView from './views/AboutView.jsx';
@@ -22,25 +22,26 @@ import TaskBarView from './views/TaskBarView.jsx';
 
 const DashboardContent = ({ isSystemAdmin, logout }) => {
   const [view, setView] = useState('home');
-  const { profile, members, hubSettings, committeeApps } = useContext(HubContext) || {};
+  const context = useContext(HubContext);
+  
+  // Safety: If Context is failing, we provide empty objects so the app doesn't crash
+  const { profile = {}, members = [], hubSettings = {}, committeeApps = [] } = context || {};
 
-  // --- PERMISSION CHECKS ---
-  // 1. Full Admin (Super Admin UID)
+  // --- TIERED PERMISSIONS ---
   const isSuperAdmin = isSystemAdmin === true;
   
-  // 2. Staff/Officer (Can see Taskbar & Edit Content)
+  // Access for Taskbar & Editing (System Admin, Officers, Committee Heads, Execomm)
   const isStaff = isSuperAdmin || 
-                  profile?.role === 'officer' || 
-                  profile?.role === 'committee-head' || 
-                  profile?.role === 'execomm';
+                  ['officer', 'committee-head', 'execomm'].includes(profile?.role?.toLowerCase());
 
   return (
     <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
+      {/* Sidebar is the anchor - it should always show */}
       <Sidebar view={view} setView={setView} logout={logout} isSystemAdmin={isSuperAdmin} />
 
       <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
         
-        {/* --- PUBLIC TIERS --- */}
+        {/* --- TIER 1: GENERAL CONTENT --- */}
         {view === 'home' && <HomeView />}
         {view === 'whats-brewing' && <EventView canEdit={isStaff} />}
         {view === 'about-us' && <AboutView />}
@@ -53,12 +54,12 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
         {view === 'the-grind-report' && <AnnouncementsView canEdit={isStaff} />}
         {view === 'profile-settings' && <ProfileSettingsView />}
 
-        {/* --- STAFF TIER (Task Bar) --- */}
+        {/* --- TIER 2: STAFF ACCESS (Task Bar) --- */}
         {view === 'task-bar' && (
-          isStaff ? <TaskBarView /> : <div className="text-red-500 text-[10px] font-black uppercase">Clearance Required</div>
+          isStaff ? <TaskBarView /> : <div className="p-10 text-red-500 font-black text-[10px] uppercase">Restricted: Staff Only</div>
         )}
 
-        {/* --- ADMIN TIER (Registry & Terminal) --- */}
+        {/* --- TIER 3: SYSTEM ADMIN ONLY (Registry & Terminal) --- */}
         {isSuperAdmin ? (
           <>
             {view === 'registry' && <RegistryView members={members} />}
@@ -72,9 +73,7 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
           </>
         ) : (
           (view === 'registry' || view === 'terminal') && (
-            <div className="text-red-500 text-[10px] font-black uppercase text-center mt-20">
-              Restricted to System Admin
-            </div>
+            <div className="p-10 text-red-500 font-black text-[10px] uppercase">Restricted: System Admin Only</div>
           )
         )}
       </main>
