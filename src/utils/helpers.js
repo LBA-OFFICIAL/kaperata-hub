@@ -54,10 +54,8 @@ export const SOCIAL_LINKS = {
 
 export const getDirectLink = (url) => { 
   if (!url || typeof url !== 'string') return ""; 
-  
   if (url.includes('drive.google.com')) { 
     const idMatch = url.match(/[-\w]{25,}/); 
-    // The thumbnail endpoint is significantly more stable for <img> tags
     if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[0]}&sz=w1000`; 
   } 
   return url; 
@@ -79,18 +77,31 @@ export const generateCSV = (headers, rows, filename) => {
   } 
 };
 
+/**
+ * LPU Academic Year Logic
+ * 1st Sem: July (7) - Dec (12)
+ * 2nd Sem: Jan (1) - June (6)
+ */
 export const getMemberIdMeta = () => { 
   const now = new Date(); 
   const month = now.getMonth() + 1; 
   const year = now.getFullYear(); 
-  let syStart = year % 100; 
-  let syEnd = (year + 1) % 100; 
-  if (month < 8) { 
-    syStart = (year - 1) % 100; 
-    syEnd = year % 100; 
-  } 
+  
+  let syStart, syEnd, sem;
+
+  if (month >= 7) {
+    // July to Dec: Start of a new Academic Year
+    syStart = year % 100;
+    syEnd = (year + 1) % 100;
+    sem = "1";
+  } else {
+    // Jan to June: Second half of the current Academic Year
+    syStart = (year - 1) % 100;
+    syEnd = year % 100;
+    sem = "2";
+  }
+
   const sy = `${String(syStart).padStart(2, '0')}${String(syEnd).padStart(2, '0')}`;
-  const sem = (month >= 8 || month <= 12) && month >= 8 ? "1" : "2";
   return { sy, sem }; 
 };
 
@@ -98,7 +109,9 @@ export const generateLBAId = (category, currentCount = 0) => {
   const { sy, sem } = getMemberIdMeta(); 
   const padded = String(Number(currentCount) + 1).padStart(4, '0'); 
   const isLeader = ['Officer', 'Committee', 'Execomm'].includes(category); 
-  return `LBA${sy}-${sem}${padded}${isLeader ? "C" : ""}`; 
+  
+  // Format: LBA 2526-10001 or LBA 2526-10001C
+  return `LBA ${sy}-${sem}${padded}${isLeader ? "C" : ""}`; 
 };
 
 export const getDailyCashPasskey = () => { 
@@ -106,11 +119,9 @@ export const getDailyCashPasskey = () => {
   const d = now.getDate();
   const m = now.getMonth() + 1;
   const y = String(now.getFullYear()).slice(-2);
-  
-  // String concatenation prevents math errors (e.g., 3 + 26 = 29)
-  // For today (March 1, 2026), this will result in: KBA-1-326
   return `KBA-${d}-${m}${y}`; 
 };
+
 // --- 3. DATE FORMATTERS ---
 
 export const formatDate = (dateInput) => { 
@@ -160,5 +171,5 @@ export const getFinancialPeriods = () => {
       sortKey: d.getTime()
     });
   }
-  return periods; // Already in descending order because of the loop
+  return periods;
 };
