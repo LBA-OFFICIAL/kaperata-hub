@@ -63,6 +63,10 @@ const Sidebar = ({ view, setView, logout, mobileMenuOpen, setMobileMenuOpen, isS
         <button onClick={logout} className="mt-6 w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-red-400 hover:bg-red-50 transition-colors">
           <LogOut size={18} />
           <span className="text-[11px] font-black uppercase tracking-wider">Sign Out</span>
-        </button>
+       </button>
       </aside>
     </>
+  );
+}; // <--- This is the line that usually goes missing
+
+export default Sidebar;
