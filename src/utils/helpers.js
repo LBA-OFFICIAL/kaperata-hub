@@ -143,3 +143,22 @@ export const getEventDateParts = (startInput, endInput) => {
   const endDay = end.getDate(); 
   return startMonth === endMonth ? { day: `${startDay}-${endDay}`, month: startMonth } : { day: `${startDay}-${endDay}`, month: `${startMonth}/${endMonth}` }; 
 };
+
+export const getFinancialPeriods = () => {
+  const periods = [];
+  const now = new Date();
+  
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthName = d.toLocaleString('default', { month: 'long' });
+    const year = d.getFullYear();
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+    
+    periods.push({
+      label: `${monthName} ${year}`,
+      value: `${monthNum}-${year}`,
+      sortKey: d.getTime()
+    });
+  }
+  return periods; // Already in descending order because of the loop
+};
