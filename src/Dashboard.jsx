@@ -4,7 +4,7 @@ import { HubContext, HubProvider } from './contexts/HubContext.jsx';
 // Core Layout
 import Sidebar from './components/Sidebar.jsx';
 
-// 1. IMPORT ALL 14 VIEW COMPONENTS (Matching your filenames)
+// 1. IMPORT ALL 14 VIEW COMPONENTS
 import HomeView from './views/HomeView.jsx';
 import EventView from './views/EventView.jsx';                   // What's Brewing?
 import AboutView from './views/AboutView.jsx';                   // About Us
@@ -22,7 +22,6 @@ import TaskBarView from './views/TaskBarView.jsx';               // The Task Bar
 
 const DashboardContent = ({ isSystemAdmin, logout }) => {
   const [view, setView] = useState('home');
-  // Adding the missing mobile state that Sidebar needs
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const { profile, members, hubSettings, committeeApps } = useContext(HubContext) || {};
@@ -32,9 +31,23 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
   const isStaff = isSuperAdmin || 
                   ['officer', 'committee-head', 'execomm'].includes(profile?.role?.toLowerCase());
 
+  // --- LOADING GATE ---
+  // If profile is missing, we show a loader instead of crashing on 'birthMonth'
+  if (!profile || !profile.uid) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-[#FDFBF7]">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="w-8 h-8 border-4 border-amber-400 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-[10px] font-black uppercase tracking-[0.3em] text-[#3E2723] animate-pulse">
+            Grinding the beans...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
-      {/* Sidebar now gets the mobile states it requires to function */}
       <Sidebar 
         view={view} 
         setView={setView} 
@@ -47,17 +60,17 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
       <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
         
         {/* TIER 1: PUBLIC ACCESS (Everyone) */}
-        {view === 'home' && <HomeView />}
+        {view === 'home' && <HomeView profile={profile} />}
         {view === 'about' && <AboutView />}
         {view === 'events' && <EventView canEdit={isStaff} />}
         {view === 'announcements' && <AnnouncementsView canEdit={isStaff} />}
-        {view === 'members_corner' && <MemberCornerView />}
+        {view === 'members_corner' && <MemberCornerView profile={profile} />}
         {view === 'series' && <SeriesView canEdit={isStaff} />}
         {view === 'masterclass' && <MasterclassView />}
         {view === 'mastery' && <MasteryView />}
         {view === 'team' && <TeamView />}
         {view === 'committee_hunt' && <CommitteeHuntView />}
-        {view === 'profile' && <ProfileSettingsView />}
+        {view === 'profile' && <ProfileSettingsView profile={profile} />}
 
         {/* TIER 2: STAFF ACCESS (Task Bar) */}
         {view === 'daily_grind' && (
