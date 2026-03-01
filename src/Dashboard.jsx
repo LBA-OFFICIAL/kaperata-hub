@@ -2,7 +2,7 @@ import React, { useState, useContext, Suspense, lazy } from 'react';
 import { HubContext, HubProvider } from './contexts/HubContext.jsx';
 import Sidebar from './components/Sidebar.jsx';
 
-// --- LAZY LOADING ---
+// LAZY LOADING
 const HomeView = lazy(() => import('./views/HomeView.jsx'));
 const EventView = lazy(() => import('./views/EventView.jsx'));
 const AboutView = lazy(() => import('./views/AboutView.jsx'));
@@ -18,20 +18,16 @@ const RegistryView = lazy(() => import('./views/RegistryView.jsx'));
 const TerminalView = lazy(() => import('./views/TerminalView.jsx'));
 const TaskBarView = lazy(() => import('./views/TaskBarView.jsx'));
 
-// --- ERROR BOUNDARY COMPONENT ---
-class ViewErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, errorMsg: '' };
-  }
-  static getDerivedStateFromError(error) { return { hasError: true, errorMsg: error.toString() }; }
+// EMERGENCY ERROR BOUNDARY
+class GlobalErrorGuard extends React.Component {
+  state = { hasError: false };
+  static getDerivedStateFromError() { return { hasError: true }; }
   render() {
     if (this.state.hasError) {
       return (
-        <div className="p-8 border-2 border-dashed border-red-200 rounded-3xl bg-red-50">
-          <p className="text-red-500 font-black text-[10px] uppercase tracking-widest">Component Crash Detected</p>
-          <p className="text-red-400 text-[11px] mt-2 font-mono">{this.state.errorMsg}</p>
-          <button onClick={() => window.location.reload()} className="mt-4 text-[10px] font-bold underline text-red-600 uppercase">Reload Hub</button>
+        <div className="p-10 text-center">
+          <p className="text-[10px] font-black uppercase text-red-500">View Loading Error</p>
+          <button onClick={() => window.location.reload()} className="text-[10px] underline mt-2">Retry</button>
         </div>
       );
     }
@@ -42,13 +38,15 @@ class ViewErrorBoundary extends React.Component {
 const DashboardContent = ({ isSystemAdmin, logout }) => {
   const [view, setView] = useState('home');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { profile, members = [], hubSettings = {}, committeeApps = [] } = useContext(HubContext) || {};
 
+  // Use a fallback empty object so useContext never returns null
+  const context = useContext(HubContext) || {};
+  const { profile = {}, members = [], hubSettings = {}, committeeApps = [] } = context;
+
+  // ACCESS LOGIC
   const isSuperAdmin = isSystemAdmin === true;
-  const isStaff = isSuperAdmin || ['officer', 'committee-head', 'execomm'].includes(profile?.role?.toLowerCase());
-
-  // Safety: If profile isn't loaded yet, keep the loader visible
-  if (!profile) return <div className="h-screen w-full flex items-center justify-center bg-[#FDFBF7] text-[10px] font-black uppercase text-amber-900 tracking-widest">Grinding Beans...</div>;
+  const userRole = profile?.role?.toLowerCase() || 'member';
+  const isStaff = isSuperAdmin || ['officer', 'committee-head', 'execomm'].includes(userRole);
 
   return (
     <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
@@ -62,9 +60,10 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
       />
 
       <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
-        <ViewErrorBoundary key={view}> {/* Key ensures boundary resets on tab change */}
-          <Suspense fallback={<div className="text-[10px] font-black uppercase text-amber-600">Steeping...</div>}>
+        <GlobalErrorGuard key={view}>
+          <Suspense fallback={<div className="p-10 text-[10px] font-black uppercase animate-pulse text-amber-600">Loading View...</div>}>
             
+            {/* PUBLIC/MEMBER VIEWS */}
             {view === 'home' && <HomeView profile={profile} />}
             {view === 'about' && <AboutView />}
             {view === 'events' && <EventView canEdit={isStaff} />}
@@ -77,21 +76,23 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
             {view === 'committee_hunt' && <CommitteeHuntView />}
             {view === 'profile' && <ProfileSettingsView profile={profile} />}
 
-            {/* RESTRICTED VIEWS */}
+            {/* STAFF/OFFICER VIEWS */}
             {view === 'daily_grind' && (isStaff ? <TaskBarView /> : <AccessDenied />)}
+            
+            {/* ADMIN ONLY VIEWS */}
             {view === 'members' && (isSuperAdmin ? <RegistryView members={members} /> : <AccessDenied />)}
             {view === 'reports' && (isSuperAdmin ? <TerminalView registry={members} hubSettings={hubSettings} committeeApps={committeeApps} /> : <AccessDenied />)}
 
           </Suspense>
-        </ViewErrorBoundary>
+        </GlobalErrorGuard>
       </main>
     </div>
   );
 };
 
 const AccessDenied = () => (
-  <div className="h-full flex items-center justify-center">
-    <p className="text-[10px] font-black uppercase text-red-500 tracking-widest">Access Restricted</p>
+  <div className="h-full flex items-center justify-center text-red-500 text-[10px] font-black uppercase tracking-widest">
+    Access Restricted
   </div>
 );
 
