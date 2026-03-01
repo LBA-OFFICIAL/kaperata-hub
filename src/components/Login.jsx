@@ -6,7 +6,7 @@ import {
   ORG_LOGO_URL, PROGRAMS, MONTHS, getDirectLink, 
   generateLBAId, getDailyCashPasskey, getMemberIdMeta 
 } from '../utils/helpers';
-import { Loader2, ArrowRight, ArrowLeft, X, HelpCircle, Coffee } from 'lucide-react';
+import { Loader2, ArrowRight, ArrowLeft, X, HelpCircle } from 'lucide-react';
 
 const Login = ({ onLoginSuccess, initialError }) => {
   const [authMode, setAuthMode] = useState('login');
@@ -14,11 +14,8 @@ const Login = ({ onLoginSuccess, initialError }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError || '');
   const [showForgotHelp, setShowForgotHelp] = useState(false);
-  
-  // Dynamic Settings from Admin Terminal
   const [adminSettings, setAdminSettings] = useState({ gcashNumber: 'Loading...' });
 
-  // Input States
   const [memberIdInput, setMemberIdInput] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [regType, setRegType] = useState('New Member');
@@ -26,21 +23,19 @@ const Login = ({ onLoginSuccess, initialError }) => {
   const [refNo, setRefNo] = useState('');
   const [cashKeyInput, setCashKeyInput] = useState('');
   const [formData, setFormData] = useState({
-    fName: '', mi: '', lName: '', email: '', prog: '', pass: '', confirm: '', bMonth: '1', bDay: '1', key: ''
+    fName: '', mi: '', lName: '', email: '', prog: '', pass: '', confirm: '', bMonth: '1', bDay: '1'
   });
 
   useEffect(() => {
-    // Listen for GCash Number updates from the Admin Settings document
     return onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'general'), (s) => {
       if (s.exists()) setAdminSettings(s.data());
     });
   }, []);
 
- const handleAuth = async (e) => {
+  const handleAuth = async (e) => {
     e.preventDefault();
     setError('');
 
-    // --- REGISTRATION STEP 1 TRANSITION ---
     if (authMode === 'register' && regStep === 1) {
       if (formData.pass !== formData.confirm) return setError("Passwords do not match!");
       if (!formData.prog) return setError("Please select your program.");
@@ -50,25 +45,24 @@ const Login = ({ onLoginSuccess, initialError }) => {
 
     setLoading(true);
     try {
-      // 1. Ensure an Anonymous Auth Session exists for both Login and Register
       let currentUser = auth.currentUser;
       if (!currentUser) {
         const result = await signInAnonymously(auth);
         currentUser = result.user;
       }
 
+      let finalProfile = null;
+
       if (authMode === 'register') {
-        // --- REGISTRATION FLOW ---
         if (payMethod === 'Cash' && cashKeyInput.toUpperCase() !== getDailyCashPasskey().toUpperCase()) {
           throw new Error("Invalid Cash Key. Ask the Officer in charge.");
         }
 
         const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
         
-        const profile = await runTransaction(db, async (tx) => {
+        finalProfile = await runTransaction(db, async (tx) => {
           const snap = await tx.get(counterRef);
           const count = snap.exists() ? (snap.data().memberCount || 0) : 0;
-          
           const lbaId = generateLBAId('Member', count);
           const meta = getMemberIdMeta();
 
@@ -97,16 +91,9 @@ const Login = ({ onLoginSuccess, initialError }) => {
           return data;
         });
 
-        localStorage.setItem('lba_profile', JSON.stringify(profile));
-        onLoginSuccess(profile);
-
       } else {
-        // --- LOGIN FLOW ---
         const cleanedId = memberIdInput.trim().toUpperCase();
-        console.log("Attempting login for ID:", cleanedId);
-        
-        const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
-        const q = query(registryRef, where('memberId', '==', cleanedId), limit(1));
+        const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', cleanedId), limit(1));
         const snap = await getDocs(q);
         
         if (snap.empty) throw new Error("Barista ID not found. Did you register yet?");
@@ -114,23 +101,23 @@ const Login = ({ onLoginSuccess, initialError }) => {
         const userDoc = snap.docs[0];
         const userData = userDoc.data();
 
-        if (userData.password !== loginPass) throw new Error("Incorrect password. Double-check your keys.");
+        if (userData.password !== loginPass) throw new Error("Incorrect password.");
 
-        // CRITICAL: UID Re-linking
-        // If the current browser session UID is different from the stored UID, update it.
         if (userData.uid !== currentUser.uid) {
           await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', userDoc.id), { 
             uid: currentUser.uid 
           });
           userData.uid = currentUser.uid;
         }
-
-        // Inside handleAuth after successful validation:
-localStorage.setItem('lba_session_active', 'true');
-window.location.reload(); // Temporary "Hammer" to force the app to recognize the new session
-        localStorage.setItem('lba_profile', JSON.stringify(userData));
-        onLoginSuccess(userData);
+        finalProfile = userData;
       }
+
+      if (finalProfile) {
+        // --- THE FIX: Save to device memory BEFORE notifying the App ---
+        localStorage.setItem('lba_profile', JSON.stringify(finalProfile));
+        onLoginSuccess(finalProfile);
+      }
+
     } catch (err) { 
       console.error("Auth Error:", err);
       setError(err.message); 
@@ -147,7 +134,7 @@ window.location.reload(); // Temporary "Hammer" to force the app to recognize th
             <button onClick={() => setShowForgotHelp(false)} className="absolute top-4 right-4 text-gray-400 hover:text-black transition-colors"><X size={20}/></button>
             <HelpCircle size={40} className="mx-auto text-amber-500 mb-4" />
             <h2 className="font-serif text-lg font-black uppercase mb-2 leading-tight">Lost Your Keys?</h2>
-            <p className="text-[10px] font-bold text-gray-400 uppercase leading-relaxed">Please contact an <span className="text-[#3E2723]">LBA Officer</span> to verify your identity and reset your password.</p>
+            <p className="text-[10px] font-bold text-gray-400 uppercase leading-relaxed">Please contact an <span className="text-[#3E2723]">LBA Officer</span> to verify your identity.</p>
             <button onClick={() => setShowForgotHelp(false)} className="mt-6 w-full py-3 bg-[#3E2723] text-[#FDB813] rounded-xl font-black text-[10px] uppercase">Got it</button>
           </div>
         </div>
@@ -155,12 +142,7 @@ window.location.reload(); // Temporary "Hammer" to force the app to recognize th
 
       <div className="bg-white p-10 md:p-14 rounded-[60px] shadow-2xl max-w-md w-full border-b-[12px] border-amber-400 relative">
         <div className="flex flex-col items-center mb-8 text-center">
-          <img 
-            src={getDirectLink(ORG_LOGO_URL)} 
-            className="w-24 h-24 mb-6 object-contain" 
-            alt="LBA" 
-            onError={(e) => e.target.src="https://ui-avatars.com/api/?name=LBA&background=3E2723&color=FDB813&bold=true"}
-          />
+          <img src={getDirectLink(ORG_LOGO_URL)} className="w-24 h-24 mb-6 object-contain" alt="LBA" />
           <h1 className="font-serif text-xl font-black uppercase tracking-tight leading-tight px-4">LPU Baristas' Association</h1>
           <p className="text-[11px] font-black uppercase tracking-[0.4em] text-amber-600 mt-2">Kaperata Hub</p>
         </div>
@@ -169,7 +151,7 @@ window.location.reload(); // Temporary "Hammer" to force the app to recognize th
 
         <form onSubmit={handleAuth} className="space-y-3">
           {authMode === 'login' ? (
-            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-2">
+            <div className="space-y-3">
               <input type="text" placeholder="BARISTA ID" className="w-full p-4 bg-amber-50/50 rounded-2xl font-black text-xs outline-none uppercase" value={memberIdInput} onChange={(e) => setMemberIdInput(e.target.value)} required />
               <div className="space-y-1">
                 <input type="password" placeholder="PASSWORD" className="w-full p-4 bg-amber-50/50 rounded-2xl font-black text-xs outline-none" value={loginPass} onChange={(e) => setLoginPass(e.target.value)} required />
@@ -182,15 +164,12 @@ window.location.reload(); // Temporary "Hammer" to force the app to recognize th
           ) : (
             <div className="space-y-3">
               {regStep === 1 ? (
-                <div className="space-y-3 animate-in fade-in slide-in-from-right-4">
-                  {/* NAME GRID */}
+                <div className="space-y-3">
                   <div className="grid grid-cols-5 gap-1">
                     <input type="text" placeholder="FIRST" className="col-span-2 p-3 bg-amber-50/50 rounded-xl text-[10px] font-black uppercase outline-none" onChange={(e)=>setFormData({...formData, fName: e.target.value})} value={formData.fName} required />
                     <input type="text" placeholder="MI" className="p-3 bg-amber-50/50 rounded-xl text-[10px] font-black uppercase outline-none text-center" onChange={(e)=>setFormData({...formData, mi: e.target.value})} value={formData.mi} />
                     <input type="text" placeholder="LAST" className="col-span-2 p-3 bg-amber-50/50 rounded-xl text-[10px] font-black uppercase outline-none" onChange={(e)=>setFormData({...formData, lName: e.target.value})} value={formData.lName} required />
                   </div>
-                  
-                  {/* PROGRAM & BIRTHDAY GRID */}
                   <div className="grid grid-cols-2 gap-2">
                     <select className="p-3 bg-amber-50/50 rounded-xl text-[10px] font-black uppercase outline-none" onChange={(e)=>setFormData({...formData, prog: e.target.value})} value={formData.prog} required>
                       <option value="">PROGRAM</option>
@@ -200,65 +179,43 @@ window.location.reload(); // Temporary "Hammer" to force the app to recognize th
                       <select className="w-2/3 p-3 bg-amber-50/50 rounded-xl text-[10px] font-black uppercase outline-none" onChange={(e)=>setFormData({...formData, bMonth: e.target.value})} value={formData.bMonth}>
                         {MONTHS.map(m => <option key={m.value} value={m.value}>{m.label.slice(0,3)}</option>)}
                       </select>
-                      <input type="number" placeholder="DD" min="1" max="31" className="w-1/3 p-3 bg-amber-50/50 rounded-xl text-[10px] font-black outline-none text-center" onChange={(e)=>setFormData({...formData, bDay: e.target.value})} value={formData.bDay} required />
+                      <input type="number" placeholder="DD" className="w-1/3 p-3 bg-amber-50/50 rounded-xl text-[10px] font-black text-center" onChange={(e)=>setFormData({...formData, bDay: e.target.value})} value={formData.bDay} required />
                     </div>
                   </div>
-
                   <input type="email" placeholder="LPU EMAIL" className="w-full p-3 bg-amber-50/50 rounded-xl text-[10px] font-black outline-none" onChange={(e)=>setFormData({...formData, email: e.target.value})} value={formData.email} required />
-                  
                   <div className="grid grid-cols-2 gap-2">
                     <input type="password" placeholder="PASSWORD" className="p-3 bg-amber-50/50 rounded-xl text-[10px] font-black outline-none" onChange={(e)=>setFormData({...formData, pass: e.target.value})} value={formData.pass} required />
                     <input type="password" placeholder="CONFIRM" className="p-3 bg-amber-50/50 rounded-xl text-[10px] font-black outline-none" onChange={(e)=>setFormData({...formData, confirm: e.target.value})} value={formData.confirm} required />
                   </div>
-                  
                   <button type="submit" className="w-full bg-[#3E2723] text-[#FDB813] py-4 rounded-2xl font-black uppercase text-xs flex justify-center items-center gap-2 mt-2 shadow-lg">
                     Next: Payment <ArrowRight size={16}/>
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4 animate-in fade-in slide-in-from-right-4">
-                  {/* STEP 2: PAYMENT */}
+                <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black uppercase px-1 text-amber-800/40">Type</label>
-                      <select className="w-full p-3 bg-amber-100 rounded-xl text-[10px] font-black uppercase outline-none" value={regType} onChange={(e) => setRegType(e.target.value)}>
-                        <option value="New Member">New (₱100)</option>
-                        <option value="For Renewal">Renewal (₱50)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[8px] font-black uppercase px-1 text-amber-800/40">Method</label>
-                      <select className="w-full p-3 bg-amber-100 rounded-xl text-[10px] font-black uppercase outline-none" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
-                        <option value="GCash">GCash</option>
-                        <option value="Cash">Cash</option>
-                      </select>
-                    </div>
+                    <select className="w-full p-3 bg-amber-100 rounded-xl text-[10px] font-black uppercase outline-none" value={regType} onChange={(e) => setRegType(e.target.value)}>
+                      <option value="New Member">New (₱100)</option>
+                      <option value="For Renewal">Renewal (₱50)</option>
+                    </select>
+                    <select className="w-full p-3 bg-amber-100 rounded-xl text-[10px] font-black uppercase outline-none" value={payMethod} onChange={(e) => setPayMethod(e.target.value)}>
+                      <option value="GCash">GCash</option>
+                      <option value="Cash">Cash</option>
+                    </select>
                   </div>
-
                   {payMethod === 'GCash' ? (
                     <div className="bg-blue-50 border-2 border-blue-100 rounded-3xl p-5 text-center">
-                      <p className="text-[9px] font-black uppercase text-blue-400 mb-1">Send Payment To</p>
-                      <p className="text-xl font-black text-blue-700 tracking-tighter">{adminSettings.gcashNumber}</p>
-                      <div className="mt-4 space-y-1">
-                        <label className="text-[8px] font-black uppercase text-blue-400 block text-left px-1">Reference Number</label>
-                        <input type="text" placeholder="13-DIGIT REF NO." className="w-full p-3 bg-white rounded-xl text-[10px] font-black uppercase outline-none border border-blue-200" value={refNo} onChange={(e) => setRefNo(e.target.value)} required />
-                      </div>
+                      <p className="text-xl font-black text-blue-700">{adminSettings.gcashNumber}</p>
+                      <input type="text" placeholder="13-DIGIT REF NO." className="w-full p-3 bg-white rounded-xl text-[10px] font-black outline-none border border-blue-200 mt-4" value={refNo} onChange={(e) => setRefNo(e.target.value)} required />
                     </div>
                   ) : (
-                    <div className="bg-[#3E2723] rounded-3xl p-5 text-center border-b-4 border-amber-900">
-                      <p className="text-[9px] font-black uppercase text-amber-500/60 mb-3">Officer Authorization</p>
-                      <div className="space-y-1">
-                        <label className="text-[8px] font-black uppercase text-amber-500 block text-left px-1">Enter Cash Key</label>
-                        <input type="text" placeholder="••••••" className="w-full p-3 bg-[#2D1B18] text-amber-400 rounded-xl text-center text-sm font-black uppercase outline-none border border-amber-900" value={cashKeyInput} onChange={(e) => setCashKeyInput(e.target.value)} required />
-                      </div>
+                    <div className="bg-[#3E2723] rounded-3xl p-5 text-center">
+                      <input type="text" placeholder="ENTER CASH KEY" className="w-full p-3 bg-[#2D1B18] text-amber-400 rounded-xl text-center text-sm font-black outline-none border border-amber-900" value={cashKeyInput} onChange={(e) => setCashKeyInput(e.target.value)} required />
                     </div>
                   )}
-
-                  <div className="grid grid-cols-2 gap-2 mt-4">
-                    <button type="button" onClick={() => setRegStep(1)} className="py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px] flex justify-center items-center gap-1">
-                      <ArrowLeft size={14}/> Back
-                    </button>
-                    <button type="submit" disabled={loading} className="py-4 bg-[#3E2723] text-[#FDB813] rounded-2xl font-black uppercase text-[10px] shadow-lg">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={() => setRegStep(1)} className="py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px]"><ArrowLeft size={14} className="inline mr-1"/> Back</button>
+                    <button type="submit" disabled={loading} className="py-4 bg-[#3E2723] text-[#FDB813] rounded-2xl font-black uppercase text-[10px]">
                       {loading ? <Loader2 className="animate-spin mx-auto" size={16} /> : 'Complete Brew'}
                     </button>
                   </div>
@@ -268,7 +225,7 @@ window.location.reload(); // Temporary "Hammer" to force the app to recognize th
           )}
         </form>
 
-        <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setRegStep(1); }} className="w-full mt-8 text-[10px] font-black uppercase tracking-widest text-amber-800 underline decoration-2 underline-offset-4 text-center">
+        <button onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setRegStep(1); }} className="w-full mt-8 text-[10px] font-black uppercase tracking-widest text-amber-800 underline underline-offset-4 text-center">
           {authMode === 'login' ? 'Not Yet Registered? Brew With Us!' : 'Already a Member? Login'}
         </button>
       </div>
