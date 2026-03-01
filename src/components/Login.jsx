@@ -125,6 +125,9 @@ const Login = ({ onLoginSuccess, initialError }) => {
           userData.uid = currentUser.uid;
         }
 
+        // Inside handleAuth after successful validation:
+localStorage.setItem('lba_session_active', 'true');
+window.location.reload(); // Temporary "Hammer" to force the app to recognize the new session
         localStorage.setItem('lba_profile', JSON.stringify(userData));
         onLoginSuccess(userData);
       }
