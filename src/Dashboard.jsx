@@ -1,90 +1,42 @@
-import React, { useState, useContext, useMemo } from 'react';
-import { HubContext, HubProvider } from './contexts/HubContext.jsx';
+import React from 'react';
 
-// --- CORE LAYOUT ---
-import Sidebar from './components/Sidebar.jsx';
+// We are NOT importing Sidebar or Context yet. 
+// This is a pure "Emergency" test.
 
-// --- ALL 14 VIEW IMPORTS ---
-import HomeView from './views/HomeView.jsx';
-import EventView from './views/EventView.jsx';
-import AboutView from './views/AboutView.jsx';
-import TeamView from './views/TeamView.jsx';
-import MemberCornerView from './views/MemberCornerView.jsx';
-import SeriesView from './views/SeriesView.jsx';
-import MasterclassView from './views/MasterclassView.jsx';
-import MasteryView from './views/MasteryView.jsx';
-import CommitteeHuntView from './views/CommitteeHuntView.jsx';
-import AnnouncementsView from './views/AnnouncementsView.jsx';
-import ProfileSettingsView from './views/ProfileSettingsView.jsx';
-import RegistryView from './views/RegistryView.jsx';
-import TerminalView from './views/TerminalView.jsx';
-import TaskBarView from './views/TaskBarView.jsx';
-
-const DashboardContent = ({ isSystemAdmin, logout }) => {
-  const [view, setView] = useState('home');
-  const context = useContext(HubContext);
-  
-  // Safety: If Context is failing, we provide empty objects so the app doesn't crash
-  const { profile = {}, members = [], hubSettings = {}, committeeApps = [] } = context || {};
-
-  // --- TIERED PERMISSIONS ---
-  const isSuperAdmin = isSystemAdmin === true;
-  
-  // Access for Taskbar & Editing (System Admin, Officers, Committee Heads, Execomm)
-  const isStaff = isSuperAdmin || 
-                  ['officer', 'committee-head', 'execomm'].includes(profile?.role?.toLowerCase());
-
+const Dashboard = ({ isSystemAdmin, logout }) => {
   return (
-    <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
-      {/* Sidebar is the anchor - it should always show */}
-      <Sidebar view={view} setView={setView} logout={logout} isSystemAdmin={isSuperAdmin} />
-
-      <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
+    <div style={{ 
+      height: '100vh', 
+      width: '100vw', 
+      backgroundColor: '#FDFBF7', 
+      display: 'flex', 
+      flexDirection: 'column',
+      alignItems: 'center', 
+      justifyContent: 'center',
+      fontFamily: 'sans-serif' 
+    }}>
+      <div style={{ padding: '40px', backgroundColor: 'white', borderRadius: '20px', boxShadow: '0 10px 25px rgba(0,0,0,0.1)', textAlign: 'center' }}>
+        <h1 style={{ color: '#3E2723', margin: '0' }}>☕ LBA Hub Emergency Mode</h1>
+        <p style={{ color: '#A8875C', fontWeight: 'bold', fontSize: '12px', marginTop: '10px' }}>THE DASHBOARD FILE IS WORKING</p>
         
-        {/* --- TIER 1: GENERAL CONTENT --- */}
-        {view === 'home' && <HomeView />}
-        {view === 'whats-brewing' && <EventView canEdit={isStaff} />}
-        {view === 'about-us' && <AboutView />}
-        {view === 'brew-crew' && <TeamView />}
-        {view === 'members-corner' && <MemberCornerView />}
-        {view === 'barista-diaries' && <SeriesView canEdit={isStaff} />}
-        {view === 'masterclass' && <MasterclassView />}
-        {view === 'mastery-program' && <MasteryView />}
-        {view === 'committee-hunt' && <CommitteeHuntView />}
-        {view === 'the-grind-report' && <AnnouncementsView canEdit={isStaff} />}
-        {view === 'profile-settings' && <ProfileSettingsView />}
+        <div style={{ marginTop: '30px', textAlign: 'left', fontSize: '13px', color: '#5D4037' }}>
+          <p>If you see this screen, the problem is likely one of these:</p>
+          <ul style={{ lineHeight: '1.6' }}>
+            <li><strong>Sidebar.jsx:</strong> Check if it has an <code>export default Sidebar</code>.</li>
+            <li><strong>HubContext.jsx:</strong> Check for typos in your Firebase paths.</li>
+            <li><strong>Firebase.js:</strong> Check if your <code>db</code> or <code>appId</code> are exported correctly.</li>
+          </ul>
+        </div>
 
-        {/* --- TIER 2: STAFF ACCESS (Task Bar) --- */}
-        {view === 'task-bar' && (
-          isStaff ? <TaskBarView /> : <div className="p-10 text-red-500 font-black text-[10px] uppercase">Restricted: Staff Only</div>
-        )}
-
-        {/* --- TIER 3: SYSTEM ADMIN ONLY (Registry & Terminal) --- */}
-        {isSuperAdmin ? (
-          <>
-            {view === 'registry' && <RegistryView members={members} />}
-            {view === 'terminal' && (
-              <TerminalView 
-                registry={members}
-                hubSettings={hubSettings}
-                committeeApps={committeeApps}
-              />
-            )}
-          </>
-        ) : (
-          (view === 'registry' || view === 'terminal') && (
-            <div className="p-10 text-red-500 font-black text-[10px] uppercase">Restricted: System Admin Only</div>
-          )
-        )}
-      </main>
+        <button 
+          onClick={logout}
+          style={{ marginTop: '20px', padding: '10px 20px', borderRadius: '10px', border: 'none', backgroundColor: '#3E2723', color: 'white', cursor: 'pointer' }}
+        >
+          Test Logout Button
+        </button>
+      </div>
     </div>
   );
 };
-
-const Dashboard = (props) => (
-  <HubProvider>
-    <DashboardContent {...props} />
-  </HubProvider>
-);
 
 export default Dashboard;
