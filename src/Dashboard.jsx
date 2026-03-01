@@ -2,26 +2,26 @@ import React, { useState, useContext, useMemo } from 'react';
 import { doc, updateDoc, deleteDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from './firebase'; 
 import { HubContext } from './contexts/HubContext.jsx';
-import { generateLBAId, getDailyCashPasskey, getDirectLink } from './utils/helpers';
+import { generateLBAId, getDailyCashPasskey } from './utils/helpers';
 
-// Views
+// Components
+import Sidebar from './components/Sidebar.jsx';
 import TerminalView from './views/TerminalView.jsx';
 import RegistryView from './views/RegistryView.jsx';
-// ... import your other views here
 
 const DashboardContent = ({ isSystemAdmin, logout }) => {
   const [view, setView] = useState('home');
-  const { hubSettings, profile, members, committeeApps, secureKeys, logs } = useContext(HubContext);
+  const { hubSettings, profile, members, committeeApps, secureKeys } = useContext(HubContext);
 
-  // --- 1. THE FINANCIAL ENGINE (Stats) ---
+  // 1. DYNAMIC STATS (Updates instantly as members are verified)
   const financialStats = useMemo(() => ({
     totalPaid: members?.filter(m => m.paymentStatus === 'paid').length || 0,
     pending: members?.filter(m => m.paymentStatus === 'unpaid').length || 0,
     exempt: members?.filter(m => m.paymentStatus === 'exempt').length || 0
   }), [members]);
 
-  // --- 2. THE ID FACTORY (Safe Registration/Verification) ---
-  // This handles the "Smooth Flow" from Unpaid -> Paid + ID Assignment
+  // 2. THE ATOMIC VERIFIER (The core of the "Smooth Flow")
+  // This turns an 'unpaid' registration into an 'Official LBA Member'
   const handleVerifyMember = async (memberDocId) => {
     try {
       await runTransaction(db, async (transaction) => {
@@ -31,76 +31,77 @@ const DashboardContent = ({ isSystemAdmin, logout }) => {
         const counterSnap = await transaction.get(counterRef);
         const memberSnap = await transaction.get(memberRef);
 
-        if (!memberSnap.exists()) throw "Member not found";
+        if (!memberSnap.exists()) throw "Member record missing.";
 
-        // Increment Global Counter
-        const currentCount = counterSnap.exists() ? counterSnap.data().memberCount || 0 : 0;
-        const nextCount = currentCount + 1;
-
-        // Generate the Official LBA ID
+        // Calculate next ID based on your existing counter
+        const currentCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0;
         const officialId = generateLBAId(memberSnap.data().positionCategory, currentCount);
 
-        // Atomic Update: Mark as Paid and Assign ID simultaneously
+        // Update Member & Increment Counter in one atomic "Breath"
         transaction.update(memberRef, {
-          memberId: officialId,
+          memberId: officialId, // Replaces the temp ID with the permanent LBA ID
           paymentStatus: 'paid',
           verifiedAt: serverTimestamp(),
           verifiedBy: profile?.name || 'Admin'
         });
 
-        transaction.set(counterRef, { memberCount: nextCount }, { merge: true });
+        transaction.set(counterRef, { memberCount: currentCount + 1 }, { merge: true });
       });
-      alert("Barista Verified & ID Assigned!");
+      console.log("Member successfully verified and ID assigned.");
     } catch (err) {
-      console.error("Transaction failed: ", err);
-      alert("Flow interrupted. Try again.");
+      console.error("Verification Transaction Failed:", err);
+      alert("System busy. Please try verifying again.");
     }
   };
 
-  // --- 3. THE CONTROL CENTER HANDLERS ---
+  // 3. SYSTEM TOGGLES (Maintenance, Registration, Keys)
   const handleUpdateSetting = async (field, val) => {
-    const opsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops');
-    await updateDoc(opsRef, { [field]: val });
+    try {
+      const opsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops');
+      await updateDoc(opsRef, { [field]: val });
+    } catch (e) { console.error("Setting update failed", e); }
   };
 
   const handleRotateKey = async (type) => {
-    const path = type === 'daily' ? ['settings', 'ops'] : ['settings', 'keys'];
-    const key = Math.random().toString(36).substring(2, 8).toUpperCase();
-    await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', ...path), { 
-      [type === 'daily' ? 'dailyKey' : type]: key 
-    });
+    try {
+      const path = type === 'daily' ? ['settings', 'ops'] : ['settings', 'keys'];
+      const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
+      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', ...path), { 
+        [type === 'daily' ? 'dailyKey' : type]: newKey 
+      });
+    } catch (e) { console.error("Key rotation failed", e); }
   };
 
-  // --- 4. THE VIEW RENDERER ---
   return (
-    <div className="flex h-screen bg-[#FDFBF7]">
-      {/* Sidebar logic would go here */}
-      
-      <main className="flex-1 overflow-y-auto p-8">
-        {view === 'members' && <RegistryView registry={members} />}
+    <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
+      <Sidebar view={view} setView={setView} logout={logout} isSystemAdmin={isSystemAdmin} />
 
+      <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
+        {/* VIEW: MEMBER REGISTRY */}
+        {view === 'members' && <RegistryView members={members} />}
+
+        {/* VIEW: ADMIN TERMINAL */}
         {view === 'reports' && isSystemAdmin && (
           <TerminalView 
-            // Data Crumbs
             registry={members}
             financialStats={financialStats}
             committeeApps={committeeApps}
             hubSettings={hubSettings}
             currentDailyKey={getDailyCashPasskey()}
-            
-            // Action Crumbs
             handleVerifyMember={handleVerifyMember}
             handleRotateKey={handleRotateKey}
             handleToggleMaintenance={() => handleUpdateSetting('maintenanceMode', !hubSettings.maintenanceMode)}
             handleToggleRegistration={() => handleUpdateSetting('registrationOpen', !hubSettings.registrationOpen)}
-            
-            // Recruitment Crumbs
             initiateAppAction={async (app, status) => {
-              const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id);
-              await updateDoc(appRef, { status, statusUpdatedAt: serverTimestamp() });
+              await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id), { 
+                status, 
+                statusUpdatedAt: serverTimestamp() 
+              });
             }}
           />
         )}
+        
+        {/* Render other views (home, about, etc.) similarly */}
       </main>
     </div>
   );
