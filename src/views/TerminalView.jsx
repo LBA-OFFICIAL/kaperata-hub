@@ -75,7 +75,7 @@ const TerminalView = ({
                     </div>
                   </div>
                   <button 
-                    onClick={() => handleVerifyMember(m.id)}
+                    onClick={() => handleVerifyMember(barista.id)}
                     className="bg-[#3E2723] text-[#FDB813] px-8 py-3 rounded-2xl font-black text-[10px] uppercase hover:scale-105 transition-transform shadow-md flex items-center justify-center gap-2"
                   >
                     <CheckCircle2 size={14}/> Verify Payment
