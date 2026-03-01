@@ -1,117 +1,99 @@
 import React, { useState, useContext, useMemo } from 'react';
-import { doc, updateDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
-import { db, appId } from './firebase'; 
-import { HubContext, HubProvider } from './contexts/HubContext.jsx'; // Added HubProvider
-import { generateLBAId, getDailyCashPasskey } from './utils/helpers';
+import { HubContext, HubProvider } from './contexts/HubContext.jsx';
 
-// Components
+// --- VIEW IMPORTS ---
 import Sidebar from './components/Sidebar.jsx';
-import TerminalView from './views/TerminalView.jsx';
-import RegistryView from './views/RegistryView.jsx';
+import HomeView from './views/HomeView.jsx';
+import EventView from './views/EventView.jsx';                   // Label: What's Brewing
+import AboutView from './views/AboutView.jsx';                   // Label: About Us
+import TeamView from './views/TeamView.jsx';                     // Label: Brew Crew
+import MemberCornerView from './views/MemberCornerView.jsx';     // Label: Member's Corner
+import SeriesView from './views/SeriesView.jsx';                 // Label: Barista Diaries
+import MasterclassView from './views/MasterclassView.jsx';       // Label: Masterclass
+import MasteryView from './views/MasteryView.jsx';               // Label: Mastery Program
+import CommitteeHuntView from './views/CommitteeHuntView.jsx';   // Label: Committee Hunt
+import AnnouncementsView from './views/AnnouncementsView.jsx';   // Label: The Grind Report
+import ProfileSettingsView from './views/ProfileSettingsView.jsx'; 
 
-// 1. Rename to match the App.jsx import or export as default
+// Restricted Views
+import RegistryView from './views/RegistryView.jsx';             
+import TerminalView from './views/TerminalView.jsx';             
+import TaskBarView from './views/TaskBarView.jsx';               
+
 const DashboardContent = ({ isSystemAdmin, logout }) => {
   const [view, setView] = useState('home');
-  // These values come from HubContext. If HubContext is null, the app crashes.
-  const { hubSettings, profile, members, committeeApps } = useContext(HubContext) || {};
+  const { profile, members, hubSettings, committeeApps } = useContext(HubContext) || {};
 
-  const financialStats = useMemo(() => ({
-    totalPaid: members?.filter(m => m.paymentStatus === 'paid').length || 0,
-    pending: members?.filter(m => m.paymentStatus === 'unpaid').length || 0,
-    exempt: members?.filter(m => m.paymentStatus === 'exempt').length || 0
-  }), [members]);
+  // --- ACCESS TIERS ---
+  
+  // 1. Can Edit Content (Officers, Committee Heads, System Admin)
+  const canEditContent = isSystemAdmin || 
+                         profile?.role === 'officer' || 
+                         profile?.role === 'committee-head';
 
-  const handleVerifyMember = async (memberDocId) => {
-    try {
-      await runTransaction(db, async (transaction) => {
-        const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters');
-        const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberDocId);
-        
-        const counterSnap = await transaction.get(counterRef);
-        const memberSnap = await transaction.get(memberRef);
+  // 2. Can Access Task Bar (Officers, Committee Heads, System Admin)
+  const canAccessTaskBar = canEditContent;
 
-        if (!memberSnap.exists()) throw "Member record missing.";
-
-        const currentCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0;
-        const officialId = generateLBAId(memberSnap.data().positionCategory, currentCount);
-
-        transaction.update(memberRef, {
-          memberId: officialId,
-          paymentStatus: 'paid',
-          verifiedAt: serverTimestamp(),
-          verifiedBy: profile?.name || 'Admin'
-        });
-
-        transaction.set(counterRef, { memberCount: currentCount + 1 }, { merge: true });
-      });
-    } catch (err) {
-      console.error("Verification Failed:", err);
-    }
-  };
-
-  const handleUpdateSetting = async (field, val) => {
-    try {
-      const opsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops');
-      await updateDoc(opsRef, { [field]: val });
-    } catch (e) { console.error("Setting update failed", e); }
-  };
-
-  const handleRotateKey = async (type) => {
-    try {
-      const path = type === 'daily' ? ['settings', 'ops'] : ['settings', 'keys'];
-      const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', ...path), { 
-        [type === 'daily' ? 'dailyKey' : type]: newKey 
-      });
-    } catch (e) { console.error("Key rotation failed", e); }
-  };
+  // 3. Can Access Registry/Terminal (System Admin Only)
+  const canAccessFullAdmin = isSystemAdmin === true;
 
   return (
     <div className="flex h-screen bg-[#FDFBF7] overflow-hidden">
       <Sidebar view={view} setView={setView} logout={logout} isSystemAdmin={isSystemAdmin} />
 
-     <main className="flex-1 overflow-y-auto p-6 md:p-12">
-  
-  {/* 1. THE HOME CHANNEL (What shows up first) */}
-  {view === 'home' && (
-    <div className="animate-in fade-in duration-500">
-      <h1 className="font-serif text-3xl font-black text-[#3E2723]">
-        Welcome to the Hub! ☕
-      </h1>
-      <p className="mt-2 text-amber-600 font-bold uppercase text-[10px] tracking-widest">
-        Select a tab from the sidebar to begin.
-      </p>
-      
-      {/* A simple status card so you know it's working */}
-      <div className="mt-8 p-6 bg-white rounded-[30px] border-b-4 border-amber-400 shadow-sm max-w-sm">
-        <p className="text-[10px] font-black text-gray-400 uppercase">System Status</p>
-        <p className="text-lg font-black text-[#3E2723]">Connected to Kaperata DB</p>
-      </div>
-    </div>
-  )}
+      <main className="flex-1 overflow-y-auto p-6 md:p-12 custom-scrollbar">
+        
+        {/* --- TIER 1: PUBLIC CONTENT --- */}
+        {/* Note: We pass 'canEdit' to views where they can Create/Delete/Edit */}
+        {view === 'home' && <HomeView />}
+        {view === 'whats-brewing' && <EventView canEdit={canEditContent} />}
+        {view === 'barista-diaries' && <SeriesView canEdit={canEditContent} />}
+        {view === 'the-grind-report' && <AnnouncementsView canEdit={canEditContent} />}
+        
+        {/* Standard Views */}
+        {view === 'about-us' && <AboutView />}
+        {view === 'brew-crew' && <TeamView />}
+        {view === 'members-corner' && <MemberCornerView />}
+        {view === 'masterclass' && <MasterclassView />}
+        {view === 'mastery-program' && <MasteryView />}
+        {view === 'committee-hunt' && <CommitteeHuntView />}
+        {view === 'profile-settings' && <ProfileSettingsView />}
 
-  {/* 2. THE MEMBERS CHANNEL */}
-  {view === 'members' && <RegistryView members={members} />}
+        {/* --- TIER 2: TASK BAR (Officers & Heads) --- */}
+        {view === 'task-bar' && (
+          canAccessTaskBar ? <TaskBarView /> : <AccessDenied />
+        )}
 
-  {/* 3. THE REPORTS CHANNEL (Only for Admins) */}
-  {view === 'reports' && isSystemAdmin && (
-    <TerminalView 
-      registry={members}
-      financialStats={financialStats}
-      hubSettings={hubSettings}
-      handleVerifyMember={handleVerifyMember}
-      handleRotateKey={handleRotateKey}
-      // ... keep the rest of your existing props here
-    />
-  )}
+        {/* --- TIER 3: SYSTEM ADMIN ONLY --- */}
+        {canAccessFullAdmin && (
+          <>
+            {view === 'registry' && <RegistryView members={members} />}
+            {view === 'terminal' && (
+              <TerminalView 
+                registry={members}
+                hubSettings={hubSettings}
+                committeeApps={committeeApps}
+              />
+            )}
+          </>
+        )}
 
-</main>
+        {/* Security Fallback for Registry/Terminal if non-admin clicks them */}
+        {!canAccessFullAdmin && (view === 'registry' || view === 'terminal') && <AccessDenied />}
+      </main>
     </div>
   );
 };
 
-// 2. THE EXPORT WRAPPER
-// This provides the context data that DashboardContent needs to run.
+// Simple reusable helper for denied access
+const AccessDenied = () => (
+  <div className="h-full flex items-center justify-center">
+    <p className="text-[10px] font-black uppercase text-red-500 tracking-widest">
+      Clearance Required: Restricted Access
+    </p>
+  </div>
+);
+
 const Dashboard = (props) => (
   <HubProvider>
     <DashboardContent {...props} />
