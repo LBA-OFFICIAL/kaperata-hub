@@ -553,19 +553,37 @@ const handleResetPassword = async (memberId, email, name) => {
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</label>
-                  <input type="date" className="w-full p-4 border rounded-[20px] text-xs font-bold" value={newTask.deadline} onChange={e => setNewTask({...newTask, deadline: e.target.value})} />
+                  {/* Committee Selection */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Committee</label>
+                    <select 
+                      className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" 
+                      value={newTask.committee || ''} 
+                      onChange={e => setNewTask({...newTask, committee: e.target.value})}
+                    >
+                      <option value="">Select Committee...</option>
+                      {COMMITTEES_INFO.map(c => (
+                        <option key={c.id} value={c.id}>{c.title}</option>
+                      ))}
+                    </select>
+                  </div>
+                
+                  {/* Filtered Member Selection */}
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</label>
+                    <select 
+                      className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" 
+                      value={newTask.assigneeId || ''} 
+                      disabled={!newTask.committee} // Disable if no committee is chosen
+                      onChange={e => setNewTask({...newTask, assigneeId: e.target.value})}
+                    >
+                      <option value="">{newTask.committee ? "Choose Barista..." : "Select Committee First"}</option>
+                      {members?.filter(m => m.committee === newTask.committee).map(m => (
+                        <option key={m.uid} value={m.uid}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Status</label>
-                  <select className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white" value={newTask.status} onChange={e => setNewTask({...newTask, status: e.target.value})}>
-                    <option value="pending">To Roast (Pending)</option>
-                    <option value="brewing">Brewing (In Progress)</option>
-                    <option value="served">Served (Completed)</option>
-                  </select>
-                </div>
-              </div>
 
               <div className="bg-amber-50 p-5 rounded-[24px] border border-amber-100">
                 <label className="text-[10px] font-black uppercase text-amber-800 mb-2 block">Internal Feedback / Notes</label>
