@@ -530,15 +530,21 @@ const handleResetPassword = async (memberId, email, name) => {
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</label>
-                  <select className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" value={newTask.assigneeId} onChange={e => setNewTask({...newTask, assigneeId: e.target.value})}>
-                    <option value="">Choose Barista...</option>
-                    {members.filter(m => m.committee === newTask.committee).map(m => (
-                      <option key={m.uid} value={m.uid}>{m.name}</option>
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Committee</label>
+                  <select 
+                    className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" 
+                    value={newTask.committee} 
+                    onChange={e => setNewTask({...newTask, committee: e.target.value, assigneeId: ''})}
+                  >
+                    {/* Use COMMITTEES_INFO and access the id/title */}
+                    <option value="">Select Committee</option>
+                    {COMMITTEES_INFO.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.title}
+                      </option>
                     ))}
                   </select>
                 </div>
-              </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Scope of Work</label>
