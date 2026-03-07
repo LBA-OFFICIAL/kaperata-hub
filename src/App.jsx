@@ -90,7 +90,6 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 
 const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
   // --- 0. FALLBACK ICONS (To prevent "Element type is invalid" errors) ---
-  // If lucide-react is not globally available or imported, we use these SVG fallbacks.
   const FallbackIcon = ({ size = 22 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
   );
@@ -260,7 +259,7 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
     return () => {
       unsubOps(); unsubKeys(); unsubLegacy(); unsubMembers(); unsubEvents(); unsubAnnounce(); unsubMc();
     };
-  }, [profile?.memberId]);
+  }, [profile?.memberId, db, appId]);
 
   // --- 4. ADMIN & RENEWAL HANDLERS ---
   const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { 
@@ -351,8 +350,8 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
     ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileTextIcon }] : [])
   ];
 
-  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
-  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative";
+  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative text-left";
+  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative text-left";
 
   // --- 6. RENDER ---
   return (
@@ -372,16 +371,23 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
               </button>
             ))}
          </div>
+         <div className="mt-auto pt-6 border-t border-white/5">
+            <button onClick={logout} className="w-full flex items-center gap-4 px-4 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all">
+               <FallbackIcon size={20} />
+               <span className="text-sm font-bold uppercase tracking-widest">Logout</span>
+            </button>
+         </div>
       </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto p-8 text-amber-50">
         <h1 className="text-3xl font-black mb-8">Welcome, {profile?.name}</h1>
+        
         {/* Simple conditional view placeholder */}
         <div className="bg-[#2D1B14] p-6 rounded-3xl border border-white/5">
            <p className="opacity-50 italic uppercase tracking-widest text-xs mb-4">{view} SECTION</p>
            <h2 className="text-xl font-bold mb-4">Content for {menuItems.find(m => m.id === view)?.label}</h2>
-           <p>This is where the {view} components would be rendered.</p>
+           <p>This section is currently being updated to integrate the latest data.</p>
         </div>
       </main>
     </div>
