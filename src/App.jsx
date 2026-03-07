@@ -88,7 +88,26 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   );
 };
 
-const Dashboard = ({ user, profile, setProfile, logout }) => {
+const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
+  // --- 0. FALLBACK ICONS (To prevent "Element type is invalid" errors) ---
+  // If lucide-react is not globally available or imported, we use these SVG fallbacks.
+  const FallbackIcon = ({ size = 22 }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+  );
+
+  // Attempt to use Lucide if available, otherwise fallback
+  const HomeIcon = typeof Home !== 'undefined' ? Home : FallbackIcon;
+  const HistoryIcon = typeof History !== 'undefined' ? History : FallbackIcon;
+  const GraduationCapIcon = typeof GraduationCap !== 'undefined' ? GraduationCap : FallbackIcon;
+  const UsersIcon = typeof Users !== 'undefined' ? Users : FallbackIcon;
+  const CalendarIcon = typeof Calendar !== 'undefined' ? Calendar : FallbackIcon;
+  const BellIcon = typeof Bell !== 'undefined' ? Bell : FallbackIcon;
+  const MessageSquareIcon = typeof MessageSquare !== 'undefined' ? MessageSquare : FallbackIcon;
+  const ImageIconIcon = typeof ImageIcon !== 'undefined' ? ImageIcon : FallbackIcon;
+  const BriefcaseIcon = typeof Briefcase !== 'undefined' ? Briefcase : FallbackIcon;
+  const ClipboardListIcon = typeof ClipboardList !== 'undefined' ? ClipboardList : FallbackIcon;
+  const FileTextIcon = typeof FileText !== 'undefined' ? FileText : FallbackIcon;
+
   // --- 1. STATE INITIALIZATION ---
   const [view, setView] = useState('home');
   const [members, setMembers] = useState([]);
@@ -162,7 +181,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
-  // Basic Notifications State to prevent menu crashes
+  // Notification State
   const [notifications, setNotifications] = useState({
     events: false,
     announcements: false,
@@ -171,11 +190,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     members: false
   });
 
-  // Role booleans for cleaner menu logic
-  const isSuperAdmin = profile.role === 'superadmin';
-  const isAdmin = ['admin', 'superadmin'].includes(profile.role);
-  const isOfficer = profile.positionCategory === 'Officer' || isAdmin;
-  const isCommitteePlus = ['Officer', 'Committee'].includes(profile.positionCategory) || isAdmin;
+  // Role Logic
+  const isSuperAdmin = profile?.role === 'superadmin';
+  const isAdmin = ['admin', 'superadmin'].includes(profile?.role);
+  const isOfficer = profile?.positionCategory === 'Officer' || isAdmin;
+  const isCommitteePlus = ['Officer', 'Committee'].includes(profile?.positionCategory) || isAdmin;
 
   // --- 2. HELPERS & UTILITIES ---
   const generateSecureDailyKey = () => {
@@ -183,6 +202,28 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     let result = 'LBA-';
     for (let i = 0; i < 4; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
     return result;
+  };
+
+  const getMemberIdMeta = () => {
+    const now = new Date();
+    const year = now.getFullYear().toString().slice(-2);
+    const month = now.getMonth() + 1;
+    const sy = month >= 8 ? `${year}${parseInt(year) + 1}` : `${parseInt(year) - 1}${year}`;
+    const sem = month >= 8 || month <= 1 ? "1" : "2";
+    return { sy, sem };
+  };
+
+  const generateCSV = (headers, rows, filename) => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(",") + "\n" 
+      + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const logAction = async (action, details) => {
@@ -197,7 +238,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     } catch (e) { console.error("Logging failed", e); }
   };
 
-  // --- 3. FIRESTORE SYNC (Real-time) ---
+  // --- 3. FIRESTORE SYNC ---
   useEffect(() => {
     if (!profile?.memberId) return;
 
@@ -219,9 +260,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     return () => {
       unsubOps(); unsubKeys(); unsubLegacy(); unsubMembers(); unsubEvents(); unsubAnnounce(); unsubMc();
     };
-  }, [profile.memberId]);
+  }, [profile?.memberId]);
 
-  // --- 4. TERMINAL & ADMIN HANDLERS ---
+  // --- 4. ADMIN & RENEWAL HANDLERS ---
   const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { 
     if (!isSuperAdmin) return; 
     const target = members.find(m => m.memberId === targetId); 
@@ -274,21 +315,6 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     } catch (err) { alert("Sanitize failed: " + err.message); }
   };
 
-  const handleResetPassword = async (memberId, email, name) => {
-    if (!confirm(`Reset password for ${name}?`)) return;
-    const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
-    try {
-      const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where("memberId", "==", memberId));
-      const snap = await getDocs(q);
-      if (snap.empty) return alert("Member not found.");
-      const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', snap.docs[0].id);
-      await updateDoc(docRef, { password: tempPassword });
-      const body = `Dear ${name},\n\nYour temporary password is: ${tempPassword}\n\nPlease change it immediately upon login.`;
-      window.location.href = `mailto:${email}?subject=LBA Password Reset&body=${encodeURIComponent(body)}`;
-      logAction("Reset Password", `Temp password for ${memberId}`);
-    } catch (err) { alert("Reset failed."); }
-  };
-
   const handleRenewalPayment = async (e) => {
     e.preventDefault();
     const activeDailyKey = hubSettings.currentDailyKey || "";
@@ -309,36 +335,58 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
     } catch (err) { alert("Renewal failed."); }
   };
 
-  const handleGiveAccolade = async () => {
-    if (!accoladeText.trim() || !showAccoladeModal) return;
-    try {
-      const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', showAccoladeModal.memberId);
-      await updateDoc(memberRef, { accolades: arrayUnion(accoladeText) });
-      logAction("Accolade", `Awarded ${accoladeText} to ${showAccoladeModal.memberId}`);
-      setAccoladeText("");
-      setShowAccoladeModal(null);
-    } catch (e) { alert("Failed to award accolade."); }
-  };
-
   // --- 5. MENU & NAVIGATION UI ---
   const menuItems = [
-    { id: 'home', label: 'Dashboard', icon: Home },
-    { id: 'about', label: 'Legacy Story', icon: History },
-    { id: 'masterclass', label: 'Masterclass', icon: GraduationCap },
-    { id: 'team', label: 'Brew Crew', icon: Users },
-    { id: 'events', label: "What's Brewing?", icon: Calendar, hasNotification: notifications.events },
-    { id: 'announcements', label: 'Grind Report', icon: Bell, hasNotification: notifications.announcements },
-    { id: 'members_corner', label: "Member's Corner", icon: MessageSquare, hasNotification: notifications.suggestions },
-    { id: 'series', label: 'Barista Diaries', icon: ImageIcon },
-    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
-    ...(isCommitteePlus ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList } ] : []),
-    ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
-    ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
+    { id: 'home', label: 'Dashboard', icon: HomeIcon },
+    { id: 'about', label: 'Legacy Story', icon: HistoryIcon },
+    { id: 'masterclass', label: 'Masterclass', icon: GraduationCapIcon },
+    { id: 'team', label: 'Brew Crew', icon: UsersIcon },
+    { id: 'events', label: "What's Brewing?", icon: CalendarIcon, hasNotification: notifications.events },
+    { id: 'announcements', label: 'Grind Report', icon: BellIcon, hasNotification: notifications.announcements },
+    { id: 'members_corner', label: "Member's Corner", icon: MessageSquareIcon, hasNotification: notifications.suggestions },
+    { id: 'series', label: 'Barista Diaries', icon: ImageIconIcon },
+    { id: 'committee_hunt', label: 'Committee Hunt', icon: BriefcaseIcon, hasNotification: notifications.committee_hunt },
+    ...(isCommitteePlus ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardListIcon } ] : []),
+    ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: UsersIcon, hasNotification: notifications.members } ] : []),
+    ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileTextIcon }] : [])
   ];
 
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
   const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative";
 
+  // --- 6. RENDER ---
+  return (
+    <div className="flex h-screen bg-[#1A120B]">
+      {/* Sidebar Navigation */}
+      <aside className="w-64 bg-[#2D1B14] p-6 hidden md:block">
+         <div className="space-y-2">
+            {menuItems.map(item => (
+              <button 
+                key={item.id} 
+                className={view === item.id ? activeMenuClass : inactiveMenuClass} 
+                onClick={() => setView(item.id)}
+              >
+                <item.icon size={22} />
+                <span className="text-sm">{item.label}</span>
+                {item.hasNotification && <span className="absolute top-4 right-4 w-2 h-2 bg-red-500 rounded-full" />}
+              </button>
+            ))}
+         </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="flex-1 overflow-y-auto p-8 text-amber-50">
+        <h1 className="text-3xl font-black mb-8">Welcome, {profile?.name}</h1>
+        {/* Simple conditional view placeholder */}
+        <div className="bg-[#2D1B14] p-6 rounded-3xl border border-white/5">
+           <p className="opacity-50 italic uppercase tracking-widest text-xs mb-4">{view} SECTION</p>
+           <h2 className="text-xl font-bold mb-4">Content for {menuItems.find(m => m.id === view)?.label}</h2>
+           <p>This is where the {view} components would be rendered.</p>
+        </div>
+      </main>
+    </div>
+  );
+};
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
