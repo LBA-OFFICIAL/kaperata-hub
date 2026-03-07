@@ -89,12 +89,11 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 };
 
 const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
-  // --- 0. FALLBACK ICONS (To prevent "Element type is invalid" errors) ---
+  // --- 0. FALLBACK ICONS ---
   const FallbackIcon = ({ size = 22 }) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
   );
 
-  // Attempt to use Lucide if available, otherwise fallback
   const HomeIcon = typeof Home !== 'undefined' ? Home : FallbackIcon;
   const HistoryIcon = typeof History !== 'undefined' ? History : FallbackIcon;
   const GraduationCapIcon = typeof GraduationCap !== 'undefined' ? GraduationCap : FallbackIcon;
@@ -106,6 +105,8 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
   const BriefcaseIcon = typeof Briefcase !== 'undefined' ? Briefcase : FallbackIcon;
   const ClipboardListIcon = typeof ClipboardList !== 'undefined' ? ClipboardList : FallbackIcon;
   const FileTextIcon = typeof FileText !== 'undefined' ? FileText : FallbackIcon;
+  const AlertOctagon = typeof AlertOctagonIcon !== 'undefined' ? AlertOctagonIcon : FallbackIcon;
+  const Trash2 = typeof Trash2Icon !== 'undefined' ? Trash2Icon : FallbackIcon;
 
   // --- 1. STATE INITIALIZATION ---
   const [view, setView] = useState('home');
@@ -164,7 +165,7 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
   const [isImporting, setIsImporting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const fileInputRef = useRef(null);
-  const [settingsForm, setSettingsForm] = useState({ ...profile });
+  const [settingsForm, setSettingsForm] = useState({});
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 });
   const [savingSettings, setSavingSettings] = useState(false);
@@ -180,7 +181,6 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
-  // Notification State
   const [notifications, setNotifications] = useState({
     events: false,
     announcements: false,
@@ -189,57 +189,13 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
     members: false
   });
 
-  // Role Logic
-  const isSuperAdmin = profile?.role === 'superadmin';
-  const isAdmin = ['admin', 'superadmin'].includes(profile?.role);
-  const isOfficer = profile?.positionCategory === 'Officer' || isAdmin;
-  const isCommitteePlus = ['Officer', 'Committee'].includes(profile?.positionCategory) || isAdmin;
-
-  // --- 2. HELPERS & UTILITIES ---
-  const generateSecureDailyKey = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let result = 'LBA-';
-    for (let i = 0; i < 4; i++) result += chars.charAt(Math.floor(Math.random() * chars.length));
-    return result;
-  };
-
-  const getMemberIdMeta = () => {
-    const now = new Date();
-    const year = now.getFullYear().toString().slice(-2);
-    const month = now.getMonth() + 1;
-    const sy = month >= 8 ? `${year}${parseInt(year) + 1}` : `${parseInt(year) - 1}${year}`;
-    const sem = month >= 8 || month <= 1 ? "1" : "2";
-    return { sy, sem };
-  };
-
-  const generateCSV = (headers, rows, filename) => {
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(",") + "\n" 
-      + rows.map(e => e.join(",")).join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", filename);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const logAction = async (action, details) => {
-    try {
-      await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'logs'), {
-        user: profile.name,
-        userId: profile.memberId,
-        action,
-        details,
-        timestamp: serverTimestamp()
-      });
-    } catch (e) { console.error("Logging failed", e); }
-  };
-
-  // --- 3. FIRESTORE SYNC ---
+  // --- 2. EFFECT HOOKS ---
   useEffect(() => {
-    if (!profile?.memberId) return;
+    if (profile) setSettingsForm({ ...profile });
+  }, [profile]);
+
+  useEffect(() => {
+    if (!profile?.memberId || !db) return;
 
     const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
     const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
@@ -248,93 +204,32 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
     const qMembers = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('name', 'asc'));
     const unsubMembers = onSnapshot(qMembers, (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
 
-    const qEvents = query(collection(db, 'artifacts', appId, 'public', 'data', 'events'), orderBy('startDate', 'desc'));
-    const unsubEvents = onSnapshot(qEvents, (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-    const qAnnounce = query(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), orderBy('date', 'desc'), limit(10));
-    const unsubAnnounce = onSnapshot(qAnnounce, (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))));
-
-    const unsubMc = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => s.exists() && setMasterclassData(s.data()));
-
-    return () => {
-      unsubOps(); unsubKeys(); unsubLegacy(); unsubMembers(); unsubEvents(); unsubAnnounce(); unsubMc();
-    };
+    return () => { unsubOps(); unsubKeys(); unsubLegacy(); unsubMembers(); };
   }, [profile?.memberId, db, appId]);
 
-  // --- 4. ADMIN & RENEWAL HANDLERS ---
-  const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { 
-    if (!isSuperAdmin) return; 
-    const target = members.find(m => m.memberId === targetId); 
-    if (!target) return; 
-    let newId = target.memberId; 
-    const isL = ['Officer', 'Committee'].includes(cat); 
-    const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId; 
-    newId = baseId + (isL ? 'C' : ''); 
-    const updates = { 
-        positionCategory: cat, 
-        specificTitle: specific || cat, 
-        memberId: newId, 
-        role: cat === 'Officer' ? 'admin' : (target.role === 'superadmin' ? 'superadmin' : 'member'), 
-        paymentStatus: ['Officer', 'Committee', 'Alumni', 'Execomm'].includes(cat) ? 'exempt' : target.paymentStatus, 
-        committee: cat === 'Committee' ? committee : "" 
-    }; 
-    if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId)); 
-    await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates }); 
-    logAction("Update Position", `Changed ${target.name} to ${cat}`);
-  };
+  // Role Logic
+  const isSuperAdmin = profile?.role === 'superadmin';
+  const isAdmin = ['admin', 'superadmin'].includes(profile?.role);
+  const isOfficer = profile?.positionCategory === 'Officer' || isAdmin;
+  const isCommitteePlus = ['Officer', 'Committee'].includes(profile?.positionCategory) || isAdmin;
 
-  const handleRotateDailyKey = async () => {
-    const newKey = generateSecureDailyKey();
+  // Functions
+  const confirmRemoveMember = async () => {
+    if (!confirmDelete) return;
     try {
-      const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops');
-      await updateDoc(settingsRef, { currentDailyKey: newKey, lastRotation: serverTimestamp() });
-      logAction("KEY_ROTATION", `New secure cash key generated: ${newKey}`);
-      alert(`Key Rotated: ${newKey}`);
-    } catch (err) { alert("Failed to rotate key."); }
+      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.id));
+      setConfirmDelete(null);
+    } catch (e) { console.error(e); }
   };
 
-  const handleSanitizeDatabase = async () => {
-    if (!confirm("RE-GENERATE all Member IDs based on join date?")) return;
-    const batch = writeBatch(db);
-    try {
-      const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc'));
-      const snapshot = await getDocs(q);
-      let count = 0;
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        const meta = getMemberIdMeta();
-        count++;
-        const isLeader = ['Officer', 'Committee'].includes(data.positionCategory);
-        const newId = `LBA${meta.sy}-${meta.sem}${String(count).padStart(4, '0')}${isLeader ? "C" : ""}`;
-        batch.update(docSnap.ref, { memberId: newId });
-      });
-      await batch.commit();
-      logAction("Sanitize DB", "Re-ordered sequential IDs");
-      alert(`Database sanitized! ${count} records updated.`);
-    } catch (err) { alert("Sanitize failed: " + err.message); }
-  };
+  const MaintenanceBanner = () => (
+    <div className="w-full bg-[#3E2723] text-white py-3 px-6 flex items-center justify-center gap-3 font-bold text-sm">
+      <AlertOctagon size={18} className="text-amber-500" />
+      <span>SOCIETY IS UNDER MAINTENANCE. ACCESS IS CURRENTLY LIMITED.</span>
+    </div>
+  );
 
-  const handleRenewalPayment = async (e) => {
-    e.preventDefault();
-    const activeDailyKey = hubSettings.currentDailyKey || "";
-    if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== activeDailyKey.toUpperCase()) {
-      return alert("Invalid Daily Cash Key.");
-    }
-    try {
-      const meta = getMemberIdMeta();
-      await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), { 
-        status: 'active', 
-        paymentStatus: 'paid', 
-        lastRenewedSY: meta.sy, 
-        lastRenewedSem: meta.sem,
-        membershipType: 'renewal',
-        paymentDetails: { method: renewalMethod, refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH', date: new Date().toISOString() }
-      });
-      alert("Membership renewed successfully!");
-    } catch (err) { alert("Renewal failed."); }
-  };
-
-  // --- 5. MENU & NAVIGATION UI ---
+  // --- 3. MENU ITEMS ---
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: HomeIcon },
     { id: 'about', label: 'Legacy Story', icon: HistoryIcon },
@@ -342,29 +237,46 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
     { id: 'team', label: 'Brew Crew', icon: UsersIcon },
     { id: 'events', label: "What's Brewing?", icon: CalendarIcon, hasNotification: notifications.events },
     { id: 'announcements', label: 'Grind Report', icon: BellIcon, hasNotification: notifications.announcements },
-    { id: 'members_corner', label: "Member's Corner", icon: MessageSquareIcon, hasNotification: notifications.suggestions },
-    { id: 'series', label: 'Barista Diaries', icon: ImageIconIcon },
-    { id: 'committee_hunt', label: 'Committee Hunt', icon: BriefcaseIcon, hasNotification: notifications.committee_hunt },
-    ...(isCommitteePlus ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardListIcon } ] : []),
-    ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: UsersIcon, hasNotification: notifications.members } ] : []),
-    ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileTextIcon }] : [])
+    { id: 'members_corner', label: "Member's Corner", icon: MessageSquareIcon },
+    ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: UsersIcon }] : [])
   ];
 
-  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative text-left";
-  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative text-left";
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#FDFBF7]">
+        <div className="text-center animate-pulse">
+          <p className="text-[#3E2723] font-black uppercase tracking-widest">Warming up the espresso machine...</p>
+        </div>
+      </div>
+    );
+  }
 
+  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative text-left";
+  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-[#3E2723]/40 hover:bg-black/5 relative text-left";
+
+  // --- 4. RENDER ---
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
+      {/* Maintenance Layer */}
       {hubSettings.maintenanceMode && !isSuperAdmin && (<div className="w-full z-[101]"><MaintenanceBanner /></div>)}
-      {hubSettings.maintenanceMode && isSuperAdmin && (<div className="w-full bg-red-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse border-b-2 border-red-800"><AlertOctagon size={14} /><span>MAINTENANCE MODE IS CURRENTLY ACTIVE</span></div>)}
+      {hubSettings.maintenanceMode && isSuperAdmin && (
+        <div className="w-full bg-red-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse border-b-2 border-red-800">
+          <AlertOctagon size={14} />
+          <span>MAINTENANCE MODE IS CURRENTLY ACTIVE</span>
+        </div>
+      )}
       
+      {/* Confirmation Modal */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
             <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
                 <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={32} /></div>
                 <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm Deletion</h3>
                 <p className="text-sm text-gray-600 mb-8">Are you sure you want to remove <span className="font-bold text-[#3E2723]">{confirmDelete.name}</span>?</p>
-                <div className="flex gap-3"><button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button><button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button></div>
+                <div className="flex gap-3">
+                  <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
+                  <button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button>
+                </div>
             </div>
         </div>
       )}
