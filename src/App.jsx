@@ -506,63 +506,74 @@ const handleResetPassword = async (memberId, email, name) => {
         </div>
       )}
 
-     {showTaskForm && (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-        <div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723] overflow-y-auto max-h-[90vh]">
-            <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingTask ? "Edit Task" : "Add Task"}</h3>
-            <div className="space-y-4">
-                {/* Project & Title */}
-                <input type="text" placeholder="Project / Group Name (e.g., Gala 2024)" className="w-full p-3 border rounded-xl text-xs font-bold bg-gray-50" value={newTask.project || ''} onChange={e => setNewTask({...newTask, project: e.target.value})} />
-                <input type="text" placeholder="Task Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
-                
-                {/* Committee & Assignee Selectors */}
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Committee</label>
-                        <select className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newTask.committee || 'Finance'} onChange={e => setNewTask({...newTask, committee: e.target.value, assigneeId: ''})}>
-                            {["Finance", "Logistics", "Marketing", "Sponsorship", "Operations"].map(c => (
-                                <option key={c} value={c}>{c}</option>
-                            ))}
-                        </select>
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</label>
-                        <select className="w-full p-3 border rounded-xl text-xs font-bold" value={newTask.assigneeId || ''} onChange={e => setNewTask({...newTask, assigneeId: e.target.value})}>
-                            <option value="">Unassigned</option>
-                            {/* Filter members list based on selected committee */}
-                            {members.filter(m => m.committee === newTask.committee).map(m => (
-                                <option key={m.id} value={m.id}>{m.name}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
-
-                <textarea placeholder="Description" className="w-full p-3 border rounded-xl text-xs" rows="2" value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} />
-                
-                <div className="grid grid-cols-2 gap-4">
-                    <input type="date" className="w-full p-3 border rounded-xl text-xs" value={newTask.deadline} onChange={e => setNewTask({...newTask, deadline: e.target.value})} />
-                    <select className="w-full p-3 border rounded-xl text-xs font-bold uppercase" value={newTask.status} onChange={e => setNewTask({...newTask, status: e.target.value})}>
-                        <option value="pending">To Roast (Pending)</option>
-                        <option value="brewing">Brewing (In Progress)</option>
-                        <option value="served">Served (Completed)</option>
-                    </select>
-                </div>
-
-                <input type="text" placeholder="Reference Link (URL)" className="w-full p-3 border rounded-xl text-xs" value={newTask.link} onChange={e => setNewTask({...newTask, link: e.target.value})} />
-                
-                <div className="bg-amber-50 p-3 rounded-xl">
-                    <label className="text-[10px] font-black uppercase text-amber-800 mb-1 block">Barista Notes / Feedback</label>
-                    <textarea className="w-full p-3 border border-amber-200 rounded-xl text-xs bg-white" rows="2" value={newTask.notes} onChange={e => setNewTask({...newTask, notes: e.target.value})} />
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                    <button onClick={() => { setShowTaskForm(false); setEditingTask(null); }} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
-                    <button onClick={handleAddTask} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">Save Task</button>
-                </div>
+       {/* Task Modal */}
+      {showTaskForm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-[40px] p-8 max-w-lg w-full border-b-[12px] border-[#3E2723] overflow-y-auto max-h-[90vh] shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black uppercase text-[#3E2723]">{editingTask ? "Modify Task" : "New Task Assignment"}</h3>
+              <button onClick={() => setShowTaskForm(false)} className="text-gray-400 hover:text-black"><X/></button>
             </div>
+            
+            <div className="space-y-5">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Context & Subject</label>
+                <input type="text" placeholder="Project / Event Name (e.g., LBA Expo 2025)" className="w-full p-4 border rounded-[20px] text-xs font-bold bg-gray-50 focus:ring-2 ring-amber-500 outline-none" value={newTask.project} onChange={e => setNewTask({...newTask, project: e.target.value})} />
+                <input type="text" placeholder="Task Title" className="w-full p-4 border rounded-[20px] text-xs font-black uppercase mt-2 focus:ring-2 ring-amber-500 outline-none" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Committee</label>
+                  <select className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" value={newTask.committee} onChange={e => setNewTask({...newTask, committee: e.target.value, assigneeId: ''})}>
+                    {COMMITTEES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</label>
+                  <select className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" value={newTask.assigneeId} onChange={e => setNewTask({...newTask, assigneeId: e.target.value})}>
+                    <option value="">Choose Barista...</option>
+                    {members.filter(m => m.committee === newTask.committee).map(m => (
+                      <option key={m.uid} value={m.uid}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Scope of Work</label>
+                <textarea placeholder="Describe the deliverables..." className="w-full p-4 border rounded-[20px] text-xs font-medium min-h-[80px]" value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</label>
+                  <input type="date" className="w-full p-4 border rounded-[20px] text-xs font-bold" value={newTask.deadline} onChange={e => setNewTask({...newTask, deadline: e.target.value})} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Status</label>
+                  <select className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white" value={newTask.status} onChange={e => setNewTask({...newTask, status: e.target.value})}>
+                    <option value="pending">To Roast (Pending)</option>
+                    <option value="brewing">Brewing (In Progress)</option>
+                    <option value="served">Served (Completed)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 p-5 rounded-[24px] border border-amber-100">
+                <label className="text-[10px] font-black uppercase text-amber-800 mb-2 block">Internal Feedback / Notes</label>
+                <textarea className="w-full p-4 border border-amber-200 rounded-[16px] text-xs bg-white" rows="2" value={newTask.notes} onChange={e => setNewTask({...newTask, notes: e.target.value})} />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button onClick={() => { setShowTaskForm(false); setEditingTask(null); }} className="flex-1 py-4 rounded-[20px] bg-gray-100 font-black uppercase text-[10px] tracking-widest text-gray-500 hover:bg-gray-200">Cancel</button>
+                <button onClick={handleSaveTask} className="flex-1 py-4 rounded-[20px] bg-[#3E2723] text-[#FDB813] font-black uppercase text-[10px] tracking-widest hover:bg-black shadow-lg">Save Assignment</button>
+              </div>
+            </div>
+          </div>
         </div>
-    </div>
-)}
+      )}
+
 
       {showProjectForm && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
