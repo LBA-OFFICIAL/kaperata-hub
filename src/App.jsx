@@ -180,7 +180,18 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const toggleSelectAll = () => { if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) { setSelectedBaristas([]); } else { setSelectedBaristas(paginatedRegistry.filter(m => m != null).map(m => m.memberId)); } };
   const toggleSelectBarista = (id) => { if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id)); else setSelectedBaristas(prev => [...prev, id]); };
   const getSafeDateString = (dateVal) => { if (!dateVal) return ''; if (typeof dateVal === 'string') return dateVal.split('T')[0]; if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0]; return ''; };
-
+  const generateSecureDailyKey = () => {
+    // Characters that are easy to read (removed 0, O, 1, I, L)
+    const charset = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+    const uint32 = new Uint32Array(6); 
+    window.crypto.getRandomValues(uint32); // Cryptographically secure random values
+    
+    let result = "";
+    for (let i = 0; i < uint32.length; i++) {
+        result += charset[uint32[i] % charset.length];
+    }
+    return result;
+};
   const logAction = async (action, details) => { if (!profile) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), { action, details, actor: profile.name, actorId: profile.memberId, timestamp: serverTimestamp() }); } catch (err) { console.error("Logging failed:", err); } };
   
   useEffect(() => {
@@ -291,7 +302,20 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const confirmRemoveMember = async () => { if (!confirmDelete) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid)); logAction("Remove Member", `Removed member: ${confirmDelete.name}`); } catch(e) { console.error(e); } finally { setConfirmDelete(null); } };
   const handleBulkImportCSV = async (e) => { const file = e.target.files[0]; if (!file) return; setIsImporting(true); const reader = new FileReader(); reader.onload = async (evt) => { try { const text = evt.target.result; const rows = text.split('\n').filter(r => r.trim().length > 0); const batch = writeBatch(db); let count = members.filter(m => m != null).length; for (let i = 1; i < rows.length; i++) { const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim()); if (!name || !email) continue; const mid = generateLBAId(pos, count++); const meta = getMemberIdMeta(); const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'expired', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() }; batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data); } await batch.commit(); logAction("Bulk Import", `Imported ${rows.length - 1} members`); } catch (err) {} finally { setIsImporting(false); e.target.value = ""; } }; reader.readAsText(file); };
   const downloadImportTemplate = () => { const headers = ["Name", "Email", "Program", "PositionCategory", "SpecificTitle"]; const rows = [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]]; generateCSV(headers, rows, "LBA_Import_Template.csv"); };
-  const handleRotateSecurityKeys = async () => { const newKeys = { officerKey: "OFF" + Math.random().toString(36).slice(-6).toUpperCase(), headKey: "HEAD" + Math.random().toString(36).slice(-6).toUpperCase(), commKey: "COMM" + Math.random().toString(36).slice(-6).toUpperCase() }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), newKeys); logAction("Rotate Keys", "Security keys rotated"); };
+  const handleRotateDailyKey = async () => {
+    const newKey = generateSecureDailyKey();
+    
+    try {
+        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops');
+        await updateDoc(settingsRef, { 
+            currentDailyKey: newKey,
+            lastRotation: serverTimestamp() 
+        });
+        logAction("KEY_ROTATION", `New secure cash key generated: ${newKey}`);
+    } catch (err) {
+        alert("Failed to rotate key.");
+    }
+};
   const handleSanitizeDatabase = async () => { if (!confirm("This will REMOVE DUPLICATES (by Name) and RE-GENERATE Member IDs. Are you sure?")) return; const batch = writeBatch(db); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc')); const snapshot = await getDocs(q); let count = 0; snapshot.docs.forEach((docSnap) => { const data = docSnap.data(); const category = data.positionCategory || "Member"; const meta = getMemberIdMeta(); count++; const padded = String(count).padStart(4, '0'); const isLeader = ['Officer', 'Committee'].includes(category); const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`; batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId }); }); await batch.commit(); logAction("Sanitize DB", "Executed database sanitization"); alert(`Database sanitized! ${count} records updated.`); } catch (err) { alert("Failed to sanitize: " + err.message); } };
   const handleMigrateToRenewal = async () => { if(!confirm("This will update ALL current members to 'Renewal' status. Proceed?")) return; const batch = writeBatch(db); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry')); const snapshot = await getDocs(q); let count = 0; snapshot.forEach(doc => { const data = doc.data(); if (data.membershipType !== 'renewal') { batch.update(doc.ref, { membershipType: 'renewal' }); count++; } }); if(count > 0) { await batch.commit(); logAction("Migrate Renewal", `Migrated ${count} members to renewal`); alert(`Migration Complete: ${count} members updated to Renewal status.`); } else { alert("No members needed updating."); } } catch (err) { alert("Migration failed."); } };
   const handleToggleStatus = async (memberId, currentStatus) => { if (!confirm(`Change status to ${currentStatus === 'active' ? 'EXPIRED' : 'ACTIVE'}?`)) return; try { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId); const updates = { status: currentStatus === 'active' ? 'expired' : 'active' }; if (currentStatus === 'active') { updates.paymentStatus = 'unpaid'; } await updateDoc(memberRef, updates); logAction("Toggle Status", `Changed ${memberId} to ${updates.status}`); } catch(e) { console.error(e); } };
@@ -299,8 +323,40 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleRecoverLostData = async () => { if(!confirm("This will restore David (Fixed ID), Geremiah & Cassandra (New Sequential IDs). Continue?")) return; try { const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry'); const allDocs = await getDocs(registryRef); let maxCount = 0; allDocs.forEach(doc => { const mid = doc.data().memberId; const match = mid?.match(/-(\d)(\d{4,})C?$/); if (match) { const num = parseInt(match[2], 10); if (num > maxCount) maxCount = num; } }); const batch = writeBatch(db); const meta = getMemberIdMeta(); const davidId = "LBA2526-20007C"; const davidRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', davidId); batch.set(davidRef, { name: "DAVID MATTHEW ADRIAS", memberId: davidId, email: "david.adrias@lpu.edu.ph", program: "BSIT", positionCategory: "Committee", specificTitle: "Committee Member", role: "member", status: "active", paymentStatus: "exempt", joinedDate: new Date().toISOString(), password: "LBA" + davidId.slice(-5), uid: "recovered_david_" + Date.now(), membershipType: "renewal" }); const geremiahCount = maxCount + 1; const geremiahId = generateLBAId("Committee", geremiahCount - 1); const geremiahRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', geremiahId); batch.set(geremiahRef, { name: "GEREMIAH HERNANI", memberId: geremiahId, email: "geremiah.hernani@lpu.edu.ph", program: "BSIT", positionCategory: "Committee", specificTitle: "Committee Member", role: "member", status: "active", paymentStatus: "exempt", joinedDate: new Date().toISOString(), password: "LBA" + geremiahId.slice(-5), uid: "recovered_geremiah_" + Date.now(), membershipType: "renewal" }); const cassandraCount = maxCount + 2; const cassandraId = generateLBAId("Committee", cassandraCount - 1); const cassandraRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', cassandraId); batch.set(cassandraRef, { name: "CASSANDRA CASIPIT", memberId: cassandraId, email: "cassandra.casipit@lpu.edu.ph", program: "BSIT", positionCategory: "Committee", specificTitle: "Committee Member", role: "member", status: "active", paymentStatus: "exempt", joinedDate: new Date().toISOString(), password: "LBA" + cassandraId.slice(-5), uid: "recovered_cassandra_" + Date.now(), membershipType: "renewal" }); const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters'); batch.set(counterRef, { memberCount: cassandraCount }, { merge: true }); await batch.commit(); alert(`Recovery successful!\nDavid: ${davidId}\nGeremiah: ${geremiahId}\nCassandra: ${cassandraId}`); } catch (err) { alert("Recovery failed: " + err.message); } };
   const handleGiveAccolade = async () => { if (!accoladeText.trim() || !showAccoladeModal) return; try { const docId = showAccoladeModal.id || showAccoladeModal.memberId; const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); await updateDoc(memberRef, { accolades: arrayUnion(accoladeText) }); setAccoladeText(""); const updated = [...(showAccoladeModal.currentAccolades || []), accoladeText]; setShowAccoladeModal(prev => ({...prev, currentAccolades: updated})); logAction("Award Accolade", `Awarded '${accoladeText}' to ${docId}`); alert("Accolade awarded!"); } catch (err) { alert("Failed to award accolade: " + err.message); } };
   const handleRemoveAccolade = async (accoladeToRemove) => { if(!confirm("Remove this accolade?")) return; try { const docId = showAccoladeModal.id || showAccoladeModal.memberId; const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); await updateDoc(memberRef, { accolades: arrayRemove(accoladeToRemove) }); const updated = showAccoladeModal.currentAccolades.filter(a => a !== accoladeToRemove); setShowAccoladeModal(prev => ({...prev, currentAccolades: updated})); logAction("Remove Accolade", `Removed '${accoladeToRemove}' from ${docId}`); } catch(e) { alert("Failed to remove accolade"); } };
-  const handleResetPassword = async (memberId, email, name) => { if (!confirm(`Reset password for ${name}?`)) return; const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase(); const subject = "LBA Password Reset Request"; const body = `Dear ${name},\n\nWe received a request to reset the password associated with your membership account at LPU Baristas' Association.\nTo regain access to your account, please use the following credentials. For security purposes, we recommend you copy and paste these details directly to avoid errors.\n\nMember ID: ${memberId}\nTemporary Password: ${tempPassword}\n\nHow to Access Your Account:\nClick the link below to access the secure login portal:\n${window.location.origin}\n\nEnter your Member ID and the Temporary Password provided above.\nOnce logged in, you will be prompted to create a new, permanent password immediately.\n\nPlease Note:\nThis temporary password will expire in 1 hour (manual enforcement required).\nIf you did not request this password reset, please contact our support team immediately at lbaofficial.pr@gmail.com and do not click the link above.\n\nThank you,\nThe LPU Baristas' Association Support Team\n${window.location.origin}`; try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { password: tempPassword }); window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; logAction("Reset Password", `Reset password for ${memberId}`); alert("Password reset! Opening email client..."); } catch (err) { alert("Failed to reset password."); } };
+const handleResetPassword = async (memberId, email, name) => {
+    if (!confirm(`Reset password for ${name}?`)) return;
 
+    const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
+    const subject = "LBA Password Reset Request";
+    const body = `Dear ${name},\n\nWe received a request to reset the password associated with your membership account at LPU Baristas' Association.\n\nMember ID: ${memberId}\nTemporary Password: ${tempPassword}\n\nLogin here: ${window.location.origin}\n\nThank you,\nLBA Support Team`;
+
+    try {
+        // Find the specific document where the memberId field matches
+        const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+        const q = query(registryRef, where("memberId", "==", memberId));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            alert("Error: Member not found in registry.");
+            return;
+        }
+
+        // Update the document using the internal Firebase ID (doc.id)
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { password: tempPassword });
+
+        // Trigger the local email client
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        
+        logAction("Reset Password", `Generated temp password for ${memberId}`);
+        alert("Password reset! Opening email client...");
+    } catch (err) {
+        console.error("Reset Error:", err);
+        alert("Failed to reset password. Check your connection or permissions.");
+    }
+};
+  const [newGcashNumber, setNewGcashNumber] = useState('');
+  
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: Home },
     { id: 'about', label: 'Legacy Story', icon: History },
@@ -1287,56 +1343,114 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
                 </div>
             )}
 
-            {view === 'reports' && isSuperAdmin && (
-                <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-                    <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6"><StatIcon icon={TrendingUp} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div></div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Total</p><p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p></div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p><p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p></div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p><p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p></div>
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p><p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p></div>
-                    </div>
-                    <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between"><div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div><div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div></div>
-                    
-                    <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white shadow-xl">
-                        <div className="flex justify-between items-center mb-6"><h4 className="font-serif text-2xl font-black uppercase text-[#FDB813]">Security Vault</h4><Lock size={24} className="text-[#FDB813]"/></div>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Officer Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.officerKey || "N/A"}</span></div>
-                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Head Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.headKey || "N/A"}</span></div>
-                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Comm Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.commKey || "N/A"}</span></div>
-                            <div className="bg-white/10 p-4 rounded-2xl border border-white/10 relative overflow-hidden"><div className="absolute top-0 right-0 bg-[#FDB813] text-[#3E2723] text-[8px] font-black px-2 py-0.5 rounded-bl-lg">PAYMENT BYPASS</div><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Bypass Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.bypassKey || "N/A"}</span></div>
-                        </div>
-                        <button onClick={handleRotateSecurityKeys} className="w-full mt-6 bg-red-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2"><RefreshCcw size={14}/> Rotate Security Keys</button>
-                    </div>
-
-                    <div className="bg-white p-8 rounded-[40px] border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
-                        <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><ClipboardList size={16}/> Operations Log</h4>
-                        <div className="space-y-2">
-                            {logs && logs.length > 0 ? ( logs.map(log => ( <div key={log.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl text-xs"><div><span className="font-bold text-[#3E2723] block">{log.action}</span><span className="text-gray-500">{log.details}</span></div><div className="text-right"><span className="block font-bold text-amber-700">{log.actor}</span><span className="text-[9px] text-gray-400">{log.timestamp?.toDate ? formatDate(log.timestamp.toDate()) : 'Just now'}</span></div></div> )) ) : ( <p className="text-center text-gray-400 text-xs py-4">No recent activity recorded.</p> )}
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
-                            <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Maintenance Mode</span><button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}</button></div>
-                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Registration</span><button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>{hubSettings.registrationOpen ? "OPEN" : "CLOSED"}</button></div>
-                                <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Renewal Season</span><button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.renewalMode ? "ACTIVE" : "OFF"}</button></div>
-                                 <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Payment Methods</span><button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">{hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}</button></div>
-                            </div>
-                        </div>
-                        <div className="bg-white p-8 rounded-[40px] border-2 border-red-100 shadow-sm">
-                             <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-red-700"><AlertOctagon size={16}/> Danger Zone</h4>
-                             <div className="space-y-3">
-                                 <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100"><Database size={14}/> Sanitize Database</button>
-                                 <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
-                                 <button onClick={handleRecoverLostData} className="w-full bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100"><LifeBuoy size={14}/> Recover Lost Data</button>
-                             </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+           {view === 'reports' && isSuperAdmin && (
+              <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+                  <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6"><StatIcon icon={TrendingUp} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Terminal</h3><p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p></div></div>
+                  
+                  {/* STATS GRID */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Total</p><p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p></div>
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p><p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p></div>
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p><p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p></div>
+                      <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p><p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p></div>
+                  </div>
+          
+                  {/* DAILY CASH KEY & FINANCIAL CONTROLS */}
+                  <div className="space-y-4">
+                      <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
+                          <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
+                          <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
+                      </div>
+          
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* GCash Update Integration */}
+                          <div className="bg-white p-6 rounded-[32px] border-2 border-amber-100 flex items-center justify-between gap-4">
+                              <div className="flex-1">
+                                  <p className="text-[10px] font-black uppercase text-amber-800">GCash Number: <span className="font-mono">{hubSettings.gcashNumber}</span></p>
+                                  <input 
+                                      type="text" placeholder="Update GCash..." 
+                                      className="w-full mt-2 p-2 bg-amber-50 rounded-lg text-xs font-bold outline-none"
+                                      value={newGcashNumber} onChange={(e) => setNewGcashNumber(e.target.value)}
+                                  />
+                              </div>
+                              <button onClick={async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { gcashNumber: newGcashNumber }); setNewGcashNumber(''); }} className="bg-[#3E2723] text-[#FDB813] p-4 rounded-2xl font-black uppercase text-[10px]"><RefreshCcw size={16}/></button>
+                          </div>
+          
+                          {/* Report Download Integration */}
+                          <button 
+                              onClick={() => {
+                                  const headers = ["Name", "ID", "Type", "Status", "Ref No", "Date"];
+                                  const rows = members.filter(m => m.paymentStatus === 'paid').map(m => [m.name, m.memberId, m.membershipType, m.paymentStatus, m.paymentDetails?.refNo || 'N/A', formatDate(m.joinedDate)]);
+                                  generateCSV(headers, rows, `LBA_Finance_${new Date().toLocaleDateString()}.csv`);
+                              }}
+                              className="bg-green-600 text-white p-6 rounded-[32px] font-black uppercase text-xs flex items-center justify-center gap-3 hover:bg-green-700 transition-all"
+                          >
+                              <Download size={20}/> Export Financial Report
+                          </button>
+                      </div>
+                  </div>
+                  
+                  {/* SECURITY VAULT */}
+                  <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white shadow-xl">
+                      <div className="flex justify-between items-center mb-6"><h4 className="font-serif text-2xl font-black uppercase text-[#FDB813]">Security Vault</h4><Lock size={24} className="text-[#FDB813]"/></div>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                          <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Officer Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.officerKey || "N/A"}</span></div>
+                          <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Head Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.headKey || "N/A"}</span></div>
+                          <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Comm Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.commKey || "N/A"}</span></div>
+                          <div className="bg-white/10 p-4 rounded-2xl border border-white/10 relative overflow-hidden"><div className="absolute top-0 right-0 bg-[#FDB813] text-[#3E2723] text-[8px] font-black px-2 py-0.5 rounded-bl-lg">PAYMENT BYPASS</div><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Bypass Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.bypassKey || "N/A"}</span></div>
+                      </div>
+                      <button onClick={handleRotateSecurityKeys} className="w-full mt-6 bg-red-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2"><RefreshCcw size={14}/> Rotate Security Keys</button>
+                  </div>
+          
+                  {/* COMMITTEE HUNT INTEGRATION */}
+                  <div className="bg-white p-8 rounded-[40px] border-2 border-purple-100 shadow-sm">
+                      <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-purple-700"><Users size={16}/> Committee Hunt Registry</h4>
+                      <div className="max-h-64 overflow-y-auto space-y-2">
+                          {committeeApps.length > 0 ? committeeApps.map(app => (
+                              <div key={app.id} className="flex justify-between items-center p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                                  <div>
+                                      <span className="font-black text-xs uppercase block">{app.name}</span>
+                                      <span className="text-[10px] font-bold text-purple-400 uppercase">Target: {app.committeeId}</span>
+                                  </div>
+                                  <div className="flex gap-2">
+                                      <button onClick={() => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'committee_apps', app.id), { status: 'approved' })} className="bg-purple-600 text-white p-2 rounded-lg"><CheckCircle2 size={14}/></button>
+                                      <button onClick={() => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'committee_apps', app.id))} className="bg-red-100 text-red-600 p-2 rounded-lg"><Trash2 size={14}/></button>
+                                  </div>
+                              </div>
+                          )) : <p className="text-center py-6 text-[10px] font-bold text-gray-400 uppercase">No active applications</p>}
+                      </div>
+                  </div>
+          
+                  {/* OPERATIONS LOG (UNCHANGED) */}
+                  <div className="bg-white p-8 rounded-[40px] border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
+                      <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><ClipboardList size={16}/> Operations Log</h4>
+                      <div className="space-y-2">
+                          {logs && logs.length > 0 ? ( logs.map(log => ( <div key={log.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl text-xs"><div><span className="font-bold text-[#3E2723] block">{log.action}</span><span className="text-gray-500">{log.details}</span></div><div className="text-right"><span className="block font-bold text-amber-700">{log.actor}</span><span className="text-[9px] text-gray-400">{log.timestamp?.toDate ? formatDate(log.timestamp.toDate()) : 'Just now'}</span></div></div> )) ) : ( <p className="text-center text-gray-400 text-xs py-4">No recent activity recorded.</p> )}
+                      </div>
+                  </div>
+          
+                  {/* SYSTEM CONTROLS & DANGER ZONE (UNCHANGED) */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+                          <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
+                          <div className="space-y-4">
+                              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Maintenance Mode</span><button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}</button></div>
+                              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Registration</span><button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>{hubSettings.registrationOpen ? "OPEN" : "CLOSED"}</button></div>
+                              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Renewal Season</span><button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.renewalMode ? "ACTIVE" : "OFF"}</button></div>
+                               <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Payment Methods</span><button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">{hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}</button></div>
+                          </div>
+                      </div>
+                      <div className="bg-white p-8 rounded-[40px] border-2 border-red-100 shadow-sm">
+                           <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-red-700"><AlertOctagon size={16}/> Danger Zone</h4>
+                           <div className="space-y-3">
+                               <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100"><Database size={14}/> Sanitize Database</button>
+                               <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
+                               <button onClick={handleRecoverLostData} className="w-full bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100"><LifeBuoy size={14}/> Recover Lost Data</button>
+                           </div>
+                      </div>
+                  </div>
+              </div>
+          )}
 
             {view === 'settings' && (
                   <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
