@@ -545,6 +545,7 @@ const handleResetPassword = async (memberId, email, name) => {
                     ))}
                   </select>
                 </div>
+              </div>
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Scope of Work</label>
