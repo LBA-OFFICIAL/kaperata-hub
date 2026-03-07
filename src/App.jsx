@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
-import { getFirestore, collection, doc, onSnapshot, query, where, limit, getDocs, updateDoc, addDoc, deleteDoc, runTransaction, serverTimestamp, arrayUnion, arrayRemove, orderBy} from 'firebase/firestore';
+import { getFirestore, collection, query, where, onSnapshot, doc, setDoc, updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, orderBy, writeBatch, arrayUnion, arrayRemove, runTransaction } from 'firebase/firestore'; 
 import { Users, Calendar, Award, Bell, LogOut, Home, Plus, ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Download, Lock, BadgeCheck, MapPin, Pen, Send, MessageSquare, TrendingUp, Mail, Trash2, Search, CheckCircle2, Settings2, ChevronRight, Facebook, Instagram, LifeBuoy, Banknote, AlertTriangle, AlertCircle, History, Cake, User, Trophy, Clock, Briefcase, Music, Database, Image as ImageIcon, RefreshCcw, GraduationCap, AlertOctagon, FileText, FileBarChart, ClipboardList, CheckSquare2, ExternalLink as Link2, BarChart2, Smile, UserCheck, Printer } from 'lucide-react';
 
 let firebaseConfig;
@@ -88,195 +88,304 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
   );
 };
 
-const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
-  // --- 0. FALLBACK ICONS ---
-  const FallbackIcon = ({ size = 22 }) => (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
-  );
+const Dashboard = ({ user, profile, setProfile, logout }) => {
+  const [view, setView] = useState('home'); const [members, setMembers] = useState([]); const [events, setEvents] = useState([]); const [announcements, setAnnouncements] = useState([]); const [suggestions, setSuggestions] = useState([]); const [committeeApps, setCommitteeApps] = useState([]); const [userApplications, setUserApplications] = useState([]); const [tasks, setTasks] = useState([]); const [projects, setProjects] = useState([]); const [expandedProjectId, setExpandedProjectId] = useState(null); const [logs, setLogs] = useState([]); const [polls, setPolls] = useState([]); const [seriesPosts, setSeriesPosts] = useState([]); const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] }); const [showPollForm, setShowPollForm] = useState(false); const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' }); const [showSeriesForm, setShowSeriesForm] = useState(false); const [editingSeriesId, setEditingSeriesId] = useState(null); const [showProjectForm, setShowProjectForm] = useState(false); const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); const [editingProject, setEditingProject] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' }); const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' }); const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); const [showCertificate, setShowCertificate] = useState(false); const [adminMcModule, setAdminMcModule] = useState(1); const [adminMcSearch, setAdminMcSearch] = useState(''); const [selectedMcMembers, setSelectedMcMembers] = useState([]); const [editingMcCurriculum, setEditingMcCurriculum] = useState(false); const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' }); const [isAnniversary, setIsAnniversary] = useState(false); const [editingMember, setEditingMember] = useState(null); const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' }); const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' }); const [showAccoladeModal, setShowAccoladeModal] = useState(null); const [accoladeText, setAccoladeText] = useState(""); const [showTaskForm, setShowTaskForm] = useState(false); const [newTask, setNewTask] = useState({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: '' }); const [editingTask, setEditingTask] = useState(null); const [renewalRef, setRenewalRef] = useState(''); const [renewalMethod, setRenewalMethod] = useState('gcash'); const [renewalCashKey, setRenewalCashKey] = useState(''); const [newGcashNumber, setNewGcashNumber] = useState(''); const [showEventForm, setShowEventForm] = useState(false); const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); const [editingEvent, setEditingEvent] = useState(null); const [showAnnounceForm, setShowAnnounceForm] = useState(false); const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' }); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const [searchQuery, setSearchQuery] = useState(""); const [selectedBaristas, setSelectedBaristas] = useState([]); const [isImporting, setIsImporting] = useState(false); const [confirmDelete, setConfirmDelete] = useState(null); const fileInputRef = useRef(null); const currentDailyKey = getDailyCashPasskey(); const [settingsForm, setSettingsForm] = useState({ ...profile }); const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' }); const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); const [savingSettings, setSavingSettings] = useState(false); const [financialFilter, setFinancialFilter] = useState('all'); const [isEditingLegacy, setIsEditingLegacy] = useState(false); const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' }); const [suggestionText, setSuggestionText] = useState(""); const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' }); const [submittingApp, setSubmittingApp] = useState(false); const [attendanceEvent, setAttendanceEvent] = useState(null); const [exportFilter, setExportFilter] = useState('all'); const [currentPage, setCurrentPage] = useState(1); const itemsPerPage = 10;
+  const [lastVisited, setLastVisited] = useState(() => { try { return JSON.parse(localStorage.getItem('lba_last_visited') || '{}'); } catch { return {}; } });
 
-  const HomeIcon = typeof Home !== 'undefined' ? Home : FallbackIcon;
-  const HistoryIcon = typeof History !== 'undefined' ? History : FallbackIcon;
-  const GraduationCapIcon = typeof GraduationCap !== 'undefined' ? GraduationCap : FallbackIcon;
-  const UsersIcon = typeof Users !== 'undefined' ? Users : FallbackIcon;
-  const CalendarIcon = typeof Calendar !== 'undefined' ? Calendar : FallbackIcon;
-  const BellIcon = typeof Bell !== 'undefined' ? Bell : FallbackIcon;
-  const MessageSquareIcon = typeof MessageSquare !== 'undefined' ? MessageSquare : FallbackIcon;
-  const ImageIconIcon = typeof ImageIcon !== 'undefined' ? ImageIcon : FallbackIcon;
-  const BriefcaseIcon = typeof Briefcase !== 'undefined' ? Briefcase : FallbackIcon;
-  const ClipboardListIcon = typeof ClipboardList !== 'undefined' ? ClipboardList : FallbackIcon;
-  const FileTextIcon = typeof FileText !== 'undefined' ? FileText : FallbackIcon;
-  const AlertOctagon = typeof AlertOctagonIcon !== 'undefined' ? AlertOctagonIcon : FallbackIcon;
-  const Trash2 = typeof Trash2Icon !== 'undefined' ? Trash2Icon : FallbackIcon;
-
-  // --- 1. STATE INITIALIZATION ---
-  const [view, setView] = useState('home');
-  const [members, setMembers] = useState([]);
-  const [events, setEvents] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
-  const [suggestions, setSuggestions] = useState([]);
-  const [committeeApps, setCommitteeApps] = useState([]);
-  const [userApplications, setUserApplications] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [projects, setProjects] = useState([]);
-  const [expandedProjectId, setExpandedProjectId] = useState(null);
-  const [logs, setLogs] = useState([]);
-  const [polls, setPolls] = useState([]);
-  const [seriesPosts, setSeriesPosts] = useState([]);
-  const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] });
-  const [showPollForm, setShowPollForm] = useState(false);
-  const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' });
-  const [showSeriesForm, setShowSeriesForm] = useState(false);
-  const [editingSeriesId, setEditingSeriesId] = useState(null);
-  const [showProjectForm, setShowProjectForm] = useState(false);
-  const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' });
-  const [editingProject, setEditingProject] = useState(null);
-  const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402', currentDailyKey: '' });
-  const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' });
-  const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} });
-  const [showCertificate, setShowCertificate] = useState(false);
-  const [adminMcModule, setAdminMcModule] = useState(1);
-  const [adminMcSearch, setAdminMcSearch] = useState('');
-  const [selectedMcMembers, setSelectedMcMembers] = useState([]);
-  const [editingMcCurriculum, setEditingMcCurriculum] = useState(false);
-  const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' });
-  const [isAnniversary, setIsAnniversary] = useState(false);
-  const [editingMember, setEditingMember] = useState(null);
-  const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' });
-  const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' });
-  const [showAccoladeModal, setShowAccoladeModal] = useState(null);
-  const [accoladeText, setAccoladeText] = useState("");
-  const [showTaskForm, setShowTaskForm] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: '' });
-  const [editingTask, setEditingTask] = useState(null);
-  const [renewalRef, setRenewalRef] = useState('');
-  const [renewalMethod, setRenewalMethod] = useState('gcash');
-  const [renewalCashKey, setRenewalCashKey] = useState('');
-  const [newGcashNumber, setNewGcashNumber] = useState('');
-  const [showEventForm, setShowEventForm] = useState(false);
-  const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' });
-  const [editingEvent, setEditingEvent] = useState(null);
-  const [showAnnounceForm, setShowAnnounceForm] = useState(false);
-  const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' });
-  const [editingAnnouncement, setEditingAnnouncement] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBaristas, setSelectedBaristas] = useState([]);
-  const [isImporting, setIsImporting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(null);
-  const fileInputRef = useRef(null);
-  const [settingsForm, setSettingsForm] = useState({});
-  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
-  const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 });
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [financialFilter, setFinancialFilter] = useState('all');
-  const [isEditingLegacy, setIsEditingLegacy] = useState(false);
-  const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } });
-  const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' });
-  const [suggestionText, setSuggestionText] = useState("");
-  const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' });
-  const [submittingApp, setSubmittingApp] = useState(false);
-  const [attendanceEvent, setAttendanceEvent] = useState(null);
-  const [exportFilter, setExportFilter] = useState('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  // 🛡️ THE 4-TIER ACCESS SYSTEM 🛡️
+  const isSuperAdmin = useMemo(() => profile?.role === 'superadmin', [profile?.role]);
+  const isOfficer = useMemo(() => isSuperAdmin || ['OFFICER'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isSuperAdmin]);
+  const isCommitteePlus = useMemo(() => isOfficer || ['COMMITTEE'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory, isOfficer]);
+  const isCommitteeHead = useMemo(() => String(profile?.positionCategory || '').toUpperCase() === 'COMMITTEE' && String(profile?.specificTitle || '').toUpperCase().includes('HEAD'), [profile?.positionCategory, profile?.specificTitle]);
   
-  const [notifications, setNotifications] = useState({
-    events: false,
-    announcements: false,
-    suggestions: false,
-    committee_hunt: false,
-    members: false
-  });
+  const isExpired = useMemo(() => profile?.status === 'expired', [profile?.status]);
+  const isExemptFromRenewal = useMemo(() => ['OFFICER', 'EXECOMM', 'COMMITTEE', 'ORG ADVISER', 'ALUMNI'].includes(String(profile?.positionCategory || '').toUpperCase()), [profile?.positionCategory]);
+  const isBirthday = useMemo(() => { if (!profile.birthMonth || !profile.birthDay) return false; const today = new Date(); return parseInt(profile.birthMonth) === (today.getMonth() + 1) && parseInt(profile.birthDay) === today.getDate(); }, [profile]);
 
-  // --- 2. EFFECT HOOKS ---
-  useEffect(() => {
-    if (profile) setSettingsForm({ ...profile });
-  }, [profile]);
+  const financialStats = useMemo(() => {
+    if (!members || !Array.isArray(members)) return { totalPaid: 0, cashCount: 0, gcashCount: 0, exemptCount: 0 };
+    const validMembers = members.filter(m => m != null && typeof m === 'object');
+    let filtered = validMembers; if (financialFilter !== 'all') { const [sy, sem] = financialFilter.split('-'); filtered = validMembers.filter(m => m?.lastRenewedSY === sy && m?.lastRenewedSem === sem); }
+    const payingMembers = filtered.filter(m => { const isExempt = ['Officer', 'Committee', 'Alumni', 'Execomm'].includes(m?.positionCategory) || m?.paymentStatus === 'exempt'; return !isExempt && m?.paymentStatus === 'paid'; });
+    const cashPayments = payingMembers.filter(m => m?.paymentDetails?.method === 'cash').length; const gcashPayments = payingMembers.filter(m => m?.paymentDetails?.method === 'gcash').length;
+    return { totalPaid: payingMembers.length, cashCount: cashPayments, gcashCount: gcashPayments, exemptCount: filtered.length - payingMembers.length };
+  }, [members, financialFilter]);
 
-  useEffect(() => {
-    if (!profile?.memberId || !db) return;
+  const semesterOptions = useMemo(() => { if(!members || !Array.isArray(members)) return []; const sems = new Set(members.filter(m => m != null).map(m => `${m?.lastRenewedSY}-${m?.lastRenewedSem}`)); return Array.from(sems).filter(s => s !== "undefined-undefined").sort().reverse(); }, [members]);
 
-    const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
-    const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
-    const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'legacy'), (s) => s.exists() && setLegacyContent(s.data()));
+  const teamStructure = useMemo(() => {
+    if (!members || !Array.isArray(members)) return { tier1: [], tier2: [], tier3: [], committees: {} };
+    const validMembers = members.filter(m => m != null && typeof m === 'object');
+    const sortedMembers = [...validMembers].sort((a, b) => (a?.name || "").localeCompare(b?.name || ""));
+    const hasTitle = (m, title) => String(m?.specificTitle || "").toUpperCase().includes(title.toUpperCase());
+    const isCat = (m, cat) => String(m?.positionCategory || "").toUpperCase() === cat.toUpperCase();
+    const committeesMap = {}; COMMITTEES_INFO.forEach(c => { committeesMap[c.id] = { heads: sortedMembers.filter(m => m?.committee === c.id && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => m?.committee === c.id && isCat(m, "Committee") && !hasTitle(m, "Head")) }; });
+    committeesMap['Unassigned'] = { heads: sortedMembers.filter(m => !m?.committee && isCat(m, "Committee") && hasTitle(m, "Head")), members: sortedMembers.filter(m => !m?.committee && isCat(m, "Committee") && !hasTitle(m, "Head")) };
+    return { tier1: sortedMembers.filter(m => hasTitle(m, "President") && isCat(m, "Officer")), tier2: sortedMembers.filter(m => hasTitle(m, "Secretary") && isCat(m, "Officer")), tier3: sortedMembers.filter(m => !hasTitle(m, "President") && !hasTitle(m, "Secretary") && isCat(m, "Officer")), committees: committeesMap };
+  }, [members]);
+
+  const volunteerCount = useMemo(() => { if (!events || !profile.memberId) return 0; return events.reduce((acc, ev) => { if (!ev.isVolunteer || !ev.shifts) return acc; const shiftCount = ev.shifts.filter(s => s.volunteers?.includes(profile.memberId)).length; return acc + shiftCount; }, 0); }, [events, profile.memberId]);
+
+  const notifications = useMemo(() => {
+      const hasNew = (items, pageKey) => { if (!items || items.length === 0) return false; const lastVisit = lastVisited[pageKey]; if (!lastVisit) return true; return items.some(i => { const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0); return d > new Date(lastVisit); }); };
+      let huntNotify = isSuperAdmin ? committeeApps.some(a => a.status === 'pending') : userApplications.some(a => { const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null; const lastVisit = lastVisited['committee_hunt']; if (!updated) return false; return !lastVisit || updated > new Date(lastVisit); });
+      let regNotify = isOfficer ? hasNew((members || []).map(m => ({ createdAt: m?.joinedDate })), 'members') : false;
+      return { events: hasNew(events, 'events'), announcements: hasNew(announcements, 'announcements'), suggestions: hasNew(suggestions, 'suggestions'), committee_hunt: huntNotify, members: regNotify };
+  }, [events, announcements, suggestions, members, committeeApps, userApplications, lastVisited, isOfficer, isSuperAdmin]);
+
+  const filteredRegistry = useMemo(() => {
+      if (!members || !Array.isArray(members)) return [];
+      const validMembers = members.filter(m => m != null && typeof m === 'object');
+      const queryUpper = (searchQuery || "").toUpperCase();
+      let filtered = validMembers.filter(m => {
+          if (!queryUpper) return true;
+          const nameMatch = (m?.name || "").toUpperCase().includes(queryUpper); const idMatch = (m?.memberId || "").toUpperCase().includes(queryUpper); const emailMatch = (m?.email || "").toUpperCase().includes(queryUpper);
+          return nameMatch || idMatch || emailMatch;
+      });
+      if (exportFilter !== 'all') {
+          if (exportFilter === 'active') filtered = filtered.filter(m => m?.status === 'active'); else if (exportFilter === 'inactive') filtered = filtered.filter(m => m?.status !== 'active'); else if (exportFilter === 'officers') filtered = filtered.filter(m => m?.positionCategory === 'Officer'); else if (exportFilter === 'committee') filtered = filtered.filter(m => m?.positionCategory === 'Committee');
+      }
+      return filtered; 
+  }, [members, searchQuery, exportFilter]);
+  
+  const totalPages = Math.max(1, Math.ceil(filteredRegistry.length / itemsPerPage));
+  const paginatedRegistry = useMemo(() => filteredRegistry.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage), [filteredRegistry, currentPage, itemsPerPage]);
+  const nextPage = () => setCurrentPage(p => Math.min(p + 1, totalPages)); const prevPage = () => setCurrentPage(p => Math.max(p - 1, 1));
+  useEffect(() => { setCurrentPage(1); }, [searchQuery, exportFilter]);
+
+  const updateLastVisited = (page) => { const newVisits = { ...lastVisited, [page]: new Date().toISOString() }; setLastVisited(newVisits); localStorage.setItem('lba_last_visited', JSON.stringify(newVisits)); };
+  const handleExportCSV = () => { 
+      if (!members) return; 
+      const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined", "Volunteer Shifts", "Masterclass", "Accolades"]; 
+      const rows = members.filter(m => m != null).map(m => {
+          const volCount = events.reduce((acc, ev) => acc + (ev.shifts?.filter(s => s.volunteers?.includes(m.memberId)).length || 0), 0);
+          const mcCompleted = [1,2,3,4,5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(m.memberId)).map(id => `Mod ${id}`).join(', ');
+          return [ 
+              m?.memberId, 
+              m?.name, 
+              m?.email, 
+              m?.positionCategory, 
+              m?.specificTitle, 
+              m?.committee || '', 
+              m?.status, 
+              getSafeDateString(m?.joinedDate) || '',
+              volCount,
+              mcCompleted,
+              (m?.accolades || []).join('; ')
+          ];
+      }); 
+      generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`); 
+  };
+  const handleBulkEmail = () => { const targets = selectedBaristas.length > 0 ? members.filter(m => m && selectedBaristas.includes(m.memberId)) : members.filter(m => m != null); const emails = targets.map(m => m?.email).filter(e => e).join(','); if (emails) window.location.href = `mailto:?bcc=${emails}`; };
+  const toggleSelectAll = () => { if (selectedBaristas.length === paginatedRegistry.length && paginatedRegistry.length > 0) { setSelectedBaristas([]); } else { setSelectedBaristas(paginatedRegistry.filter(m => m != null).map(m => m.memberId)); } };
+  const toggleSelectBarista = (id) => { if (selectedBaristas.includes(id)) setSelectedBaristas(prev => prev.filter(mid => mid !== id)); else setSelectedBaristas(prev => [...prev, id]); };
+  const getSafeDateString = (dateVal) => { if (!dateVal) return ''; if (typeof dateVal === 'string') return dateVal.split('T')[0]; if (dateVal.toDate) return dateVal.toDate().toISOString().split('T')[0]; return ''; };
+  const generateSecureDailyKey = () => {
+    // Characters that are easy to read (removed 0, O, 1, I, L)
+    const charset = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
+    const uint32 = new Uint32Array(6); 
+    window.crypto.getRandomValues(uint32); // Cryptographically secure random values
     
-    const qMembers = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('name', 'asc'));
-    const unsubMembers = onSnapshot(qMembers, (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+    let result = "";
+    for (let i = 0; i < uint32.length; i++) {
+        result += charset[uint32[i] % charset.length];
+    }
+    return result;
+};
+  const logAction = async (action, details) => { if (!profile) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), { action, details, actor: profile.name, actorId: profile.memberId, timestamp: serverTimestamp() }); } catch (err) { console.error("Logging failed:", err); } };
+  
+  useEffect(() => {
+      if (!user) return;
+      const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); if (JSON.stringify(data) !== JSON.stringify(profile)) { setProfile(data); localStorage.setItem('lba_profile', JSON.stringify(data)); } } });
+      let unsubReg = () => {}; if (isOfficer) { unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() })))); }
+      const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)); setSuggestions(data); });
+      let unsubApps = () => {}; if (isSuperAdmin) unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => setUserApplications(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubProjects = () => {}; if (isOfficer) unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => setProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubTasks = () => {}; if (isOfficer) unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubLogs = () => {}; if (isSuperAdmin) unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => setPolls(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => setSeriesPosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
+      const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
+      const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => { if(s.exists()) { setLegacyContent(s.data()); const data = s.data(); setLegacyForm({ ...data, achievements: data.achievements || [], imageUrl: data.imageUrl || '', galleryUrl: data.galleryUrl || '', imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' } }); if (data.establishedDate) { const today = new Date(); const est = new Date(data.establishedDate); if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) setIsAnniversary(true); } } });
+      const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => { if(s.exists()) setMasterclassData(s.data()); else setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); });
+      return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubApps(); unsubUserApps(); unsubProjects(); unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); };
+  }, [user, isSuperAdmin, isOfficer, profile.memberId]);
 
-    return () => { unsubOps(); unsubKeys(); unsubLegacy(); unsubMembers(); };
-  }, [profile?.memberId, db, appId]);
+  useEffect(() => { if (attendanceEvent && events.length > 0) { const liveEvent = events.find(e => e.id === attendanceEvent.id); if (liveEvent) setAttendanceEvent(liveEvent); } }, [events]);
+  useEffect(() => { const head = document.head; let linkIcon = document.querySelector("link[rel~='icon']"); if (!linkIcon) { linkIcon = document.createElement('link'); linkIcon.rel = 'icon'; head.appendChild(linkIcon); } linkIcon.href = APP_ICON_URL; }, []);
 
-  // Role Logic
-  const isSuperAdmin = profile?.role === 'superadmin';
-  const isAdmin = ['admin', 'superadmin'].includes(profile?.role);
-  const isOfficer = profile?.positionCategory === 'Officer' || isAdmin;
-  const isCommitteePlus = ['Officer', 'Committee'].includes(profile?.positionCategory) || isAdmin;
-
-  // Functions
-  const confirmRemoveMember = async () => {
-    if (!confirmDelete) return;
-    try {
-      await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.id));
-      setConfirmDelete(null);
-    } catch (e) { console.error(e); }
+  const handleUpdateProfile = async (e) => { e.preventDefault(); setSavingSettings(true); try { const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) }; if (settingsForm.email !== profile.email) { updated.email = settingsForm.email.toLowerCase(); } await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated); setProfile(updated); localStorage.setItem('lba_profile', JSON.stringify(updated)); alert("Profile updated successfully!"); } catch(err) { console.error(err); alert("Failed to update profile."); } finally { setSavingSettings(false); } };
+  const handleChangePassword = async (e) => { e.preventDefault(); if (passwordForm.new !== passwordForm.confirm) return alert("New passwords do not match."); if (passwordForm.current !== profile.password) return alert("Incorrect current password."); try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), { password: passwordForm.new }); const updatedProfile = { ...profile, password: passwordForm.new }; setProfile(updatedProfile); localStorage.setItem('lba_profile', JSON.stringify(updatedProfile)); setPasswordForm({ current: '', new: '', confirm: '' }); alert("Password changed successfully."); } catch (err) { alert("Failed to change password."); } };
+  const handleDeleteSuggestion = async (id) => { if(!confirm("Are you sure you want to delete this suggestion?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'suggestions', id)); logAction("Delete Suggestion", `Deleted suggestion ID: ${id}`); } catch(err) {} };
+  const handlePostSuggestion = async (e) => { e.preventDefault(); if (isExpired) return alert("Your membership is expired. Please renew to post suggestions."); if (!suggestionText.trim()) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), { text: suggestionText, authorId: profile.memberId, authorName: "Anonymous", createdAt: serverTimestamp() }); setSuggestionText(""); alert("Suggestion submitted anonymously!"); } catch (err) {} };
+  const handleCreatePoll = async (e) => { e.preventDefault(); const validOptions = newPoll.options.filter(o => o.trim() !== ''); if (!newPoll.question || validOptions.length < 2) return alert("A question and at least 2 options are required."); try { const formattedOptions = validOptions.map((opt, idx) => ({ id: idx + 1, text: opt, votes: [] })); await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), { question: newPoll.question, options: formattedOptions, createdBy: profile.name, createdAt: serverTimestamp(), status: 'active' }); setShowPollForm(false); setNewPoll({ question: '', options: ['', ''] }); logAction("Create Poll", `Created poll: ${newPoll.question}`); } catch (e) {} };
+  const handleVotePoll = async (pollId, optionId) => { if (isExpired) return alert("Renew membership to vote."); try { const pollRef = doc(db, 'artifacts', appId, 'public', 'data', 'polls', pollId); const poll = polls.find(p => p.id === pollId); if (!poll) return; const updatedOptions = poll.options.map(opt => { const newVotes = opt.votes.filter(uid => uid !== profile.memberId); if (opt.id === optionId) newVotes.push(profile.memberId); return { ...opt, votes: newVotes }; }); await updateDoc(pollRef, { options: updatedOptions }); } catch (e) {} };
+  const handleDeletePoll = async (id) => { if(!confirm("Delete this poll?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'polls', id)); } catch (e) {} };
+  const handlePostSeries = async (e) => { e.preventDefault(); const validUrls = newSeriesPost.imageUrls.filter(url => url.trim() !== ''); if (validUrls.length === 0) return alert("At least one image URL is required."); try { if (editingSeriesId) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', editingSeriesId), { title: newSeriesPost.title, imageUrls: validUrls, caption: newSeriesPost.caption, lastEdited: serverTimestamp() }); logAction("Update Series", `Updated Barista Diaries: ${newSeriesPost.title}`); setEditingSeriesId(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), { title: newSeriesPost.title, imageUrls: validUrls, caption: newSeriesPost.caption, author: profile.name, authorId: profile.memberId, createdAt: serverTimestamp() }); logAction("Post Series", `Posted to Barista Diaries: ${newSeriesPost.title}`); } setShowSeriesForm(false); setNewSeriesPost({ title: '', imageUrls: [''], caption: '' }); } catch (e) {} };
+  const handleEditSeries = (post) => { setNewSeriesPost({ title: post.title, imageUrls: post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : [post.imageUrl || ''], caption: post.caption }); setEditingSeriesId(post.id); setShowSeriesForm(true); };
+  const handleDeleteSeries = async (id) => { if(!confirm("Delete this post?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'series_posts', id)); } catch (e) {} };
+  const addShift = () => { if (!tempShift.date || !tempShift.name) return alert("Date and Shift Name are required."); setNewEvent(prev => ({ ...prev, shifts: [...(prev.shifts||[]), { id: crypto.randomUUID(), date: tempShift.date, name: tempShift.name, startTime: tempShift.startTime, endTime: tempShift.endTime, capacity: tempShift.capacity, volunteerCapacity: tempShift.volunteerCapacity, attendees: [], volunteers: [] }] })); setTempShift({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); };
+  const removeShift = (id) => { setNewEvent(prev => ({ ...prev, shifts: prev.shifts.filter(s => s.id !== id) })); };
+  const handleShiftRegistration = async (ev, shiftId, role) => { if (isExpired) return alert("Your membership is expired. Please renew first."); const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id); const updatedShifts = ev.shifts.map(shift => { if (shift.id === shiftId) { const listKey = role === 'volunteer' ? 'volunteers' : 'attendees'; const capKey = role === 'volunteer' ? 'volunteerCapacity' : 'capacity'; const currentList = shift[listKey] || []; const isRegistered = currentList.includes(profile.memberId); if (isRegistered) { return { ...shift, [listKey]: currentList.filter(id => id !== profile.memberId) }; } else { if (currentList.length >= shift[capKey]) { alert(`This shift is full for ${role}s!`); return shift; } return { ...shift, [listKey]: [...currentList, profile.memberId] }; } } return shift; }); try { await updateDoc(eventRef, { shifts: updatedShifts }); } catch(err) { console.error(err); } };
+  const handleAddAchievement = () => { if (!tempAchievement.text.trim()) return; const newAch = { text: tempAchievement.text.trim(), date: tempAchievement.date || new Date().toISOString().split('T')[0] }; const updatedList = [...(legacyForm.achievements || []), newAch].sort((a,b) => new Date(a.date) - new Date(b.date)); setLegacyForm(prev => ({ ...prev, achievements: updatedList })); setTempAchievement({ date: '', text: '' }); };
+  const handleUpdateAchievement = (index, field, value) => { const updated = [...legacyForm.achievements]; updated[index] = { ...updated[index], [field]: value }; updated.sort((a,b) => new Date(a.date || '1970-01-01') - new Date(b.date || '1970-01-01')); setLegacyForm(prev => ({ ...prev, achievements: updated })); };
+  const handleRemoveAchievement = (index) => { setLegacyForm(prev => ({ ...prev, achievements: prev.achievements.filter((_, i) => i !== index) })); };
+  const handleAddEvent = async (e) => { e.preventDefault(); try { const eventPayload = { ...newEvent, name: newEvent.name.toUpperCase(), venue: newEvent.venue.toUpperCase(), createdAt: serverTimestamp(), attendees: [], registered: [] }; if (editingEvent) { delete eventPayload.createdAt; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', editingEvent.id), eventPayload); logAction("Update Event", `Updated event: ${newEvent.name}`); setEditingEvent(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'events'), eventPayload); logAction("Create Event", `Created event: ${newEvent.name}`); } setShowEventForm(false); setNewEvent({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); } catch (err) {} };
+  const handleEditEvent = (ev) => { setNewEvent({ ...ev, masterclassModuleIds: ev.masterclassModuleIds || (ev.masterclassModuleId ? [ev.masterclassModuleId] : []), shifts: ev.shifts || [], scheduleType: ev.scheduleType || 'WHOLE_DAY', attendanceRequired: ev.attendanceRequired || false, evaluationLink: ev.evaluationLink || '', isVolunteer: ev.isVolunteer || false, registrationRequired: ev.registrationRequired !== undefined ? ev.registrationRequired : true, openForAll: ev.openForAll !== undefined ? ev.openForAll : true, volunteerTarget: ev.volunteerTarget || { officer: 0, committee: 0, member: 0 } }); setEditingEvent(ev); setShowEventForm(true); };
+  const handleDeleteEvent = async (id) => { if(!confirm("Delete this event?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', id)); logAction("Delete Event", `Deleted event ID: ${id}`); } catch(err) {} };
+  const handleToggleAttendanceLocal = async (memberId) => { if (!attendanceEvent || !memberId) return; const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', attendanceEvent.id); const isPresent = attendanceEvent.attendees?.includes(memberId); try { if (isPresent) { await updateDoc(eventRef, { attendees: arrayRemove(memberId) }); } else { await updateDoc(eventRef, { attendees: arrayUnion(memberId) }); } if (attendanceEvent.masterclassModuleIds && attendanceEvent.masterclassModuleIds.length > 0) { const trackerRef = doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'); const updates = {}; attendanceEvent.masterclassModuleIds.forEach(modId => { updates[`moduleAttendees.${modId}`] = isPresent ? arrayRemove(memberId) : arrayUnion(memberId); }); await updateDoc(trackerRef, updates); } setAttendanceEvent(prev => ({ ...prev, attendees: isPresent ? prev.attendees.filter(id => id !== memberId) : [...(prev.attendees || []), memberId] })); } catch(err) {} };
+  const handleDownloadAttendance = () => { if (!attendanceEvent) return; const validMembers = members.filter(m => m != null); const presentMembers = validMembers.filter(m => attendanceEvent.attendees?.includes(m.memberId)); const headers = ["Name", "ID", "Position"]; const rows = presentMembers.sort((a,b) => (a.name || "").localeCompare(b.name || "")).map(m => [m.name, m.memberId, m.specificTitle]); generateCSV(headers, rows, `${attendanceEvent.name.replace(/\s+/g, '_')}_Attendance.csv`); };
+  const handleRegisterEvent = async (ev) => { if (isExpired) return alert("Your membership is expired. Please renew to join events."); const eventRef = doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id); const isRegistered = ev.registered?.includes(profile.memberId); try { if (isRegistered) { await updateDoc(eventRef, { registered: arrayRemove(profile.memberId) }); } else { await updateDoc(eventRef, { registered: arrayUnion(profile.memberId) }); } } catch (err) {} };
+  const handlePostAnnouncement = async (e) => { e.preventDefault(); try { if (editingAnnouncement) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', editingAnnouncement.id), { ...newAnnouncement, lastEdited: serverTimestamp() }); logAction("Update Announcement", `Updated announcement: ${newAnnouncement.title}`); setEditingAnnouncement(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), { ...newAnnouncement, date: new Date().toISOString(), createdAt: serverTimestamp() }); logAction("Post Announcement", `Posted announcement: ${newAnnouncement.title}`); } setShowAnnounceForm(false); setNewAnnouncement({ title: '', content: '' }); } catch (err) {} };
+  const handleDeleteAnnouncement = async (id) => { if(!confirm("Delete this announcement?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'announcements', id)); logAction("Delete Announcement", `Deleted announcement ID: ${id}`); } catch(err) {} };
+  const handleEditAnnouncement = (ann) => { setNewAnnouncement({ title: ann.title, content: ann.content }); setEditingAnnouncement(ann); setShowAnnounceForm(true); };
+  const handleSaveLegacy = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), legacyForm); logAction("Update Legacy", "Updated About Us / Legacy content"); setIsEditingLegacy(false); } catch(err) {} };
+  const handleUpdateMemberDetails = async (e) => { e.preventDefault(); if (!editingMember) return; try { const docId = editingMember.id || editingMember.memberId; const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); await updateDoc(memberRef, { joinedDate: new Date(editMemberForm.joinedDate).toISOString() }); logAction("Update Member", `Updated details for ${editingMember.name}`); setEditingMember(null); alert("Member details updated."); } catch(err) { alert("Failed to update member: " + err.message); } };
+  const handleBulkAddMasterclass = async () => { if (selectedMcMembers.length === 0) return alert("No members selected!"); const currentAttendees = masterclassData.moduleAttendees?.[adminMcModule] || []; const updatedAttendees = [...new Set([...currentAttendees, ...selectedMcMembers])]; const newData = { ...masterclassData, moduleAttendees: { ...masterclassData.moduleAttendees, [adminMcModule]: updatedAttendees } }; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData); logAction("Masterclass Add", `Added ${selectedMcMembers.length} to Module ${adminMcModule}`); setSelectedMcMembers([]); setAdminMcSearch(''); alert(`Added ${selectedMcMembers.length} attendees to Module ${adminMcModule}`); } catch(e) {} };
+  const handleSaveCertTemplate = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), masterclassData); alert("Template Saved"); } catch(e) {} };
+  const handleSaveMcCurriculum = async () => { try { const newData = { ...masterclassData, moduleDetails: { ...masterclassData.moduleDetails, [adminMcModule]: tempMcDetails } }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData); logAction("Update Curriculum", `Updated Module ${adminMcModule}`); setEditingMcCurriculum(false); alert("Curriculum Updated"); } catch(e) {} };
+  const handleUpdateGcashNumber = async () => { if (!newGcashNumber.trim()) return; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, gcashNumber: newGcashNumber }); logAction("Update GCash", `Changed GCash number to ${newGcashNumber}`); setNewGcashNumber(''); alert("GCash Number Updated Successfully"); } catch (err) { alert("Failed to update GCash Number"); } };
+  const handleApplyCommittee = async (e, targetCommittee) => { e.preventDefault(); if (isExpired) return alert("Your membership is expired. Please renew to apply."); setSubmittingApp(true); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)); const snap = await getDocs(q); if(!snap.empty) { alert("You already have a pending application."); setSubmittingApp(false); return; } await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), { memberId: profile.memberId, name: profile.name, email: profile.email, committee: targetCommittee, role: committeeForm.role, status: 'pending', createdAt: serverTimestamp(), statusUpdatedAt: serverTimestamp() }); alert("Application submitted successfully!"); } catch(err) { alert("Failed to submit application."); } finally { setSubmittingApp(false); } };
+  const handleCreateProject = async (e) => { e.preventDefault(); try { const validMembers = members.filter(m => m != null); const projectHead = validMembers.find(m => m?.memberId === newProject.projectHeadId); const payload = { title: newProject.title, description: newProject.description, deadline: newProject.deadline, projectHeadId: newProject.projectHeadId, projectHeadName: projectHead ? projectHead.name : '' }; if (editingProject) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', editingProject.id), { ...payload, lastEdited: serverTimestamp() }); logAction("Update Project", `Updated project: ${newProject.title}`); setEditingProject(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), { ...payload, createdBy: profile.memberId, createdAt: serverTimestamp(), status: 'active' }); logAction("Create Project", `Created project: ${newProject.title}`); } setShowProjectForm(false); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); } catch(e) {} };
+  const handleEditProject = (proj) => { setNewProject({ title: proj.title, description: proj.description, deadline: proj.deadline, projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName }); setEditingProject(proj); setShowProjectForm(true); };
+  const handleAddTask = async (e) => { e.preventDefault(); if (!newTask.projectId) return alert("Task must belong to a project"); try { if (editingTask) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', editingTask.id), { ...newTask, lastEdited: serverTimestamp() }); logAction("Update Task", `Updated task: ${newTask.title}`); setEditingTask(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'tasks'), { ...newTask, createdBy: profile.memberId, creatorName: profile.name, createdAt: serverTimestamp() }); logAction("Create Task", `Created task: ${newTask.title}`); } setShowTaskForm(false); setNewTask({ title: '', description: '', deadline: '', link: '', status: 'pending', notes: '', projectId: newTask.projectId }); } catch (err) {} };
+  const handleUpdateTaskStatus = async (taskId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', taskId), { status: newStatus }); } catch (err) {} };
+  const handleDeleteTask = async (id) => { if(!confirm("Delete this task?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', id)); logAction("Delete Task", `Deleted task ID: ${id}`); } catch(err) {} };
+  const handleEditTask = (task) => { setNewTask({ title: task.title, description: task.description, deadline: task.deadline, link: task.link, status: task.status, notes: task.notes || '', projectId: task.projectId }); setEditingTask(task); setShowTaskForm(true); };
+  const initiateAppAction = (app, type) => { let subject = ""; let body = ""; const signature = "\n\nBest regards,\nLPU Baristas' Association"; if (type === 'for_interview') { subject = `LBA Committee Application: Interview Invitation`; body = `Dear ${app.name},\n\nWe have reviewed your application for the ${app.committee} and would like to invite you for an interview.\n\nPlease let us know your availability.\n${signature}`; } else if (type === 'accepted') { subject = `LBA Committee Application: Congratulations!`; body = `Dear ${app.name},\n\nWe are pleased to inform you that you have been accepted as a ${app.role} for the ${app.committee}!\n\nWelcome to the team! We will add you to the group chat shortly.\n${signature}`; } else if (type === 'denied') { subject = `LBA Committee Application Update`; body = `Dear ${app.name},\n\nThank you for your interest in joining the LBA Committee. After careful consideration, we regret to inform you that we cannot move forward with your application at this time.\n\nWe encourage you to stay active and apply again in the future.\n${signature}`; } setEmailModal({ isOpen: true, app, type, subject, body }); };
+  const confirmAppAction = async () => { if (!emailModal.app) return; try { const { app, type, subject, body } = emailModal; const batch = writeBatch(db); const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id); const updates = { status: type, statusUpdatedAt: serverTimestamp(), lastEmailSent: new Date().toISOString() }; batch.update(appRef, updates); if (type === 'accepted') { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId); batch.update(memberRef, { positionCategory: 'Committee', specificTitle: app.role, committee: app.committee, accolades: arrayUnion(`${app.committee} - ${app.role}`) }); } await batch.commit(); logAction("Committee Action", `${type.toUpperCase()} application for ${app.name}`); window.location.href = `mailto:${app.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' }); alert("Status updated and email client opened!"); } catch (err) { alert("Error updating status."); } };
+  const handleDeleteApp = async (id) => { if (!confirm("Delete this application?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id)); logAction("Delete App", `Deleted application ID: ${id}`); } catch(err) {} };
+  const handleToggleRegistration = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, registrationOpen: !hubSettings.registrationOpen }); logAction("Toggle Reg", `Registration ${!hubSettings.registrationOpen ? 'Opened' : 'Closed'}`); } catch (err) {} };
+  const handleToggleMaintenance = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, maintenanceMode: !hubSettings.maintenanceMode }); logAction("Toggle Maintenance", `Maintenance ${!hubSettings.maintenanceMode ? 'Enabled' : 'Disabled'}`); } catch (err) {} };
+  const handleToggleRenewalMode = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, renewalMode: !hubSettings.renewalMode }); logAction("Toggle Renewal", `Renewal Mode ${!hubSettings.renewalMode ? 'ON' : 'OFF'}`); } catch (err) {} };
+  const handleToggleAllowedPayment = async () => { const newMode = hubSettings.allowedPayment === 'gcash_only' ? 'both' : 'gcash_only'; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, allowedPayment: newMode }); } catch (err) {} };
+  
+  const handleToggleSuperAdmin = async (memberId, currentRole, name) => { 
+      if (!isSuperAdmin) return; 
+      const targetCat = members.find(m => m.memberId === memberId)?.positionCategory;
+      const revertRole = targetCat === 'Officer' ? 'admin' : 'member';
+      const newRoleToSet = currentRole === 'superadmin' ? revertRole : 'superadmin'; 
+      if (!confirm(`Are you sure you want to ${newRoleToSet === 'superadmin' ? 'GRANT' : 'REVOKE'} System Admin access for ${name}?`)) return; 
+      try { 
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId), { role: newRoleToSet }); 
+          logAction("Toggle Super Admin", `${newRoleToSet === 'superadmin' ? 'Granted' : 'Revoked'} admin access for ${name}`); 
+          alert(`Successfully updated access for ${name}.`); 
+      } catch (e) { alert("Failed to update access."); } 
   };
 
-  const MaintenanceBanner = () => (
-    <div className="w-full bg-[#3E2723] text-white py-3 px-6 flex items-center justify-center gap-3 font-bold text-sm">
-      <AlertOctagon size={18} className="text-amber-500" />
-      <span>SOCIETY IS UNDER MAINTENANCE. ACCESS IS CURRENTLY LIMITED.</span>
-    </div>
-  );
+  const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { 
+      if (!isSuperAdmin) return; 
+      const validMembers = members.filter(m => m != null); 
+      const target = validMembers.find(m => m.memberId === targetId); 
+      if (!target) return; 
+      let newId = target.memberId; 
+      const isL = ['Officer', 'Committee'].includes(cat); 
+      const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId; 
+      newId = baseId + (isL ? 'C' : ''); 
+      const updates = { 
+          positionCategory: cat, 
+          specificTitle: specific || cat, 
+          memberId: newId, 
+          role: cat === 'Officer' ? 'admin' : (target.role === 'superadmin' ? 'superadmin' : 'member'), 
+          paymentStatus: ['Officer', 'Committee', 'Alumni', 'Execomm'].includes(cat) ? 'exempt' : target.paymentStatus, 
+          committee: cat === 'Committee' ? committee : "" 
+      }; 
+      if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId)); 
+      await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates }); 
+  };
+  
+  const initiateRemoveMember = (mid, name) => { setConfirmDelete({ mid, name }); };
+  const confirmRemoveMember = async () => { if (!confirmDelete) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid)); logAction("Remove Member", `Removed member: ${confirmDelete.name}`); } catch(e) { console.error(e); } finally { setConfirmDelete(null); } };
+  const handleBulkImportCSV = async (e) => { const file = e.target.files[0]; if (!file) return; setIsImporting(true); const reader = new FileReader(); reader.onload = async (evt) => { try { const text = evt.target.result; const rows = text.split('\n').filter(r => r.trim().length > 0); const batch = writeBatch(db); let count = members.filter(m => m != null).length; for (let i = 1; i < rows.length; i++) { const [name, email, prog, pos, title] = rows[i].split(',').map(s => s.trim()); if (!name || !email) continue; const mid = generateLBAId(pos, count++); const meta = getMemberIdMeta(); const data = { name: name.toUpperCase(), email: email.toLowerCase(), program: prog || "UNSET", positionCategory: pos || "Member", specificTitle: title || pos || "Member", memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status: 'expired', paymentStatus: pos !== 'Member' ? 'exempt' : 'unpaid', lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: new Date().toISOString() }; batch.set(doc(db, 'artifacts', appId, 'public', 'data', 'registry', mid), data); } await batch.commit(); logAction("Bulk Import", `Imported ${rows.length - 1} members`); } catch (err) {} finally { setIsImporting(false); e.target.value = ""; } }; reader.readAsText(file); };
+  const downloadImportTemplate = () => { const headers = ["Name", "Email", "Program", "PositionCategory", "SpecificTitle"]; const rows = [["JUAN DELA CRUZ", "juan@lpu.edu.ph", "BSIT", "Member", "Member"]]; generateCSV(headers, rows, "LBA_Import_Template.csv"); };
+  const handleRotateDailyKey = async () => {
+    const newKey = generateSecureDailyKey();
+    
+    try {
+        const settingsRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops');
+        await updateDoc(settingsRef, { 
+            currentDailyKey: newKey,
+            lastRotation: serverTimestamp() 
+        });
+        logAction("KEY_ROTATION", `New secure cash key generated: ${newKey}`);
+    } catch (err) {
+        alert("Failed to rotate key.");
+    }
+};
+  const handleSanitizeDatabase = async () => { if (!confirm("This will REMOVE DUPLICATES (by Name) and RE-GENERATE Member IDs. Are you sure?")) return; const batch = writeBatch(db); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), orderBy('joinedDate', 'asc')); const snapshot = await getDocs(q); let count = 0; snapshot.docs.forEach((docSnap) => { const data = docSnap.data(); const category = data.positionCategory || "Member"; const meta = getMemberIdMeta(); count++; const padded = String(count).padStart(4, '0'); const isLeader = ['Officer', 'Committee'].includes(category); const newId = `LBA${meta.sy}-${meta.sem}${padded}${isLeader ? "C" : ""}`; batch.update(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { memberId: newId }); }); await batch.commit(); logAction("Sanitize DB", "Executed database sanitization"); alert(`Database sanitized! ${count} records updated.`); } catch (err) { alert("Failed to sanitize: " + err.message); } };
+  const handleMigrateToRenewal = async () => { if(!confirm("This will update ALL current members to 'Renewal' status. Proceed?")) return; const batch = writeBatch(db); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry')); const snapshot = await getDocs(q); let count = 0; snapshot.forEach(doc => { const data = doc.data(); if (data.membershipType !== 'renewal') { batch.update(doc.ref, { membershipType: 'renewal' }); count++; } }); if(count > 0) { await batch.commit(); logAction("Migrate Renewal", `Migrated ${count} members to renewal`); alert(`Migration Complete: ${count} members updated to Renewal status.`); } else { alert("No members needed updating."); } } catch (err) { alert("Migration failed."); } };
+  const handleToggleStatus = async (memberId, currentStatus) => { if (!confirm(`Change status to ${currentStatus === 'active' ? 'EXPIRED' : 'ACTIVE'}?`)) return; try { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', memberId); const updates = { status: currentStatus === 'active' ? 'expired' : 'active' }; if (currentStatus === 'active') { updates.paymentStatus = 'unpaid'; } await updateDoc(memberRef, updates); logAction("Toggle Status", `Changed ${memberId} to ${updates.status}`); } catch(e) { console.error(e); } };
+  const handleRenewalPayment = async (e) => { e.preventDefault(); if (renewalMethod === 'gcash' && !renewalRef) return; if (renewalMethod === 'cash' && !renewalCashKey) return; if (renewalMethod === 'cash' && renewalCashKey.trim().toUpperCase() !== getDailyCashPasskey().toUpperCase()) { return alert("Invalid Cash Key."); } try { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId); const meta = getMemberIdMeta(); await updateDoc(memberRef, { status: 'active', paymentStatus: 'paid', lastRenewedSY: meta.sy, lastRenewedSem: meta.sem, membershipType: 'renewal', paymentDetails: { method: renewalMethod, refNo: renewalMethod === 'gcash' ? renewalRef : 'CASH', date: new Date().toISOString() } }); setRenewalRef(''); setRenewalCashKey(''); alert("Membership renewed successfully! Welcome back."); } catch (err) { alert("Renewal failed. Please try again."); } };
+  const handleRecoverLostData = async () => { if(!confirm("This will restore David (Fixed ID), Geremiah & Cassandra (New Sequential IDs). Continue?")) return; try { const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry'); const allDocs = await getDocs(registryRef); let maxCount = 0; allDocs.forEach(doc => { const mid = doc.data().memberId; const match = mid?.match(/-(\d)(\d{4,})C?$/); if (match) { const num = parseInt(match[2], 10); if (num > maxCount) maxCount = num; } }); const batch = writeBatch(db); const meta = getMemberIdMeta(); const davidId = "LBA2526-20007C"; const davidRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', davidId); batch.set(davidRef, { name: "DAVID MATTHEW ADRIAS", memberId: davidId, email: "david.adrias@lpu.edu.ph", program: "BSIT", positionCategory: "Committee", specificTitle: "Committee Member", role: "member", status: "active", paymentStatus: "exempt", joinedDate: new Date().toISOString(), password: "LBA" + davidId.slice(-5), uid: "recovered_david_" + Date.now(), membershipType: "renewal" }); const geremiahCount = maxCount + 1; const geremiahId = generateLBAId("Committee", geremiahCount - 1); const geremiahRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', geremiahId); batch.set(geremiahRef, { name: "GEREMIAH HERNANI", memberId: geremiahId, email: "geremiah.hernani@lpu.edu.ph", program: "BSIT", positionCategory: "Committee", specificTitle: "Committee Member", role: "member", status: "active", paymentStatus: "exempt", joinedDate: new Date().toISOString(), password: "LBA" + geremiahId.slice(-5), uid: "recovered_geremiah_" + Date.now(), membershipType: "renewal" }); const cassandraCount = maxCount + 2; const cassandraId = generateLBAId("Committee", cassandraCount - 1); const cassandraRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', cassandraId); batch.set(cassandraRef, { name: "CASSANDRA CASIPIT", memberId: cassandraId, email: "cassandra.casipit@lpu.edu.ph", program: "BSIT", positionCategory: "Committee", specificTitle: "Committee Member", role: "member", status: "active", paymentStatus: "exempt", joinedDate: new Date().toISOString(), password: "LBA" + cassandraId.slice(-5), uid: "recovered_cassandra_" + Date.now(), membershipType: "renewal" }); const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters'); batch.set(counterRef, { memberCount: cassandraCount }, { merge: true }); await batch.commit(); alert(`Recovery successful!\nDavid: ${davidId}\nGeremiah: ${geremiahId}\nCassandra: ${cassandraId}`); } catch (err) { alert("Recovery failed: " + err.message); } };
+  const handleGiveAccolade = async () => { if (!accoladeText.trim() || !showAccoladeModal) return; try { const docId = showAccoladeModal.id || showAccoladeModal.memberId; const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); await updateDoc(memberRef, { accolades: arrayUnion(accoladeText) }); setAccoladeText(""); const updated = [...(showAccoladeModal.currentAccolades || []), accoladeText]; setShowAccoladeModal(prev => ({...prev, currentAccolades: updated})); logAction("Award Accolade", `Awarded '${accoladeText}' to ${docId}`); alert("Accolade awarded!"); } catch (err) { alert("Failed to award accolade: " + err.message); } };
+  const handleRemoveAccolade = async (accoladeToRemove) => { if(!confirm("Remove this accolade?")) return; try { const docId = showAccoladeModal.id || showAccoladeModal.memberId; const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', docId); await updateDoc(memberRef, { accolades: arrayRemove(accoladeToRemove) }); const updated = showAccoladeModal.currentAccolades.filter(a => a !== accoladeToRemove); setShowAccoladeModal(prev => ({...prev, currentAccolades: updated})); logAction("Remove Accolade", `Removed '${accoladeToRemove}' from ${docId}`); } catch(e) { alert("Failed to remove accolade"); } };
+const handleResetPassword = async (memberId, email, name) => {
+    if (!confirm(`Reset password for ${name}?`)) return;
 
-  // --- 3. MENU ITEMS ---
+    const tempPassword = "LBA-" + Math.random().toString(36).slice(-6).toUpperCase();
+    const subject = "LBA Password Reset Request";
+    const body = `Dear ${name},\n\nWe received a request to reset the password associated with your membership account at LPU Baristas' Association.\n\nMember ID: ${memberId}\nTemporary Password: ${tempPassword}\n\nLogin here: ${window.location.origin}\n\nThank you,\nLBA Support Team`;
+
+    try {
+        // Find the specific document where the memberId field matches
+        const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry');
+        const q = query(registryRef, where("memberId", "==", memberId));
+        const querySnapshot = await getDocs(q);
+
+        if (querySnapshot.empty) {
+            alert("Error: Member not found in registry.");
+            return;
+        }
+
+        // Update the document using the internal Firebase ID (doc.id)
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', querySnapshot.docs[0].id);
+        await updateDoc(docRef, { password: tempPassword });
+
+        // Trigger the local email client
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+        
+        logAction("Reset Password", `Generated temp password for ${memberId}`);
+        alert("Password reset! Opening email client...");
+    } catch (err) {
+        console.error("Reset Error:", err);
+        alert("Failed to reset password. Check your connection or permissions.");
+    }
+};
+  
   const menuItems = [
-    { id: 'home', label: 'Dashboard', icon: HomeIcon },
-    { id: 'about', label: 'Legacy Story', icon: HistoryIcon },
-    { id: 'masterclass', label: 'Masterclass', icon: GraduationCapIcon },
-    { id: 'team', label: 'Brew Crew', icon: UsersIcon },
-    { id: 'events', label: "What's Brewing?", icon: CalendarIcon, hasNotification: notifications.events },
-    { id: 'announcements', label: 'Grind Report', icon: BellIcon, hasNotification: notifications.announcements },
-    { id: 'members_corner', label: "Member's Corner", icon: MessageSquareIcon },
-    ...(isOfficer ? [{ id: 'members', label: 'Registry', icon: UsersIcon }] : [])
+    { id: 'home', label: 'Dashboard', icon: Home },
+    { id: 'about', label: 'Legacy Story', icon: History },
+    { id: 'masterclass', label: 'Masterclass', icon: GraduationCap },
+    { id: 'team', label: 'Brew Crew', icon: Users },
+    { id: 'events', label: "What's Brewing?", icon: Calendar, hasNotification: notifications.events },
+    { id: 'announcements', label: 'Grind Report', icon: Bell, hasNotification: notifications.announcements },
+    { id: 'members_corner', label: "Member's Corner", icon: MessageSquare, hasNotification: notifications.suggestions },
+    { id: 'series', label: 'Barista Diaries', icon: ImageIcon },
+    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
+    ...(isCommitteePlus ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList } ] : []),
+    ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
+    ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
-  if (!profile) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#FDFBF7]">
-        <div className="text-center animate-pulse">
-          <p className="text-[#3E2723] font-black uppercase tracking-widest">Warming up the espresso machine...</p>
-        </div>
-      </div>
-    );
-  }
+  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
+  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative";
 
-  const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative text-left";
-  const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-[#3E2723]/40 hover:bg-black/5 relative text-left";
-
-  // --- 4. RENDER ---
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
-      {/* Maintenance Layer */}
       {hubSettings.maintenanceMode && !isSuperAdmin && (<div className="w-full z-[101]"><MaintenanceBanner /></div>)}
-      {hubSettings.maintenanceMode && isSuperAdmin && (
-        <div className="w-full bg-red-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse border-b-2 border-red-800">
-          <AlertOctagon size={14} />
-          <span>MAINTENANCE MODE IS CURRENTLY ACTIVE</span>
-        </div>
-      )}
+      {hubSettings.maintenanceMode && isSuperAdmin && (<div className="w-full bg-red-600 text-white text-center py-2 px-4 flex items-center justify-center gap-2 font-black text-[10px] uppercase animate-pulse border-b-2 border-red-800"><AlertOctagon size={14} /><span>MAINTENANCE MODE IS CURRENTLY ACTIVE</span></div>)}
       
-      {/* Confirmation Modal */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-fadeIn">
             <div className="bg-white rounded-[32px] p-8 max-w-sm w-full text-center border-b-[8px] border-[#3E2723]">
                 <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><Trash2 size={32} /></div>
                 <h3 className="text-xl font-black uppercase text-[#3E2723] mb-2">Confirm Deletion</h3>
                 <p className="text-sm text-gray-600 mb-8">Are you sure you want to remove <span className="font-bold text-[#3E2723]">{confirmDelete.name}</span>?</p>
-                <div className="flex gap-3">
-                  <button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button>
-                  <button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button>
-                </div>
+                <div className="flex gap-3"><button onClick={() => setConfirmDelete(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button><button onClick={confirmRemoveMember} className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold uppercase text-xs hover:bg-red-700">Delete</button></div>
             </div>
         </div>
       )}
