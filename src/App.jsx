@@ -353,47 +353,6 @@ const Dashboard = ({ user, profile, setProfile, logout, db, appId }) => {
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative text-left";
   const inactiveMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all text-amber-200/40 hover:bg-white/5 relative text-left";
 
-  // --- 6. RENDER ---
-  return (
-    <div className="flex h-screen bg-[#1A120B]">
-      {/* Sidebar Navigation */}
-      <aside className="w-64 bg-[#2D1B14] p-6 hidden md:block">
-         <div className="space-y-2">
-            {menuItems.map(item => (
-              <button 
-                key={item.id} 
-                className={view === item.id ? activeMenuClass : inactiveMenuClass} 
-                onClick={() => setView(item.id)}
-              >
-                <item.icon size={22} />
-                <span className="text-sm">{item.label}</span>
-                {item.hasNotification && <span className="absolute top-4 right-4 w-2 h-2 bg-red-500 rounded-full" />}
-              </button>
-            ))}
-         </div>
-         <div className="mt-auto pt-6 border-t border-white/5">
-            <button onClick={logout} className="w-full flex items-center gap-4 px-4 py-4 text-red-400 hover:bg-red-500/10 rounded-2xl transition-all">
-               <FallbackIcon size={20} />
-               <span className="text-sm font-bold uppercase tracking-widest">Logout</span>
-            </button>
-         </div>
-      </aside>
-
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-8 text-amber-50">
-        <h1 className="text-3xl font-black mb-8">Welcome, {profile?.name}</h1>
-        
-        {/* Simple conditional view placeholder */}
-        <div className="bg-[#2D1B14] p-6 rounded-3xl border border-white/5">
-           <p className="opacity-50 italic uppercase tracking-widest text-xs mb-4">{view} SECTION</p>
-           <h2 className="text-xl font-bold mb-4">Content for {menuItems.find(m => m.id === view)?.label}</h2>
-           <p>This section is currently being updated to integrate the latest data.</p>
-        </div>
-      </main>
-    </div>
-  );
-};
-
   return (
     <div className="min-h-screen bg-[#FDFBF7] flex flex-col text-[#3E2723] font-sans relative overflow-hidden">
       {hubSettings.maintenanceMode && !isSuperAdmin && (<div className="w-full z-[101]"><MaintenanceBanner /></div>)}
