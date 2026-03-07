@@ -355,7 +355,6 @@ const handleResetPassword = async (memberId, email, name) => {
         alert("Failed to reset password. Check your connection or permissions.");
     }
 };
-  const [newGcashNumber, setNewGcashNumber] = useState('');
   
   const menuItems = [
     { id: 'home', label: 'Dashboard', icon: Home },
