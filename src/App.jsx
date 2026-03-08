@@ -1580,10 +1580,8 @@ const handleResetPassword = async (memberId, email, name) => {
                      <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
                      <button onClick={handleRecoverLostData} className="w-full bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100"><LifeBuoy size={14}/> Recover Lost Data</button>
                  </div>
-            </div>
-        </div>
-    </div>
-)}
+                )
+              )}
 
             {view === 'settings' && (
                   <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
