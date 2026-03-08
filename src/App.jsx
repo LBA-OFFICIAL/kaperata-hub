@@ -1420,8 +1420,28 @@ const handleResetPassword = async (memberId, email, name) => {
                 </div>
             )}
 
-          {view === 'reports' && isSuperAdmin && (
-    <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+          {view === 'reports' && isSuperAdmin && (    
+                // 1. CHECK IF DATA IS MISSING
+            (!financialStats || !hubSettings || !secureKeys) ? (
+              
+              // 2. IF MISSING: SHOW LOADING
+              <div className="flex flex-col items-center justify-center p-20 space-y-4">
+                <div className="w-12 h-12 border-4 border-[#3E2723] border-t-amber-500 rounded-full animate-spin"></div>
+                <p className="font-black uppercase text-[10px] text-amber-800 animate-pulse">
+                  Heating up the roaster... (Loading Data)
+                </p>
+              </div>
+          
+            ) : (
+          
+              // 3. IF DATA IS PRESENT: SHOW THE ACTUAL TERMINAL
+              <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+                {/* ... All your Terminal code from before goes here ... */}
+                <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
+                    <StatIcon icon={TrendingUp} variant="amber" />
+                    {/* etc... */}
+                </div>
+      <div className="space-y-10 animate-fadeIn text-[#3E2723]">
         <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
             <StatIcon icon={TrendingUp} variant="amber" />
             <div>
@@ -1432,10 +1452,10 @@ const handleResetPassword = async (memberId, email, name) => {
         
         {/* STATS GRID */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Total</p><p className="text-2xl font-black text-[#3E2723]">{financialStats.totalPaid + financialStats.exemptCount}</p></div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p><p className="text-2xl font-black text-green-600">{financialStats.totalPaid}</p></div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p><p className="text-2xl font-black text-blue-600">{financialStats.exemptCount}</p></div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p><p className="text-2xl font-black text-purple-600">{committeeApps.filter(a => !['accepted','denied'].includes(a.status)).length}</p></div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Total</p><p className="text-2xl font-black text-[#3E2723]">{financialStats?.totalPaid + financialStats.exemptCount}</p></div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p><p className="text-2xl font-black text-green-600">{financialStats?.totalPaid}</p></div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p><p className="text-2xl font-black text-blue-600">{financialStats?.exemptCount}</p></div>
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p><p className="text-2xl font-black text-purple-600">{(committeeApps || []).filter(a => !['accepted','denied'].includes(a.status)).length}</p></div>
         </div>
 
         {/* PROJECT & COMMITTEE MANAGER (NEW) */}
@@ -1481,13 +1501,13 @@ const handleResetPassword = async (memberId, email, name) => {
         <div className="space-y-4">
             <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
                 <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
-                <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey}</div>
+                <div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey ||}</div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="bg-white p-6 rounded-[32px] border-2 border-amber-100 flex items-center justify-between gap-4">
                     <div className="flex-1">
-                        <p className="text-[10px] font-black uppercase text-amber-800">GCash Number: <span className="font-mono">{hubSettings.gcashNumber}</span></p>
+                        <p className="text-[10px] font-black uppercase text-amber-800">GCash Number: <span className="font-mono">{hubSettings?.gcashNumber}</span></p>
                         <input type="text" placeholder="Update GCash..." className="w-full mt-2 p-2 bg-amber-50 rounded-lg text-xs font-bold outline-none" value={newGcashNumber} onChange={(e) => setNewGcashNumber(e.target.value)} />
                     </div>
                     <button onClick={async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { gcashNumber: newGcashNumber }); setNewGcashNumber(''); }} className="bg-[#3E2723] text-[#FDB813] p-4 rounded-2xl font-black uppercase text-[10px]"><RefreshCcw size={16}/></button>
