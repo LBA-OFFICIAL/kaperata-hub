@@ -1584,7 +1584,7 @@ const handleResetPassword = async (memberId, email, name) => {
               </div>
             </div>
           </div>
-        )) 
+        ) 
       )} 
 
             {view === 'settings' && (
