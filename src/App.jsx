@@ -1573,15 +1573,16 @@ const handleResetPassword = async (memberId, email, name) => {
                     <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Payment Methods</span><button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">{hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}</button></div>
                 </div>
             </div>
-            <div className="bg-white p-8 rounded-[40px] border-2 border-red-100 shadow-sm">
-                 <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-red-700"><AlertOctagon size={16}/> Danger Zone</h4>
-                 <div className="space-y-3">
-                     <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100"><Database size={14}/> Sanitize Database</button>
-                     <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
-                     <button onClick={handleRecoverLostData} className="w-full bg-blue-50 text-blue-600 border border-blue-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-blue-100"><LifeBuoy size={14}/> Recover Lost Data</button>
-                 </div>
-                )
-              )}
+           <div className="bg-white p-8 rounded-[40px] border-2 border-red-100 shadow-sm mb-10">
+                <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-red-700"><AlertOctagon size={16}/> Danger Zone</h4>
+                <div className="space-y-3">
+                    <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100"><Database size={14}/> Sanitize Database</button>
+                    <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
+                    </div>
+                </div>
+            </div>
+          )
+      )}
 
             {view === 'settings' && (
                   <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
