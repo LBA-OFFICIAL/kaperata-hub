@@ -1420,43 +1420,45 @@ const handleResetPassword = async (memberId, email, name) => {
                 </div>
             )}
 
-          {view === 'reports' && isSuperAdmin && (    
-                // 1. CHECK IF DATA IS MISSING
-            (!financialStats || !hubSettings || !secureKeys) ? (
-              
-              // 2. IF MISSING: SHOW LOADING
-              <div className="flex flex-col items-center justify-center p-20 space-y-4">
-                <div className="w-12 h-12 border-4 border-[#3E2723] border-t-amber-500 rounded-full animate-spin"></div>
-                <p className="font-black uppercase text-[10px] text-amber-800 animate-pulse">
-                  Heating up the roaster... (Loading Data)
-                </p>
-              </div>
-          
-            ) : (
-          
-              // 3. IF DATA IS PRESENT: SHOW THE ACTUAL TERMINAL
-              <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-                {/* ... All your Terminal code from before goes here ... */}
-                <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
-                    <StatIcon icon={TrendingUp} variant="amber" />
-                    {/* etc... */}
-                </div>
-      <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-        <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
-            <StatIcon icon={TrendingUp} variant="amber" />
-            <div>
+         {view === 'reports' && isSuperAdmin && (
+        !financialStats || !hubSettings || !secureKeys ? (
+          /* LOADING STATE */
+          <div className="flex flex-col items-center justify-center p-20 space-y-4">
+            <div className="w-12 h-12 border-4 border-[#3E2723] border-t-amber-500 rounded-full animate-spin"></div>
+            <p className="font-black uppercase text-[10px] text-amber-800 animate-pulse">
+              Heating up the roaster... (Loading Data)
+            </p>
+          </div>
+        ) : (
+          /* ACTUAL TERMINAL */
+          <div className="space-y-10 animate-fadeIn text-[#3E2723]">
+            <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
+              <StatIcon icon={TrendingUp} variant="amber" />
+              <div>
                 <h3 className="font-serif text-4xl font-black uppercase">Terminal</h3>
                 <p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p>
+              </div>
             </div>
-        </div>
-        
-        {/* STATS GRID */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Total</p><p className="text-2xl font-black text-[#3E2723]">{financialStats?.totalPaid + financialStats.exemptCount}</p></div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p><p className="text-2xl font-black text-green-600">{financialStats?.totalPaid}</p></div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p><p className="text-2xl font-black text-blue-600">{financialStats?.exemptCount}</p></div>
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center"><p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p><p className="text-2xl font-black text-purple-600">{(committeeApps || []).filter(a => !['accepted','denied'].includes(a.status)).length}</p></div>
-        </div>
+
+            {/* STATS GRID */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
+                <p className="text-2xl font-black text-[#3E2723]">{(financialStats?.totalPaid || 0) + (financialStats?.exemptCount || 0)}</p>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
+                <p className="text-2xl font-black text-green-600">{financialStats?.totalPaid || 0}</p>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
+                <p className="text-2xl font-black text-blue-600">{financialStats?.exemptCount || 0}</p>
+              </div>
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+                <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
+                <p className="text-2xl font-black text-purple-600">{(committeeApps || []).filter(a => !['accepted','denied'].includes(a.status)).length}</p>
+              </div>
+            </div>
 
         {/* PROJECT & COMMITTEE MANAGER (NEW) */}
         <div className="bg-white p-8 rounded-[40px] border-4 border-[#3E2723] shadow-sm">
@@ -1578,11 +1580,12 @@ const handleResetPassword = async (memberId, email, name) => {
                 <div className="space-y-3">
                     <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100"><Database size={14}/> Sanitize Database</button>
                     <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
-                    </div>
-                </div>
+                   </div>
+              </div>
             </div>
-          )
-      )}
+          </div>
+        ) 
+      )} 
 
             {view === 'settings' && (
                   <div className="space-y-8 animate-fadeIn max-w-4xl mx-auto">
@@ -1616,9 +1619,9 @@ const handleResetPassword = async (memberId, email, name) => {
                   </div>
                 )}
              <DataPrivacyFooter />
-          </main>
-        </div>
-  );
+    </main>
+  </div>
+ );
 };
 
 export default function App() {
