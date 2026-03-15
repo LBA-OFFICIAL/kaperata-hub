@@ -1614,11 +1614,10 @@ const handleResetPassword = async (memberId, email, name) => {
                       </div>
                       <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs"><p>Member ID: <span className="font-mono text-white font-bold">{profile.memberId}</span></p><p className="mt-2">Need help with your account? Contact the PR Committee.</p></div>
                   </div>
-            )}
+                )}
              <DataPrivacyFooter />
           </main>
-      </div>
-    </div>
+        </div>
   );
 };
 
