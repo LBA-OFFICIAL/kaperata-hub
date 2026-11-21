@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, onAuthStateChanged, signInAnonymously, signOut } from 'firebase/auth';
 import { getFirestore, collection, query, where, onSnapshot, doc, setDoc, updateDoc, addDoc, serverTimestamp, getDocs, limit, deleteDoc, orderBy, writeBatch, arrayUnion, arrayRemove, runTransaction } from 'firebase/firestore'; 
-import { Users, Calendar, Award, Bell, LogOut, Home, Plus, ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Download, Lock, BadgeCheck, MapPin, Pen, Send, MessageSquare, TrendingUp, Mail, Trash2, Search, CheckCircle2, Settings2, ChevronRight, Facebook, Instagram, LifeBuoy, Banknote, AlertTriangle, AlertCircle, History, Cake, User, Trophy, Clock, Briefcase, Music, Database, Image as ImageIcon, RefreshCcw, GraduationCap, AlertOctagon, FileText, FileBarChart, ClipboardList, CheckSquare2, ExternalLink as Link2, BarChart2, Smile, UserCheck, Printer } from 'lucide-react';
+import { BookOpen, Package, Users, Calendar, Award, Bell, LogOut, Home, Plus, ShieldCheck, Menu, X, Sparkles, Loader2, Coffee, Download, Lock, BadgeCheck, MapPin, Pen, Send, MessageSquare, TrendingUp, Mail, Trash2, Search, CheckCircle2, Settings2, ChevronRight, Facebook, Instagram, LifeBuoy, Banknote, AlertTriangle, AlertCircle, History, Cake, User, Trophy, Clock, Briefcase, Music, Database, Image as ImageIcon, RefreshCcw, GraduationCap, AlertOctagon, FileText, FileBarChart, ClipboardList, CheckSquare2, ExternalLink as Link2, BarChart2, Smile, UserCheck, Printer } from 'lucide-react';
 
 let firebaseConfig;
 if (typeof __firebase_config !== 'undefined') { try { firebaseConfig = JSON.parse(__firebase_config); } catch (e) { firebaseConfig = {}; } } 
@@ -20,11 +20,87 @@ const MONTHS = [{ value: 1, label: "January" }, { value: 2, label: "February" },
 const DEFAULT_MASTERCLASS_MODULES = [{ id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" }, { id: 2, title: "Equipment Familiarization", short: "Equipment" }, { id: 3, title: "Manual Brewing", short: "Brewing" }, { id: 4, title: "Espresso Machine", short: "Espresso" }, { id: 5, title: "Signature Beverage (Advanced)", short: "Sig Bev" }];
 const COMMITTEES_INFO = [
   { id: "Arts", title: "Arts & Design", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80", description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.", roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"] },
-  { id: "Media", title: "Media & Documentation", image: "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?auto=format&fit=crop&w=800&q=80", description: "Capturing the moments. We handle photography, videography, and highlights of every event.", roles: ["Photography", "Videography", "Editing"] },
   { id: "Events", title: "Events & Logistics", image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80", description: "The backbone of operations. We plan flows, manage logistics, and ensure smooth gatherings.", roles: ["Program Flow", "Logistics", "Crowd Control"] },
-  { id: "PR", title: "Public Relations", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", description: "The voice of the association. We manage social media, engagement, and external partners.", roles: ["Social Media", "Copywriting", "External Partnerships"] }
+  { id: "Marketing", title: "Marketing Committee", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", description: "The voice of the association. Social media, public relations, photo & video documentation, and external partnerships.", roles: ["Social Media", "Photo & Video", "Copywriting", "Partnerships"] },
+  { id: "Care", title: "Members Care Committee", image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=800&q=80", description: "Looking after our members. We track member progress, issue ID laces, handle renewals, monitor member count and keep engagement high.", roles: ["Progress Tracking", "ID Lace Issuance", "Renewals", "Member Count", "Engagement"] }
 ];
-const SOCIAL_LINKS = { facebook: "https://fb.com/lpubaristas.official", instagram: "https://instagram.com/lpubaristas.official", tiktok: "https://tiktok.com/@lpubaristas.official", email: "lpubaristas.official@gmail.com", pr_email: "lbaofficial.pr@gmail.com" };
+const normCommittee = (c) => (c === 'Media' || c === 'PR') ? 'Marketing' : (c || '');
+const committeeTitle = (id) => (COMMITTEES_INFO.find(c => c.id === id) || {}).title || id || '';
+const EMAIL_RULE_MSG = "Please use your LPU network email (for example name@lpu.edu.ph) or a Gmail address (name@gmail.com).";
+const isAllowedEmail = (v) => { const e = String(v || '').trim().toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false; const d = e.split('@')[1]; return d === 'gmail.com' || /(^|\.)lpu[a-z]*\.edu\.ph$/.test(d); };
+const isValidStudentId = (v) => /^[0-9A-Za-z-]{5,20}$/.test(String(v || '').trim());
+const EMPTY_ITEM = { name: '', category: '', quantity: '0', unit: 'pcs', reorderLevel: '5', notes: '' };
+const MANUAL_SECTIONS = [
+  { title: "Signing up and logging in", level: 'all', items: [
+    "Open the Hub and tap Sign Up. Fill in your name, LPU Student ID number, email (your LPU network email or a Gmail address both work), program, birthday and a password.",
+    "When you finish, the Hub gives you a Member ID that looks like LBA2627-10001. Write it down: you log in with the Member ID and your password, not with your email.",
+    "Have a Leader Key from an officer? Type it in the optional Leader Key box when signing up so your role is set right away.",
+    "Forgot your password or Member ID? Tap the help link on the login page or email lbaofficial.pr@gmail.com."
+  ] },
+  { title: "Your dashboard and account", level: 'all', items: [
+    "The Dashboard shows your membership status, Member ID, achievements and volunteer shifts.",
+    "Open Settings (your profile) to update your name, nickname, email, Student ID, photo link and birthday. Emails must be an LPU network address or Gmail.",
+    "Settings also shows whether your ID lace has been issued yet."
+  ] },
+  { title: "Renewing your membership", level: 'all', items: [
+    "When Renewal Season is open and your membership shows Expired, a Renew option appears on your dashboard.",
+    "Pay by GCash and enter the reference number, or pay in cash to an officer, who gives you the Daily Cash Key to type in.",
+    "Officers, committee members, execomm, alumni and advisers do not pay renewal fees."
+  ] },
+  { title: "Events, volunteering and attendance", level: 'all', items: [
+    "What's Brewing? lists upcoming events. Some events run on several dates and times.",
+    "If an event needs volunteers, tap a shift to sign up. You can leave a shift before it starts.",
+    "Attendance is checked by officers on the event day. Past events stay in the list for reference."
+  ] },
+  { title: "Masterclass, Barista Diaries and the Brew Crew", level: 'all', items: [
+    "Masterclass tracks the five modules you have attended and your certificate progress.",
+    "Barista Diaries is the photo journal of the organisation. Brew Crew shows the current officers and committees.",
+    "Legacy Story tells the history of LBA."
+  ] },
+  { title: "Join the Team (committees and executive board)", level: 'all', items: [
+    "Committees: choose Arts & Design, Events & Logistics, Marketing or Members Care and tap Apply Now.",
+    "Executive Board: choose the position you want, add a short note on why you fit, and submit.",
+    "You can have one application in progress at a time. Your status shows on the same page: Pending, For Interview, Accepted or Closed. Watch your email for interview details.",
+    "Your membership must be active to apply."
+  ] },
+  { title: "Announcements, polls and suggestions", level: 'all', items: [
+    "Grind Report holds announcements. Member's Corner has polls and a suggestion box for ideas and concerns."
+  ] },
+  { title: "Registry (officers)", level: 'officer', items: [
+    "Search by name, Member ID, Student ID or email. Use the filter to see active, inactive, officers, committee members, ID laces issued or ID laces pending.",
+    "CSV exports the whole registry (including Student ID and ID lace status). Email opens a message to the members you ticked.",
+    "ID Lace: tap the Pending/Issued button on a member to record that their lace was handed over. If your Inventory has an item called ID Lace, its stock goes down by one automatically (and back up if you undo).",
+    "Only a System Admin can change a member's category, title, committee or status. Changing someone back to Member automatically sets their title to Member."
+  ] },
+  { title: "Inventory (officers)", level: 'officer', items: [
+    "Open Inventory and tap Add Item. Give it a name, category, current quantity, unit and a reorder level.",
+    "Use the minus and plus buttons for quick changes, or Adjust to enter an amount and a reason (for example Received from supplier). Every change is saved in the item's history.",
+    "Items at or below their reorder level are flagged Low Stock and counted at the top of the page.",
+    "To track ID laces, add an item named ID Lace with the number you have on hand."
+  ] },
+  { title: "Terminal (System Admins)", level: 'admin', items: [
+    "Daily Cash Key: the code members need when paying cash. Rotate it any time; the new key works immediately.",
+    "Security Vault: the leader keys for officers, committee heads and committee members. Rotate them after every recruitment.",
+    "Applications: review applications from Join the Team. Use the mail icon to invite for interview, the check to accept (the member's role updates automatically) and the X to decline. Your email app opens with a ready message.",
+    "Importing members: Registry > Import accepts a CSV with a Name column; Email, Program, Category, Title, Committee, Status, Joined, Student ID and ID Lace are optional. Rows whose Member ID already exists are skipped.",
+    "System controls: maintenance mode, open/close registration, renewal season and payment methods."
+  ] },
+  { title: "If something looks wrong", level: 'all', items: [
+    "Refresh the page first. If a page shows a red error box, send a screenshot of it to lbaofficial.pr@gmail.com.",
+    "Questions about membership, ID laces or renewals go to the Members Care Committee or any officer."
+  ] }
+];
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error) { console.error('Page error:', error); }
+  componentDidUpdate(prev) { if (prev.resetKey !== this.props.resetKey && this.state.error) this.setState({ error: null }); }
+  render() {
+    if (this.state.error) return (<div className="bg-red-50 border-2 border-red-200 rounded-[32px] p-8 text-red-900 max-w-2xl mx-auto mt-10"><h3 className="font-black uppercase text-lg mb-2">This page hit a problem</h3><p className="text-xs font-bold mb-4">Please refresh. If it keeps happening, send a screenshot of this box to lbaofficial.pr@gmail.com.</p><pre className="text-[10px] whitespace-pre-wrap bg-white/70 p-3 rounded-xl border border-red-100">{String((this.state.error && this.state.error.message) || this.state.error)}</pre></div>);
+    return this.props.children;
+  }
+}
+const SOCIAL_LINKS = { facebook: "https://fb.com/lpubaristas.official", instagram: "https://instagram.com/lpubaristas.official", tiktok: "https://tiktok.com/@lpubaristas.official", email: "lbaofficial.pr@gmail.com", pr_email: "lbaofficial.pr@gmail.com" };
 
 const getDirectLink = (url) => { if (!url || typeof url !== 'string') return ""; if (url.includes('drive.google.com')) { const idMatch = url.match(/[-\w]{25,}/); if (idMatch) return `https://lh3.googleusercontent.com/d/${idMatch[0]}`; } return url; };
 const generateCSV = (headers, rows, filename) => { const csvContent = [headers.join(','), ...rows.map(row => row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(','))].join('\n'); const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); if (link.download !== undefined) { const url = URL.createObjectURL(blob); link.setAttribute("href", url); link.setAttribute("download", filename); link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); URL.revokeObjectURL(url); } };
@@ -46,10 +122,10 @@ const MemberCard = ({ m }) => (<div key={m?.memberId || m?.name} className="bg-w
 const DataPrivacyFooter = () => (<div className="w-full py-8 mt-12 border-t border-amber-900/10 text-[#3E2723]/40 text-center"><div className="flex items-center justify-center gap-2 mb-2 font-black uppercase text-[10px] tracking-widest"><ShieldCheck size={12} /> Data Privacy Statement</div><p className="text-[9px] leading-relaxed max-w-lg mx-auto px-4">LPU Baristas' Association (LBA) is committed to protecting your personal data strictly for membership management.</p><div className="mt-4 flex justify-center gap-4 text-[9px] font-bold uppercase tracking-wider"><span>© {new Date().getFullYear()} LBA</span></div></div>);
 
 const Login = ({ user, onLoginSuccess, initialError }) => {
-  const [authMode, setAuthMode] = useState('login'); const [memberIdInput, setMemberIdInput] = useState(''); const [password, setPassword] = useState(''); const [confirmPassword, setConfirmPassword] = useState(''); const [firstName, setFirstName] = useState(''); const [middleInitial, setMiddleInitial] = useState(''); const [lastName, setLastName] = useState(''); const [email, setEmail] = useState(''); const [program, setProgram] = useState(''); const [birthMonth, setBirthMonth] = useState(''); const [birthDay, setBirthDay] = useState(''); const [inputKey, setInputKey] = useState(''); const [registerCommittee, setRegisterCommittee] = useState(''); const [paymentMethod, setPaymentMethod] = useState(''); const [refNo, setRefNo] = useState(''); const [cashOfficerKey, setCashOfficerKey] = useState(''); const [membershipType, setMembershipType] = useState('new'); const [error, setError] = useState(initialError || ''); const [loading, setLoading] = useState(false); const [statusMessage, setStatusMessage] = useState(''); const [pendingProfile, setPendingProfile] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, maintenanceMode: false, gcashNumber: '09953510850' }); const [secureKeys, setSecureKeys] = useState(null); const [showForgotModal, setShowForgotModal] = useState(false);
+  const [authMode, setAuthMode] = useState('login'); const [memberIdInput, setMemberIdInput] = useState(''); const [password, setPassword] = useState(''); const [confirmPassword, setConfirmPassword] = useState(''); const [firstName, setFirstName] = useState(''); const [middleInitial, setMiddleInitial] = useState(''); const [lastName, setLastName] = useState(''); const [email, setEmail] = useState(''); const [studentId, setStudentId] = useState(''); const [program, setProgram] = useState(''); const [birthMonth, setBirthMonth] = useState(''); const [birthDay, setBirthDay] = useState(''); const [inputKey, setInputKey] = useState(''); const [registerCommittee, setRegisterCommittee] = useState(''); const [paymentMethod, setPaymentMethod] = useState(''); const [refNo, setRefNo] = useState(''); const [cashOfficerKey, setCashOfficerKey] = useState(''); const [membershipType, setMembershipType] = useState('new'); const [error, setError] = useState(initialError || ''); const [loading, setLoading] = useState(false); const [statusMessage, setStatusMessage] = useState(''); const [pendingProfile, setPendingProfile] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, maintenanceMode: false, gcashNumber: '09953510850' }); const [secureKeys, setSecureKeys] = useState(null); const [showForgotModal, setShowForgotModal] = useState(false);
   useEffect(() => { if(initialError) setError(initialError); }, [initialError]);
   useEffect(() => { if (!user) return; const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()), (e) => {}); const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()), (e) => {}); return () => { unsubOps(); unsubKeys(); }; }, [user]);
-  const handleAuth = async (e) => { e.preventDefault(); if (loading) return; setError(''); setLoading(true); setStatusMessage('Authenticating...'); const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out.")), 60000)); try { await Promise.race([ (async () => { let currentUser = user || auth.currentUser; if (!currentUser) { const result = await signInAnonymously(auth); currentUser = result.user; } if (authMode === 'register') { if (!hubSettings.registrationOpen) throw new Error("Registration closed."); if (password !== confirmPassword) throw new Error("Passwords mismatch."); if (!birthMonth || !birthDay) throw new Error("Birthday required."); setStatusMessage('Verifying details...'); let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid', finalMembershipType = membershipType; if (inputKey) { const uk = inputKey.trim().toUpperCase(); if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; } else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; } else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; } else if (uk === (secureKeys?.bypassKey || "KAPERATA_BYPASS_2024").toUpperCase()) { pc = 'Member'; st = 'Member'; pay = 'exempt'; } else throw new Error("Invalid key."); if (pc !== 'Member') finalMembershipType = 'renewal'; } setStatusMessage('Finalizing registration...'); const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry'); const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters'); let fallbackCount = 0; try { const allDocs = await getDocs(registryRef); if (!allDocs.empty) { let maxIdNum = 0; allDocs.forEach(d => { const mId = d.data().memberId; const match = mId?.match(/-(\d)(\d{4,})C?$/); if (match && match[2]) { const num = parseInt(match[2], 10); if (num > maxIdNum) maxIdNum = num; } }); fallbackCount = maxIdNum; } } catch(e) {} const newProfile = await runTransaction(db, async (transaction) => { const counterSnap = await transaction.get(counterRef); let nextCount; const storedCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0; nextCount = Math.max(storedCount, fallbackCount) + 1; let assignedId = generateLBAId(pc, nextCount - 1); let memberRef = doc(registryRef, assignedId); let memberSnap = await transaction.get(memberRef); let attempts = 0; while(memberSnap.exists() && attempts < 20) { nextCount++; assignedId = generateLBAId(pc, nextCount - 1); memberRef = doc(registryRef, assignedId); memberSnap = await transaction.get(memberRef); attempts++; } if(memberSnap.exists()) throw new Error("System busy."); const meta = getMemberIdMeta(); const profileData = { uid: currentUser.uid, name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(), firstName: firstName.toUpperCase(), middleInitial: middleInitial.toUpperCase(), lastName: lastName.toUpperCase(), email: email.toLowerCase(), password, program, birthMonth: parseInt(birthMonth), birthDay: parseInt(birthDay), positionCategory: pc, specificTitle: st, committee: registerCommittee, memberId: assignedId, role, status: 'active', paymentStatus: pay, lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, membershipType: finalMembershipType, joinedDate: new Date().toISOString() }; if (pc !== 'Member' || pay === 'exempt') { transaction.set(memberRef, profileData); transaction.set(counterRef, { memberCount: nextCount }, { merge: true }); return profileData; } else { return profileData; } }); if (pc !== 'Member' || newProfile.paymentStatus === 'exempt') { localStorage.setItem('lba_profile', JSON.stringify(newProfile)); onLoginSuccess(newProfile); } else { setPendingProfile(newProfile); setAuthMode('payment'); } } else if (authMode === 'payment') { setStatusMessage('Processing...'); if (paymentMethod === 'cash' && cashOfficerKey.trim().toUpperCase() !== getActiveCashKey(secureKeys).toUpperCase()) throw new Error("Invalid Cash Key."); const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry'); const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters'); let fallbackCount = 0; try { const allDocs = await getDocs(registryRef); if (!allDocs.empty) { allDocs.forEach(d => { const mId = d.data().memberId; const match = mId?.match(/-(\d)(\d{4,})C?$/); if (match && match[2]) { const num = parseInt(match[2], 10); if (num > fallbackCount) fallbackCount = num; } }); } } catch(e) {} const finalProfile = await runTransaction(db, async (transaction) => { const counterSnap = await transaction.get(counterRef); let nextCount = Math.max(counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0, fallbackCount) + 1; let assignedId = generateLBAId(pendingProfile.positionCategory, nextCount - 1); let memberRef = doc(registryRef, assignedId); let memberSnap = await transaction.get(memberRef); let attempts = 0; while(memberSnap.exists() && attempts < 20) { nextCount++; assignedId = generateLBAId(pendingProfile.positionCategory, nextCount - 1); memberRef = doc(registryRef, assignedId); memberSnap = await transaction.get(memberRef); attempts++; } if(memberSnap.exists()) throw new Error("System busy."); const finalData = { ...pendingProfile, memberId: assignedId, paymentStatus: 'paid', paymentDetails: { method: paymentMethod, refNo } }; transaction.set(memberRef, finalData); transaction.set(counterRef, { memberCount: nextCount }, { merge: true }); return finalData; }); localStorage.setItem('lba_profile', JSON.stringify(finalProfile)); onLoginSuccess(finalProfile); } else { setStatusMessage('Logging in...'); const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1)); const snap = await getDocs(q); if (snap.empty) throw new Error("ID not found."); const docSnap = snap.docs[0]; const userData = docSnap.data(); if (userData.password !== password) throw new Error("Incorrect password."); if (userData.uid !== currentUser.uid) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { uid: currentUser.uid }); userData.uid = currentUser.uid; } localStorage.setItem('lba_profile', JSON.stringify(userData)); onLoginSuccess(userData); } })(), timeout ]); } catch (err) { setError(err.message.includes("database") ? "Database missing." : err.message); } finally { setLoading(false); setStatusMessage(''); }
+  const handleAuth = async (e) => { e.preventDefault(); if (loading) return; setError(''); setLoading(true); setStatusMessage('Authenticating...'); const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out.")), 60000)); try { await Promise.race([ (async () => { let currentUser = user || auth.currentUser; if (!currentUser) { const result = await signInAnonymously(auth); currentUser = result.user; } if (authMode === 'register') { if (!hubSettings.registrationOpen) throw new Error("Registration closed."); if (password !== confirmPassword) throw new Error("Passwords mismatch."); if (!birthMonth || !birthDay) throw new Error("Birthday required."); if (!isValidStudentId(studentId)) throw new Error("Please enter your LPU Student ID number (letters, numbers and dashes only)."); if (!isAllowedEmail(email)) throw new Error(EMAIL_RULE_MSG); try { const dup = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('studentId', '==', studentId.trim().toUpperCase()))); if (!dup.empty) throw new Error("This Student ID is already registered. Use your Member ID to log in, or contact an officer."); } catch (dupErr) { if (dupErr && /already registered/.test(dupErr.message || '')) throw dupErr; } setStatusMessage('Verifying details...'); let pc = 'Member', st = 'Member', role = 'member', pay = 'unpaid', finalMembershipType = membershipType; if (inputKey) { const uk = inputKey.trim().toUpperCase(); if (uk === (secureKeys?.officerKey || "KAPERATA_OFFICER_2024").toUpperCase()) { pc = 'Officer'; role = 'admin'; pay = 'exempt'; } else if (uk === (secureKeys?.headKey || "KAPERATA_HEAD_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Head'; pay = 'exempt'; } else if (uk === (secureKeys?.commKey || "KAPERATA_COMM_2024").toUpperCase()) { pc = 'Committee'; st = 'Committee Member'; pay = 'exempt'; } else if (uk === (secureKeys?.bypassKey || "KAPERATA_BYPASS_2024").toUpperCase()) { pc = 'Member'; st = 'Member'; pay = 'exempt'; } else throw new Error("Invalid key."); if (pc !== 'Member') finalMembershipType = 'renewal'; } setStatusMessage('Finalizing registration...'); const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry'); const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters'); let fallbackCount = 0; try { const allDocs = await getDocs(registryRef); if (!allDocs.empty) { let maxIdNum = 0; allDocs.forEach(d => { const mId = d.data().memberId; const match = mId?.match(/-(\d)(\d{4,})C?$/); if (match && match[2]) { const num = parseInt(match[2], 10); if (num > maxIdNum) maxIdNum = num; } }); fallbackCount = maxIdNum; } } catch(e) {} const newProfile = await runTransaction(db, async (transaction) => { const counterSnap = await transaction.get(counterRef); let nextCount; const storedCount = counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0; nextCount = Math.max(storedCount, fallbackCount) + 1; let assignedId = generateLBAId(pc, nextCount - 1); let memberRef = doc(registryRef, assignedId); let memberSnap = await transaction.get(memberRef); let attempts = 0; while(memberSnap.exists() && attempts < 20) { nextCount++; assignedId = generateLBAId(pc, nextCount - 1); memberRef = doc(registryRef, assignedId); memberSnap = await transaction.get(memberRef); attempts++; } if(memberSnap.exists()) throw new Error("System busy."); const meta = getMemberIdMeta(); const profileData = { uid: currentUser.uid, name: `${firstName} ${middleInitial ? middleInitial + '. ' : ''}${lastName}`.toUpperCase(), firstName: firstName.toUpperCase(), middleInitial: middleInitial.toUpperCase(), lastName: lastName.toUpperCase(), email: email.trim().toLowerCase(), studentId: studentId.trim().toUpperCase(), password, program, birthMonth: parseInt(birthMonth), birthDay: parseInt(birthDay), positionCategory: pc, specificTitle: st, committee: registerCommittee, memberId: assignedId, role, status: 'active', paymentStatus: pay, lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, membershipType: finalMembershipType, joinedDate: new Date().toISOString() }; if (pc !== 'Member' || pay === 'exempt') { transaction.set(memberRef, profileData); transaction.set(counterRef, { memberCount: nextCount }, { merge: true }); return profileData; } else { return profileData; } }); if (pc !== 'Member' || newProfile.paymentStatus === 'exempt') { localStorage.setItem('lba_profile', JSON.stringify(newProfile)); onLoginSuccess(newProfile); } else { setPendingProfile(newProfile); setAuthMode('payment'); } } else if (authMode === 'payment') { setStatusMessage('Processing...'); if (paymentMethod === 'cash' && cashOfficerKey.trim().toUpperCase() !== getActiveCashKey(secureKeys).toUpperCase()) throw new Error("Invalid Cash Key."); const registryRef = collection(db, 'artifacts', appId, 'public', 'data', 'registry'); const counterRef = doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'counters'); let fallbackCount = 0; try { const allDocs = await getDocs(registryRef); if (!allDocs.empty) { allDocs.forEach(d => { const mId = d.data().memberId; const match = mId?.match(/-(\d)(\d{4,})C?$/); if (match && match[2]) { const num = parseInt(match[2], 10); if (num > fallbackCount) fallbackCount = num; } }); } } catch(e) {} const finalProfile = await runTransaction(db, async (transaction) => { const counterSnap = await transaction.get(counterRef); let nextCount = Math.max(counterSnap.exists() ? (counterSnap.data().memberCount || 0) : 0, fallbackCount) + 1; let assignedId = generateLBAId(pendingProfile.positionCategory, nextCount - 1); let memberRef = doc(registryRef, assignedId); let memberSnap = await transaction.get(memberRef); let attempts = 0; while(memberSnap.exists() && attempts < 20) { nextCount++; assignedId = generateLBAId(pendingProfile.positionCategory, nextCount - 1); memberRef = doc(registryRef, assignedId); memberSnap = await transaction.get(memberRef); attempts++; } if(memberSnap.exists()) throw new Error("System busy."); const finalData = { ...pendingProfile, memberId: assignedId, paymentStatus: 'paid', paymentDetails: { method: paymentMethod, refNo } }; transaction.set(memberRef, finalData); transaction.set(counterRef, { memberCount: nextCount }, { merge: true }); return finalData; }); localStorage.setItem('lba_profile', JSON.stringify(finalProfile)); onLoginSuccess(finalProfile); } else { setStatusMessage('Logging in...'); const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), where('memberId', '==', memberIdInput.trim().toUpperCase()), limit(1)); const snap = await getDocs(q); if (snap.empty) throw new Error("ID not found."); const docSnap = snap.docs[0]; const userData = docSnap.data(); if (userData.password !== password) throw new Error("Incorrect password."); if (userData.uid !== currentUser.uid) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', docSnap.id), { uid: currentUser.uid }); userData.uid = currentUser.uid; } localStorage.setItem('lba_profile', JSON.stringify(userData)); onLoginSuccess(userData); } })(), timeout ]); } catch (err) { setError(err.message.includes("database") ? "Database missing." : err.message); } finally { setLoading(false); setStatusMessage(''); }
   };
   const activeBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-[#3E2723] text-[#FDB813]";
   const inactiveBtnClass = "flex-1 p-4 rounded-2xl border font-black uppercase text-[10px] bg-amber-50 text-amber-900";
@@ -67,7 +143,9 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
           {authMode === 'register' && (
             <div className="space-y-3">
               <div className="grid grid-cols-5 gap-2"><input type="text" required placeholder="FIRST" className="col-span-2 p-3 border border-amber-200 rounded-xl outline-none text-xs font-bold uppercase" value={firstName} onChange={(e) => setFirstName(e.target.value.toUpperCase())} /><input type="text" placeholder="MI" maxLength="1" className="p-3 border border-amber-200 rounded-xl outline-none text-xs text-center font-bold uppercase" value={middleInitial} onChange={(e) => setMiddleInitial(e.target.value.toUpperCase())} /><input type="text" required placeholder="LAST" className="col-span-2 p-3 border border-amber-200 rounded-xl outline-none text-xs font-bold uppercase" value={lastName} onChange={(e) => setLastName(e.target.value.toUpperCase())} /></div>
-              <input type="email" required placeholder="LPU Email" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input type="text" required placeholder="LPU Student ID No." autoComplete="off" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold uppercase" value={studentId} onChange={(e) => setStudentId(e.target.value)} />
+              <input type="email" required placeholder="LPU network email or Gmail" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <p className="text-[9px] text-gray-400 font-bold -mt-1 ml-1">Use your LPU network email (name@lpu.edu.ph) or a Gmail address.</p>
               <div className="grid grid-cols-2 gap-2"><select required className="p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={program} onChange={(e) => setProgram(e.target.value)}><option value="">Select Program</option>{PROGRAMS.map(p => <option key={p} value={p}>{p}</option>)}</select><select required className="p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={membershipType} onChange={(e) => setMembershipType(e.target.value)}><option value="new">New Member</option><option value="renewal">Renewal</option></select></div>
               <div className="grid grid-cols-2 gap-2"><select required className="p-3 border border-amber-200 rounded-xl text-xs font-black uppercase" value={birthMonth} onChange={(e) => setBirthMonth(e.target.value)}><option value="">Birth Month</option>{MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select><input type="number" required min="1" max="31" placeholder="Day" className="p-3 border border-amber-200 rounded-xl text-xs font-bold" value={birthDay} onChange={(e) => setBirthDay(e.target.value)} /></div>
               <input type="password" required placeholder="Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={password} onChange={(e) => setPassword(e.target.value)} /><input type="password" required placeholder="Confirm Password" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
@@ -93,7 +171,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 };
 
 const Dashboard = ({ user, profile, setProfile, logout }) => {
-  const [view, setView] = useState('home'); const [members, setMembers] = useState([]); const [events, setEvents] = useState([]); const [announcements, setAnnouncements] = useState([]); const [suggestions, setSuggestions] = useState([]); const [committeeApps, setCommitteeApps] = useState([]); const [userApplications, setUserApplications] = useState([]); const [tasks, setTasks] = useState([]); const [projects, setProjects] = useState([]); const [expandedProjectId, setExpandedProjectId] = useState(null); const [logs, setLogs] = useState([]); const [polls, setPolls] = useState([]); const [seriesPosts, setSeriesPosts] = useState([]); const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] }); const [showPollForm, setShowPollForm] = useState(false); const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' }); const [showSeriesForm, setShowSeriesForm] = useState(false); const [editingSeriesId, setEditingSeriesId] = useState(null); const [showProjectForm, setShowProjectForm] = useState(false); const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); const [editingProject, setEditingProject] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' }); const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' }); const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); const [showCertificate, setShowCertificate] = useState(false); const [adminMcModule, setAdminMcModule] = useState(1); const [adminMcSearch, setAdminMcSearch] = useState(''); const [selectedMcMembers, setSelectedMcMembers] = useState([]); const [editingMcCurriculum, setEditingMcCurriculum] = useState(false); const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' }); const [isAnniversary, setIsAnniversary] = useState(false); const [editingMember, setEditingMember] = useState(null); const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' }); const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' }); const [showAccoladeModal, setShowAccoladeModal] = useState(null); const [accoladeText, setAccoladeText] = useState(""); const [showTaskForm, setShowTaskForm] = useState(false); const [newTask, setNewTask] = useState({ ...EMPTY_TASK }); const [editingTask, setEditingTask] = useState(null); const [renewalRef, setRenewalRef] = useState(''); const [renewalMethod, setRenewalMethod] = useState('gcash'); const [renewalCashKey, setRenewalCashKey] = useState(''); const [newGcashNumber, setNewGcashNumber] = useState(''); const [showEventForm, setShowEventForm] = useState(false); const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); const [editingEvent, setEditingEvent] = useState(null); const [showAnnounceForm, setShowAnnounceForm] = useState(false); const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' }); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const [searchQuery, setSearchQuery] = useState(""); const [selectedBaristas, setSelectedBaristas] = useState([]); const [isImporting, setIsImporting] = useState(false); const [confirmDelete, setConfirmDelete] = useState(null); const fileInputRef = useRef(null); const currentDailyKey = getActiveCashKey(secureKeys); const [settingsForm, setSettingsForm] = useState({ ...profile }); const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' }); const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); const [savingSettings, setSavingSettings] = useState(false); const [financialFilter, setFinancialFilter] = useState('all'); const [isEditingLegacy, setIsEditingLegacy] = useState(false); const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' }); const [suggestionText, setSuggestionText] = useState(""); const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' }); const [submittingApp, setSubmittingApp] = useState(false); const [attendanceEvent, setAttendanceEvent] = useState(null); const [exportFilter, setExportFilter] = useState('all'); const [currentPage, setCurrentPage] = useState(1); const itemsPerPage = 10;
+  const [view, setView] = useState('home'); const [inventory, setInventory] = useState([]); const [showInvForm, setShowInvForm] = useState(false); const [invForm, setInvForm] = useState(EMPTY_ITEM); const [editingInv, setEditingInv] = useState(null); const [invSearch, setInvSearch] = useState(''); const [officerForm, setOfficerForm] = useState({ role: '', why: '' }); const [members, setMembers] = useState([]); const [events, setEvents] = useState([]); const [announcements, setAnnouncements] = useState([]); const [suggestions, setSuggestions] = useState([]); const [committeeApps, setCommitteeApps] = useState([]); const [userApplications, setUserApplications] = useState([]); const [tasks, setTasks] = useState([]); const [projects, setProjects] = useState([]); const [expandedProjectId, setExpandedProjectId] = useState(null); const [logs, setLogs] = useState([]); const [polls, setPolls] = useState([]); const [seriesPosts, setSeriesPosts] = useState([]); const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] }); const [showPollForm, setShowPollForm] = useState(false); const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' }); const [showSeriesForm, setShowSeriesForm] = useState(false); const [editingSeriesId, setEditingSeriesId] = useState(null); const [showProjectForm, setShowProjectForm] = useState(false); const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); const [editingProject, setEditingProject] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' }); const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' }); const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); const [showCertificate, setShowCertificate] = useState(false); const [adminMcModule, setAdminMcModule] = useState(1); const [adminMcSearch, setAdminMcSearch] = useState(''); const [selectedMcMembers, setSelectedMcMembers] = useState([]); const [editingMcCurriculum, setEditingMcCurriculum] = useState(false); const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' }); const [isAnniversary, setIsAnniversary] = useState(false); const [editingMember, setEditingMember] = useState(null); const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' }); const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' }); const [showAccoladeModal, setShowAccoladeModal] = useState(null); const [accoladeText, setAccoladeText] = useState(""); const [showTaskForm, setShowTaskForm] = useState(false); const [newTask, setNewTask] = useState({ ...EMPTY_TASK }); const [editingTask, setEditingTask] = useState(null); const [renewalRef, setRenewalRef] = useState(''); const [renewalMethod, setRenewalMethod] = useState('gcash'); const [renewalCashKey, setRenewalCashKey] = useState(''); const [newGcashNumber, setNewGcashNumber] = useState(''); const [showEventForm, setShowEventForm] = useState(false); const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); const [editingEvent, setEditingEvent] = useState(null); const [showAnnounceForm, setShowAnnounceForm] = useState(false); const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' }); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const [searchQuery, setSearchQuery] = useState(""); const [selectedBaristas, setSelectedBaristas] = useState([]); const [isImporting, setIsImporting] = useState(false); const [confirmDelete, setConfirmDelete] = useState(null); const fileInputRef = useRef(null); const currentDailyKey = getActiveCashKey(secureKeys); const [settingsForm, setSettingsForm] = useState({ ...profile }); const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' }); const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); const [savingSettings, setSavingSettings] = useState(false); const [financialFilter, setFinancialFilter] = useState('all'); const [isEditingLegacy, setIsEditingLegacy] = useState(false); const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' }); const [suggestionText, setSuggestionText] = useState(""); const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' }); const [submittingApp, setSubmittingApp] = useState(false); const [attendanceEvent, setAttendanceEvent] = useState(null); const [exportFilter, setExportFilter] = useState('all'); const [currentPage, setCurrentPage] = useState(1); const itemsPerPage = 10;
   const [lastVisited, setLastVisited] = useState(() => { try { return JSON.parse(localStorage.getItem('lba_last_visited') || '{}'); } catch { return {}; } });
 
   // 🛡️ THE 4-TIER ACCESS SYSTEM 🛡️
@@ -143,11 +221,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const queryUpper = (searchQuery || "").toUpperCase();
       let filtered = validMembers.filter(m => {
           if (!queryUpper) return true;
-          const nameMatch = (m?.name || "").toUpperCase().includes(queryUpper); const idMatch = (m?.memberId || "").toUpperCase().includes(queryUpper); const emailMatch = (m?.email || "").toUpperCase().includes(queryUpper);
-          return nameMatch || idMatch || emailMatch;
+          const nameMatch = (m?.name || "").toUpperCase().includes(queryUpper); const idMatch = (m?.memberId || "").toUpperCase().includes(queryUpper); const emailMatch = (m?.email || "").toUpperCase().includes(queryUpper); const sidMatch = (m?.studentId || "").toUpperCase().includes(queryUpper);
+          return nameMatch || idMatch || emailMatch || sidMatch;
       });
       if (exportFilter !== 'all') {
-          if (exportFilter === 'active') filtered = filtered.filter(m => m?.status === 'active'); else if (exportFilter === 'inactive') filtered = filtered.filter(m => m?.status !== 'active'); else if (exportFilter === 'officers') filtered = filtered.filter(m => m?.positionCategory === 'Officer'); else if (exportFilter === 'committee') filtered = filtered.filter(m => m?.positionCategory === 'Committee');
+          if (exportFilter === 'active') filtered = filtered.filter(m => m?.status === 'active'); else if (exportFilter === 'inactive') filtered = filtered.filter(m => m?.status !== 'active'); else if (exportFilter === 'officers') filtered = filtered.filter(m => m?.positionCategory === 'Officer'); else if (exportFilter === 'committee') filtered = filtered.filter(m => m?.positionCategory === 'Committee'); else if (exportFilter === 'lace_issued') filtered = filtered.filter(m => m?.idLaceIssued); else if (exportFilter === 'lace_pending') filtered = filtered.filter(m => !m?.idLaceIssued && m?.status === 'active');
       }
       return filtered; 
   }, [members, searchQuery, exportFilter]);
@@ -160,7 +238,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const updateLastVisited = (page) => { const newVisits = { ...lastVisited, [page]: new Date().toISOString() }; setLastVisited(newVisits); localStorage.setItem('lba_last_visited', JSON.stringify(newVisits)); };
   const handleExportCSV = () => { 
       if (!members) return; 
-      const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined", "Volunteer Shifts", "Masterclass", "Accolades"]; 
+      const headers = ["ID", "Name", "Email", "Category", "Title", "Committee", "Status", "Joined", "Volunteer Shifts", "Masterclass", "Accolades", "Student ID", "ID Lace", "ID Lace Date"]; 
       const rows = members.filter(m => m != null).map(m => {
           const volCount = events.reduce((acc, ev) => acc + (ev.shifts?.filter(s => s.volunteers?.includes(m.memberId)).length || 0), 0);
           const mcCompleted = [1,2,3,4,5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(m.memberId)).map(id => `Mod ${id}`).join(', ');
@@ -175,7 +253,10 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
               getSafeDateString(m?.joinedDate) || '',
               volCount,
               mcCompleted,
-              (m?.accolades || []).join('; ')
+              (m?.accolades || []).join('; '),
+              m?.studentId || '',
+              m?.idLaceIssued ? 'Issued' : 'Pending',
+              m?.idLaceIssuedAt ? (getSafeDateString(m.idLaceIssuedAt) || '') : ''
           ];
       }); 
       generateCSV(headers, rows, `LBA_Registry_${new Date().toISOString().split('T')[0]}.csv`); 
@@ -201,28 +282,29 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   useEffect(() => {
       if (!user) return;
       const unsubProfile = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), (docSnap) => { if (docSnap.exists()) { const data = docSnap.data(); if (JSON.stringify(data) !== JSON.stringify(profile)) { setProfile(data); localStorage.setItem('lba_profile', JSON.stringify(data)); } } });
-      let unsubReg = () => {}; if (isOfficer) { unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data() })))); }
+      let unsubReg = () => {}; if (isOfficer) { unsubReg = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'registry'), (s) => setMembers(s.docs.map(d => ({ id: d.id, ...d.data(), committee: normCommittee(d.data().committee) })))); }
       const unsubEvents = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'events'), (s) => setEvents(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubAnn = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'announcements'), (s) => setAnnouncements(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubSug = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions')), (s) => { const data = s.docs.map(d => ({ id: d.id, ...d.data() })); data.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)); setSuggestions(data); });
-      let unsubApps = () => {}; if (isSuperAdmin) unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubApps = () => {}; if (isSuperAdmin) unsubApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications')), (s) => setCommitteeApps(s.docs.map(d => ({ id: d.id, ...d.data(), committee: normCommittee(d.data().committee) }))));
       const unsubUserApps = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)), (s) => setUserApplications(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       let unsubProjects = () => {}; if (isOfficer) unsubProjects = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), orderBy('createdAt', 'desc')), (s) => setProjects(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       let unsubTasks = () => {}; if (isOfficer) unsubTasks = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'tasks')), (s) => setTasks(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       let unsubLogs = () => {}; if (isSuperAdmin) unsubLogs = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'activity_logs'), orderBy('timestamp', 'desc'), limit(50)), (s) => setLogs(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+      let unsubInv = () => {}; if (isOfficer) unsubInv = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), (s) => setInventory(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubPolls = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'polls'), orderBy('createdAt', 'desc')), (s) => setPolls(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => setSeriesPosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
       const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
       const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => { if(s.exists()) { setLegacyContent(s.data()); const data = s.data(); setLegacyForm({ ...data, achievements: data.achievements || [], imageUrl: data.imageUrl || '', galleryUrl: data.galleryUrl || '', imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' } }); if (data.establishedDate) { const today = new Date(); const est = new Date(data.establishedDate); if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) setIsAnniversary(true); } } });
       const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => { if(s.exists()) setMasterclassData(s.data()); else setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); });
-      return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubApps(); unsubUserApps(); unsubProjects(); unsubTasks(); unsubLogs(); unsubPolls(); unsubSeries(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); };
+      return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubApps(); unsubUserApps(); unsubProjects(); unsubTasks(); unsubLogs(); unsubInv(); unsubPolls(); unsubSeries(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); };
   }, [user, isSuperAdmin, isOfficer, profile.memberId]);
 
   useEffect(() => { if (attendanceEvent && events.length > 0) { const liveEvent = events.find(e => e.id === attendanceEvent.id); if (liveEvent) setAttendanceEvent(liveEvent); } }, [events]);
   useEffect(() => { const head = document.head; let linkIcon = document.querySelector("link[rel~='icon']"); if (!linkIcon) { linkIcon = document.createElement('link'); linkIcon.rel = 'icon'; head.appendChild(linkIcon); } linkIcon.href = APP_ICON_URL; }, []);
 
-  const handleUpdateProfile = async (e) => { e.preventDefault(); setSavingSettings(true); try { const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay) }; if (settingsForm.email !== profile.email) { updated.email = settingsForm.email.toLowerCase(); } await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated); setProfile(updated); localStorage.setItem('lba_profile', JSON.stringify(updated)); alert("Profile updated successfully!"); } catch(err) { console.error(err); alert("Failed to update profile."); } finally { setSavingSettings(false); } };
+  const handleUpdateProfile = async (e) => { e.preventDefault(); if (settingsForm.email && settingsForm.email !== profile.email && !isAllowedEmail(settingsForm.email)) { alert(EMAIL_RULE_MSG); return; } if (settingsForm.studentId && !isValidStudentId(settingsForm.studentId)) { alert("Student ID may only contain letters, numbers and dashes."); return; } setSavingSettings(true); try { const updated = { ...profile, ...settingsForm, birthMonth: parseInt(settingsForm.birthMonth), birthDay: parseInt(settingsForm.birthDay), studentId: String(settingsForm.studentId || '').trim().toUpperCase() }; if (settingsForm.email !== profile.email) { updated.email = settingsForm.email.toLowerCase(); } await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), updated); setProfile(updated); localStorage.setItem('lba_profile', JSON.stringify(updated)); alert("Profile updated successfully!"); } catch(err) { console.error(err); alert("Failed to update profile."); } finally { setSavingSettings(false); } };
   const handleChangePassword = async (e) => { e.preventDefault(); if (passwordForm.new !== passwordForm.confirm) return alert("New passwords do not match."); if (passwordForm.current !== profile.password) return alert("Incorrect current password."); try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', profile.memberId), { password: passwordForm.new }); const updatedProfile = { ...profile, password: passwordForm.new }; setProfile(updatedProfile); localStorage.setItem('lba_profile', JSON.stringify(updatedProfile)); setPasswordForm({ current: '', new: '', confirm: '' }); alert("Password changed successfully."); } catch (err) { alert("Failed to change password."); } };
   const handleDeleteSuggestion = async (id) => { if(!confirm("Are you sure you want to delete this suggestion?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'suggestions', id)); logAction("Delete Suggestion", `Deleted suggestion ID: ${id}`); } catch(err) {} };
   const handlePostSuggestion = async (e) => { e.preventDefault(); if (isExpired) return alert("Your membership is expired. Please renew to post suggestions."); if (!suggestionText.trim()) return; try { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'suggestions'), { text: suggestionText, authorId: profile.memberId, authorName: "Anonymous", createdAt: serverTimestamp() }); setSuggestionText(""); alert("Suggestion submitted anonymously!"); } catch (err) {} };
@@ -253,7 +335,9 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleSaveCertTemplate = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), masterclassData); alert("Template Saved"); } catch(e) {} };
   const handleSaveMcCurriculum = async () => { try { const newData = { ...masterclassData, moduleDetails: { ...masterclassData.moduleDetails, [adminMcModule]: tempMcDetails } }; await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), newData); logAction("Update Curriculum", `Updated Module ${adminMcModule}`); setEditingMcCurriculum(false); alert("Curriculum Updated"); } catch(e) {} };
   const handleUpdateGcashNumber = async () => { if (!newGcashNumber.trim()) return; try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, gcashNumber: newGcashNumber }); logAction("Update GCash", `Changed GCash number to ${newGcashNumber}`); setNewGcashNumber(''); alert("GCash Number Updated Successfully"); } catch (err) { alert("Failed to update GCash Number"); } };
-  const handleApplyCommittee = async (e, targetCommittee) => { e.preventDefault(); if (isExpired) return alert("Your membership is expired. Please renew to apply."); setSubmittingApp(true); try { const q = query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId)); const snap = await getDocs(q); if(!snap.empty) { alert("You already have a pending application."); setSubmittingApp(false); return; } await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), { memberId: profile.memberId, name: profile.name, email: profile.email, committee: targetCommittee, role: committeeForm.role, status: 'pending', createdAt: serverTimestamp(), statusUpdatedAt: serverTimestamp() }); alert("Application submitted successfully!"); } catch(err) { alert("Failed to submit application."); } finally { setSubmittingApp(false); } };
+  const submitApplication = async (payload) => { if (isExpired) return alert("Your membership is expired. Please renew to apply."); setSubmittingApp(true); try { const snap = await getDocs(query(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), where('memberId', '==', profile.memberId))); if (snap.docs.some(d => ['pending', 'for_interview'].includes(d.data().status))) { alert("You already have an application in progress. Please wait for the officers' update."); return; } await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'applications'), { memberId: profile.memberId, name: profile.name, email: profile.email, studentId: profile.studentId || '', program: profile.program || '', status: 'pending', createdAt: serverTimestamp(), statusUpdatedAt: serverTimestamp(), ...payload }); alert("Application submitted successfully!"); } catch (err) { alert("Failed to submit application."); } finally { setSubmittingApp(false); } };
+  const handleApplyCommittee = async (e, targetCommittee) => { e.preventDefault(); await submitApplication({ appType: 'committee', committee: targetCommittee, role: 'Committee Member' }); };
+  const handleApplyOfficer = async (e) => { e.preventDefault(); if (!officerForm.role) return alert("Please choose the position you are applying for."); await submitApplication({ appType: 'officer', committee: 'Executive Board', role: officerForm.role, reason: (officerForm.why || '').trim().slice(0, 500) }); setOfficerForm({ role: '', why: '' }); };
   const handleCreateProject = async (e) => { e.preventDefault(); try { const validMembers = members.filter(m => m != null); const projectHead = validMembers.find(m => m?.memberId === newProject.projectHeadId); const payload = { title: newProject.title, description: newProject.description, deadline: newProject.deadline, projectHeadId: newProject.projectHeadId, projectHeadName: projectHead ? projectHead.name : '' }; if (editingProject) { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', editingProject.id), { ...payload, lastEdited: serverTimestamp() }); logAction("Update Project", `Updated project: ${newProject.title}`); setEditingProject(null); } else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'projects'), { ...payload, createdBy: profile.memberId, createdAt: serverTimestamp(), status: 'active' }); logAction("Create Project", `Created project: ${newProject.title}`); } setShowProjectForm(false); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); } catch(e) {} };
   const handleEditProject = (proj) => { setNewProject({ title: proj.title, description: proj.description, deadline: proj.deadline, projectHeadId: proj.projectHeadId, projectHeadName: proj.projectHeadName }); setEditingProject(proj); setShowProjectForm(true); };
   const handleSaveTask = async (e) => {
@@ -278,8 +362,8 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleUpdateTaskStatus = async (taskId, newStatus) => { try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', taskId), { status: newStatus }); } catch (err) {} };
   const handleDeleteTask = async (id) => { if(!confirm("Delete this task?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'tasks', id)); logAction("Delete Task", `Deleted task ID: ${id}`); } catch(err) {} };
   const handleEditTask = (task) => { setNewTask({ ...EMPTY_TASK, title: task.title || '', description: task.description || '', deadline: task.deadline || '', link: task.link || '', status: task.status || 'pending', notes: task.notes || '', projectId: task.projectId || '', committee: task.committee || '', assigneeId: task.assigneeId || '', assigneeName: task.assigneeName || '' }); setEditingTask(task); setShowTaskForm(true); };
-  const initiateAppAction = (app, type) => { let subject = ""; let body = ""; const signature = "\n\nBest regards,\nLPU Baristas' Association"; if (type === 'for_interview') { subject = `LBA Committee Application: Interview Invitation`; body = `Dear ${app.name},\n\nWe have reviewed your application for the ${app.committee} and would like to invite you for an interview.\n\nPlease let us know your availability.\n${signature}`; } else if (type === 'accepted') { subject = `LBA Committee Application: Congratulations!`; body = `Dear ${app.name},\n\nWe are pleased to inform you that you have been accepted as a ${app.role} for the ${app.committee}!\n\nWelcome to the team! We will add you to the group chat shortly.\n${signature}`; } else if (type === 'denied') { subject = `LBA Committee Application Update`; body = `Dear ${app.name},\n\nThank you for your interest in joining the LBA Committee. After careful consideration, we regret to inform you that we cannot move forward with your application at this time.\n\nWe encourage you to stay active and apply again in the future.\n${signature}`; } setEmailModal({ isOpen: true, app, type, subject, body }); };
-  const confirmAppAction = async () => { if (!emailModal.app) return; try { const { app, type, subject, body } = emailModal; const batch = writeBatch(db); const appRef = doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id); const updates = { status: type, statusUpdatedAt: serverTimestamp(), lastEmailSent: new Date().toISOString() }; batch.update(appRef, updates); if (type === 'accepted') { const memberRef = doc(db, 'artifacts', appId, 'public', 'data', 'registry', app.memberId); batch.update(memberRef, { positionCategory: 'Committee', specificTitle: app.role, committee: app.committee, accolades: arrayUnion(`${app.committee} - ${app.role}`) }); } await batch.commit(); logAction("Committee Action", `${type.toUpperCase()} application for ${app.name}`); window.location.href = `mailto:${app.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' }); alert("Status updated and email client opened!"); } catch (err) { alert("Error updating status."); } };
+  const initiateAppAction = (app, type) => { let subject = ""; let body = ""; const isEx = app.appType === 'officer'; const kind = isEx ? 'Executive Board' : 'Committee'; const where = isEx ? 'Executive Board' : committeeTitle(app.committee); const signature = "\n\nBest regards,\nLPU Baristas' Association"; if (type === 'for_interview') { subject = `LBA ${kind} Application: Interview Invitation`; body = `Dear ${app.name},\n\nWe have reviewed your application for ${isEx ? "the" : "the"} ${where} and would like to invite you for an interview.\n\nPlease let us know your availability.\n${signature}`; } else if (type === 'accepted') { subject = `LBA ${kind} Application: Congratulations!`; body = `Dear ${app.name},\n\nWe are pleased to inform you that you have been accepted as ${app.role} of the ${where}!\n\nWelcome to the team! We will add you to the group chat shortly.\n${signature}`; } else if (type === 'denied') { subject = `LBA ${kind} Application Update`; body = `Dear ${app.name},\n\nThank you for your interest in joining the LBA ${kind}. After careful consideration, we regret to inform you that we cannot move forward with your application at this time.\n\nWe encourage you to stay active and apply again in the future.\n${signature}`; } setEmailModal({ isOpen: true, app, type, subject, body }); };
+  const confirmAppAction = async () => { if (!emailModal.app) return; try { const { app, type, subject, body } = emailModal; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id), { status: type, statusUpdatedAt: serverTimestamp(), lastEmailSent: new Date().toISOString() }); if (type === 'accepted') { const isEx = app.appType === 'officer'; const newId = await handleUpdatePosition(app.memberId, isEx ? 'Officer' : 'Committee', app.role, isEx ? '' : normCommittee(app.committee), true); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId || app.memberId), { accolades: arrayUnion(isEx ? `Executive Board - ${app.role}` : `${committeeTitle(app.committee)} - ${app.role}`) }); } logAction("Application Action", `${type.toUpperCase()} application for ${app.name}`); window.location.href = `mailto:${app.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; setEmailModal({ isOpen: false, app: null, type: '', subject: '', body: '' }); alert("Status updated and email client opened!"); } catch (err) { alert("Error updating status: " + ((err && err.message) || '')); } };
   const handleDeleteApp = async (id) => { if (!confirm("Delete this application?")) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', id)); logAction("Delete App", `Deleted application ID: ${id}`); } catch(err) {} };
   const handleToggleRegistration = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, registrationOpen: !hubSettings.registrationOpen }); logAction("Toggle Reg", `Registration ${!hubSettings.registrationOpen ? 'Opened' : 'Closed'}`); } catch (err) {} };
   const handleToggleMaintenance = async () => { try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { ...hubSettings, maintenanceMode: !hubSettings.maintenanceMode }); logAction("Toggle Maintenance", `Maintenance ${!hubSettings.maintenanceMode ? 'Enabled' : 'Disabled'}`); } catch (err) {} };
@@ -299,7 +383,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       } catch (e) { alert("Failed to update access."); } 
   };
 
-  const handleUpdatePosition = async (targetId, cat, specific = "", committee = "") => { 
+  const handleUpdatePosition = async (targetId, cat, specific = "", committee = "", explicitTitle = false) => { 
       if (!isSuperAdmin) return; 
       const validMembers = members.filter(m => m != null); 
       const target = validMembers.find(m => m.memberId === targetId); 
@@ -308,17 +392,51 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const isL = ['Officer', 'Committee'].includes(cat); 
       const baseId = newId.endsWith('C') ? newId.slice(0, -1) : newId; 
       newId = baseId + (isL ? 'C' : ''); 
+      // Title follows the category: moving someone to Member always makes the title Member.
+      const catChanged = cat !== target.positionCategory;
+      const validFor = (c, t) => (c === 'Officer' && OFFICER_TITLES.includes(t)) || (c === 'Committee' && COMMITTEE_TITLES.includes(t));
+      const defaultTitle = ({ Member: 'Member', Committee: 'Committee Member' })[cat] || cat;
+      let title = specific || defaultTitle;
+      if (cat === 'Member') title = 'Member';
+      else if (catChanged && !explicitTitle && !validFor(cat, specific)) title = defaultTitle;
       const updates = { 
           positionCategory: cat, 
-          specificTitle: specific || cat, 
+          specificTitle: title, 
           memberId: newId, 
           role: cat === 'Officer' ? 'admin' : (target.role === 'superadmin' ? 'superadmin' : 'member'), 
           paymentStatus: ['Officer', 'Committee', 'Alumni', 'Execomm'].includes(cat) ? 'exempt' : target.paymentStatus, 
-          committee: cat === 'Committee' ? committee : "" 
+          committee: cat === 'Committee' ? normCommittee(committee) : "" 
       }; 
       if (newId !== targetId) await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', targetId)); 
       await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', newId), { ...target, ...updates }); 
+      return newId;
   };
+
+  const handleToggleIdLace = async (m) => {
+      if (!isOfficer || !m) return; const issuing = !m.idLaceIssued;
+      try {
+          await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', m.memberId), issuing ? { idLaceIssued: true, idLaceIssuedAt: new Date().toISOString(), idLaceIssuedBy: profile.name } : { idLaceIssued: false, idLaceIssuedAt: '', idLaceIssuedBy: '' });
+          const lace = inventory.find(i => i && /id\s*lace/i.test(String(i.name || '')));
+          if (lace) await handleAdjustStock(lace, issuing ? -1 : 1, `${issuing ? 'Issued to' : 'Returned by'} ${m.name} (${m.memberId})`, true);
+          logAction("ID Lace", `${issuing ? 'Issued ID lace to' : 'Undid ID lace for'} ${m.name}`);
+      } catch (err) { alert("Could not update ID lace status: " + ((err && err.message) || '')); }
+  };
+  const handleAdjustStock = async (item, delta, reason, silent = false) => {
+      const cur = Number(item.quantity || 0); const next = Math.max(0, cur + delta); const change = next - cur; if (change === 0) { if (!silent) alert("Stock cannot go below zero."); return; }
+      try { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', item.id), { quantity: next, updatedAt: new Date().toISOString(), updatedBy: profile.name, history: [...(item.history || []), { at: new Date().toISOString(), by: profile.name, change, balance: next, reason: reason || 'Adjustment' }].slice(-30) }); logAction("Inventory", `${item.name}: ${change > 0 ? '+' : ''}${change} (${reason || 'Adjustment'})`); }
+      catch (err) { alert("Could not update stock: " + ((err && err.message) || '')); }
+  };
+  const handleSaveInventoryItem = async (e) => {
+      e.preventDefault(); const name = (invForm.name || '').trim(); if (!name) return alert("Item name is required.");
+      const qty = Math.max(0, parseInt(invForm.quantity, 10) || 0); const reorder = Math.max(0, parseInt(invForm.reorderLevel, 10) || 0); const nowIso = new Date().toISOString();
+      const payload = { name, category: (invForm.category || '').trim() || 'General', unit: (invForm.unit || '').trim() || 'pcs', quantity: qty, reorderLevel: reorder, notes: (invForm.notes || '').trim(), updatedAt: nowIso, updatedBy: profile.name };
+      try {
+          if (editingInv) { const before = Number(editingInv.quantity || 0); const hist = qty !== before ? [{ at: nowIso, by: profile.name, change: qty - before, balance: qty, reason: 'Edited item' }] : []; await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', editingInv.id), { ...payload, history: [...(editingInv.history || []), ...hist].slice(-30) }); logAction("Inventory", `Edited item: ${name}`); }
+          else { await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'inventory'), { ...payload, createdAt: serverTimestamp(), history: [{ at: nowIso, by: profile.name, change: qty, balance: qty, reason: 'Initial stock' }] }); logAction("Inventory", `Added item: ${name}`); }
+          setShowInvForm(false); setEditingInv(null); setInvForm(EMPTY_ITEM);
+      } catch (err) { alert("Could not save item: " + ((err && err.message) || '')); }
+  };
+  const handleDeleteInventoryItem = async (item) => { if (!confirm(`Delete "${item.name}" from the inventory? This cannot be undone.`)) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'inventory', item.id)); logAction("Inventory", `Deleted item: ${item.name}`); } catch (err) { alert("Could not delete item."); } };
   
   const initiateRemoveMember = (mid, name) => { setConfirmDelete({ mid, name }); };
   const confirmRemoveMember = async () => { if (!confirmDelete) return; try { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'registry', confirmDelete.mid)); logAction("Remove Member", `Removed member: ${confirmDelete.name}`); } catch(e) { console.error(e); } finally { setConfirmDelete(null); } };
@@ -344,7 +462,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
         const rows = parseCSVText(String(evt.target.result));
         if (rows.length < 2) { alert("The file has no member rows under the header."); return; }
         const norm = (h) => String(h).toLowerCase().replace(/[^a-z0-9]/g, '');
-        const aliases = { id: 'id', memberid: 'id', name: 'name', fullname: 'name', email: 'email', emailaddress: 'email', program: 'program', course: 'program', category: 'cat', positioncategory: 'cat', title: 'title', specifictitle: 'title', committee: 'committee', status: 'status', joined: 'joined', joineddate: 'joined' };
+        const aliases = { id: 'id', memberid: 'id', name: 'name', fullname: 'name', email: 'email', emailaddress: 'email', program: 'program', course: 'program', category: 'cat', positioncategory: 'cat', title: 'title', specifictitle: 'title', committee: 'committee', status: 'status', joined: 'joined', joineddate: 'joined', studentid: 'sid', studentno: 'sid', lpuid: 'sid', idlace: 'lace' };
         const idx = {}; rows[0].forEach((h, i) => { const k = aliases[norm(h)]; if (k && idx[k] == null) idx[k] = i; });
         if (idx.name == null) { alert("No 'Name' column found. Columns in your file: " + rows[0].join(', ')); return; }
         const get = (r, k) => (idx[k] != null ? String(r[idx[k]] || '').trim() : '');
@@ -361,7 +479,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
           const status = get(r, 'status').toLowerCase() === 'active' ? 'active' : 'expired';
           const exempt = pos !== 'Member';
           const jd = get(r, 'joined') ? new Date(get(r, 'joined')) : null;
-          ops.push({ mid, data: { name, email: get(r, 'email').toLowerCase(), program: get(r, 'program') || 'UNSET', positionCategory: pos, specificTitle: get(r, 'title') || pos, committee: get(r, 'committee'), memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status, paymentStatus: exempt ? 'exempt' : (status === 'active' ? 'paid' : 'unpaid'), lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: jd && !isNaN(jd.getTime()) ? jd.toISOString() : new Date().toISOString() } });
+          ops.push({ mid, data: { name, email: get(r, 'email').toLowerCase(), program: get(r, 'program') || 'UNSET', positionCategory: pos, specificTitle: get(r, 'title') || pos, committee: normCommittee(get(r, 'committee')), studentId: get(r, 'sid').toUpperCase(), idLaceIssued: ['issued', 'yes', 'true', '1', 'y'].includes(get(r, 'lace').toLowerCase()), memberId: mid, role: pos === 'Officer' ? 'admin' : 'member', status, paymentStatus: exempt ? 'exempt' : (status === 'active' ? 'paid' : 'unpaid'), lastRenewedSem: meta.sem, lastRenewedSY: meta.sy, password: "LBA" + mid.slice(-5), joinedDate: jd && !isNaN(jd.getTime()) ? jd.toISOString() : new Date().toISOString() } });
         }
         for (let i = 0; i < ops.length; i += 400) {
           const batch = writeBatch(db);
@@ -439,9 +557,9 @@ const handleResetPassword = async (memberId, email, name) => {
     { id: 'announcements', label: 'Grind Report', icon: Bell, hasNotification: notifications.announcements },
     { id: 'members_corner', label: "Member's Corner", icon: MessageSquare, hasNotification: notifications.suggestions },
     { id: 'series', label: 'Barista Diaries', icon: ImageIcon },
-    { id: 'committee_hunt', label: 'Committee Hunt', icon: Briefcase, hasNotification: notifications.committee_hunt },
-    ...(isCommitteePlus ? [ { id: 'daily_grind', label: 'The Task Bar', icon: ClipboardList } ] : []),
-    ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members } ] : []),
+    { id: 'committee_hunt', label: 'Join the Team', icon: Briefcase, hasNotification: notifications.committee_hunt },
+    { id: 'manual', label: 'User Manual', icon: BookOpen },
+    ...(isOfficer ? [ { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members }, { id: 'inventory', label: 'Inventory', icon: Package } ] : []),
     ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : [])
   ];
 
@@ -578,83 +696,6 @@ const handleResetPassword = async (memberId, email, name) => {
                 <div className="flex gap-3"><button onClick={() => setShowAccoladeModal(null)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Close</button><button onClick={handleGiveAccolade} className="flex-1 py-3 rounded-xl bg-yellow-500 text-white font-bold uppercase text-xs hover:bg-yellow-600">Award</button></div>
             </div>
         </div>
-      )}
-
-       {/* Task Modal */}
-      {showTaskForm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <form onSubmit={handleSaveTask} className="bg-white rounded-[40px] p-8 max-w-lg w-full border-b-[12px] border-[#3E2723] overflow-y-auto max-h-[90vh] shadow-2xl">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black uppercase text-[#3E2723]">{editingTask ? "Modify Task" : "New Task Assignment"}</h3>
-              <button type="button" onClick={() => { setShowTaskForm(false); setEditingTask(null); }} className="text-gray-400 hover:text-black"><X/></button>
-            </div>
-
-            <div className="space-y-5">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Project</label>
-                <div className="w-full p-4 border rounded-[20px] text-xs font-bold bg-gray-50">{(projects.find(p => p.id === newTask.projectId) || {}).title || "Selected project"}</div>
-                <input type="text" required placeholder="Task Title" className="w-full p-4 border rounded-[20px] text-xs font-black uppercase mt-2 focus:ring-2 ring-amber-500 outline-none" value={newTask.title} onChange={e => setNewTask({ ...newTask, title: e.target.value })} />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Scope of Work</label>
-                <textarea placeholder="Describe the deliverables..." className="w-full p-4 border rounded-[20px] text-xs font-medium min-h-[80px]" value={newTask.description} onChange={e => setNewTask({ ...newTask, description: e.target.value })} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Committee</label>
-                  <select className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" value={newTask.committee || ''} onChange={e => setNewTask({ ...newTask, committee: e.target.value, assigneeId: '' })}>
-                    <option value="">Select Committee...</option>
-                    {COMMITTEES_INFO.map(c => (<option key={c.id} value={c.id}>{c.title}</option>))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</label>
-                  <select className="w-full p-4 border rounded-[20px] text-[10px] font-black uppercase bg-white cursor-pointer" value={newTask.assigneeId || ''} disabled={!newTask.committee} onChange={e => setNewTask({ ...newTask, assigneeId: e.target.value })}>
-                    <option value="">{newTask.committee ? "Choose Barista..." : "Select Committee First"}</option>
-                    {members.filter(m => m && m.committee === newTask.committee).map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</label>
-                  <input type="date" className="w-full p-4 border rounded-[20px] text-xs font-bold" value={newTask.deadline || ''} onChange={e => setNewTask({ ...newTask, deadline: e.target.value })} />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Reference Link</label>
-                  <input type="text" placeholder="https://..." className="w-full p-4 border rounded-[20px] text-xs" value={newTask.link || ''} onChange={e => setNewTask({ ...newTask, link: e.target.value })} />
-                </div>
-              </div>
-
-              <div className="bg-amber-50 p-5 rounded-[24px] border border-amber-100">
-                <label className="text-[10px] font-black uppercase text-amber-800 mb-2 block">Internal Feedback / Notes</label>
-                <textarea className="w-full p-4 border border-amber-200 rounded-[16px] text-xs bg-white" rows="2" value={newTask.notes || ''} onChange={e => setNewTask({ ...newTask, notes: e.target.value })} />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => { setShowTaskForm(false); setEditingTask(null); }} className="flex-1 py-4 rounded-[20px] bg-gray-100 font-black uppercase text-[10px] tracking-widest text-gray-500 hover:bg-gray-200">Cancel</button>
-                <button type="submit" className="flex-1 py-4 rounded-[20px] bg-[#3E2723] text-[#FDB813] font-black uppercase text-[10px] tracking-widest hover:bg-black shadow-lg">Save Assignment</button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {showProjectForm && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
-              <div className="bg-white rounded-[32px] p-8 max-w-lg w-full border-b-[8px] border-[#3E2723]">
-                  <h3 className="text-xl font-black uppercase text-[#3E2723] mb-4">{editingProject ? "Edit Project" : "Create New Project"}</h3>
-                  <div className="space-y-4">
-                      <input type="text" placeholder="Project Title" className="w-full p-3 border rounded-xl text-xs font-bold" value={newProject.title} onChange={e => setNewProject({...newProject, title: e.target.value})} />
-                      <textarea placeholder="Description / Goals" className="w-full p-3 border rounded-xl text-xs" rows="3" value={newProject.description} onChange={e => setNewProject({...newProject, description: e.target.value})} />
-                      <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-gray-500 uppercase">Deadline</label><input type="date" className="w-full p-3 border rounded-xl text-xs" value={newProject.deadline} onChange={e => setNewProject({...newProject, deadline: e.target.value})} /></div><div><label className="text-[10px] font-bold text-gray-500 uppercase">Assign Project Head</label><select className="w-full p-3 border rounded-xl text-xs" value={newProject.projectHeadId} onChange={e => setNewProject({...newProject, projectHeadId: e.target.value})}><option value="">Select Member...</option>{members.filter(m=>m!=null).map(m => (<option key={m.memberId} value={m.memberId}>{m.name}</option>))}</select></div></div>
-                      <div className="flex gap-3 pt-2"><button onClick={() => setShowProjectForm(false)} className="flex-1 py-3 rounded-xl bg-gray-100 font-bold uppercase text-xs text-gray-600 hover:bg-gray-200">Cancel</button><button onClick={handleCreateProject} className="flex-1 py-3 rounded-xl bg-[#3E2723] text-white font-bold uppercase text-xs hover:bg-black">{editingProject ? "Save" : "Create"}</button></div>
-                  </div>
-              </div>
-          </div>
       )}
 
       {showPollForm && (
@@ -807,6 +848,7 @@ const handleResetPassword = async (memberId, email, name) => {
           {mobileMenuOpen && <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setMobileMenuOpen(false)}></div>}
 
           <main className="flex-1 overflow-y-auto p-4 md:p-10 relative custom-scrollbar">
+            <ErrorBoundary resetKey={view}>
                 <header className="flex justify-between items-center mb-10">
                 <div className="flex items-center gap-4"><button onClick={() => setMobileMenuOpen(true)} className="md:hidden text-[#3E2723]"><Menu size={24}/></button><h2 className="font-serif text-3xl font-black uppercase text-[#3E2723]">KAPErata Hub</h2></div>
                 <div onClick={() => setView('settings')} className="bg-white p-2 pr-6 rounded-full border border-amber-100 flex items-center gap-3 shadow-sm cursor-pointer hover:bg-amber-50 transition-colors" title="Edit Profile"><img src={getDirectLink(profile.photoUrl) || `https://ui-avatars.com/api/?name=${profile.name}&background=FDB813&color=3E2723`} className="w-10 h-10 rounded-full object-cover" /><div className="hidden sm:block"><p className="text-[10px] font-black uppercase text-[#3E2723]">{profile.nickname || profile.name.split(' ')[0]} {isSuperAdmin && <ShieldCheck size={10} className="inline text-amber-500"/>}</p><p className="text-[8px] font-black text-amber-500 uppercase">{profile.specificTitle}</p></div></div>
@@ -1265,7 +1307,7 @@ const handleResetPassword = async (memberId, email, name) => {
             {view === 'committee_hunt' && (
                 <div className="space-y-8 animate-fadeIn">
                      <div className="bg-[#3E2723] text-white p-10 rounded-[48px] text-center relative overflow-hidden">
-                        <div className="relative z-10"><h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3><p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Serve the student body, hone your leadership skills, and be part of the legacy.</p></div>
+                        <div className="relative z-10"><h3 className="font-serif text-4xl font-black uppercase mb-4">Join the Team</h3><p className="text-amber-200/80 font-bold uppercase text-sm max-w-xl mx-auto">Apply for a committee or the executive board. Serve the student body, hone your leadership skills, and be part of the legacy.</p></div>
                         <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                     </div>
                     {userApplications && userApplications.length > 0 && (
@@ -1274,12 +1316,12 @@ const handleResetPassword = async (memberId, email, name) => {
                             <div className="space-y-3">
                                 {userApplications.map(app => {
                                     let statusBg = 'bg-yellow-50 border-yellow-200'; let statusText = <p className="text-yellow-700 font-black uppercase text-xs">Application Pending</p>;
-                                    if (app.status === 'for_interview') { statusBg = 'bg-blue-50 border-blue-200 animate-pulse'; statusText = <><p className="text-blue-700 font-black uppercase text-xs">For Interview</p><p className="text-[10px] text-blue-600 mt-1">Please check your LPU email.</p></>; } 
+                                    if (app.status === 'for_interview') { statusBg = 'bg-blue-50 border-blue-200 animate-pulse'; statusText = <><p className="text-blue-700 font-black uppercase text-xs">For Interview</p><p className="text-[10px] text-blue-600 mt-1">Please check your email.</p></>; } 
                                     else if (app.status === 'accepted') { statusBg = 'bg-green-50 border-green-300'; statusText = <><p className="text-green-700 font-black uppercase text-sm">🎉 CONGRATULATIONS!</p><p className="text-[10px] text-green-600 mt-1">Welcome to the team!</p></>; } 
                                     else if (app.status === 'denied') { statusBg = 'bg-gray-50 border-gray-200'; statusText = <><p className="text-gray-700 font-black uppercase text-xs">Application Closed</p><p className="text-[10px] text-gray-500 mt-1">Reach out to any officer for feedback.</p></>; }
                                     return (
                                         <div key={app.id} className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-5 rounded-2xl border-2 ${statusBg} gap-4`}>
-                                            <div><p className="font-black text-[#3E2723] uppercase text-lg">{app.committee}</p><p className="text-xs text-gray-500 font-bold uppercase">{app.role}</p><p className="text-[9px] text-gray-400 mt-1">Applied: {app.createdAt?.toDate ? formatDate(app.createdAt.toDate()) : 'Recently'}</p></div>
+                                            <div><p className="font-black text-[#3E2723] uppercase text-lg">{committeeTitle(app.committee)}</p><p className="text-xs text-gray-500 font-bold uppercase">{app.role}</p><p className="text-[9px] text-gray-400 mt-1">Applied: {app.createdAt?.toDate ? formatDate(app.createdAt.toDate()) : 'Recently'}</p></div>
                                             <div className="text-left sm:text-right">{statusText}</div>
                                         </div>
                                     )
@@ -1287,82 +1329,133 @@ const handleResetPassword = async (memberId, email, name) => {
                             </div>
                         </div>
                     )}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                        {COMMITTEES_INFO.map(c => {
-                            const hasAppliedToThis = userApplications && userApplications.some(a => a.committee === c.id);
-                            return (
-                                <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
-                                    <div className="h-32 rounded-2xl bg-gray-100 mb-6 overflow-hidden"><img src={c.image} className="w-full h-full object-cover" alt={c.title} /></div>
-                                    <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
-                                    <p className="text-xs text-gray-600 mb-6 leading-relaxed flex-1">{c.description}</p>
-                                    <button onClick={(e) => { setCommitteeForm({ role: 'Committee Member' }); handleApplyCommittee(e, c.id); }} disabled={submittingApp || hasAppliedToThis} className={`w-full py-4 rounded-xl font-black uppercase text-xs transition-all ${hasAppliedToThis ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md hover:shadow-lg'}`}>{hasAppliedToThis ? 'Applied ✓' : 'Apply Now'}</button>
-                                </div>
-                            );
-                        })}
+
+                    <div>
+                        <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-1">Committees</h4>
+                        <p className="text-xs text-gray-500 font-bold mb-4">Pick the committee that fits you and tap Apply Now.</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+                            {COMMITTEES_INFO.map(c => {
+                                const hasAppliedToThis = userApplications && userApplications.some(a => a.committee === c.id && a.status !== 'denied');
+                                return (
+                                    <div key={c.id} className="bg-white p-6 rounded-[32px] border border-amber-100 shadow-sm hover:shadow-xl transition-shadow flex flex-col">
+                                        <div className="h-32 rounded-2xl bg-gray-100 mb-6 overflow-hidden"><img src={c.image} className="w-full h-full object-cover" alt={c.title} /></div>
+                                        <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-2">{c.title}</h4>
+                                        <p className="text-xs text-gray-600 mb-4 leading-relaxed flex-1">{c.description}</p>
+                                        <div className="flex flex-wrap gap-1 mb-4">{(c.roles || []).map(r => <span key={r} className="bg-amber-50 text-amber-800 text-[8px] font-black uppercase px-2 py-1 rounded-full">{r}</span>)}</div>
+                                        <button onClick={(e) => handleApplyCommittee(e, c.id)} disabled={submittingApp || hasAppliedToThis} className={`w-full py-4 rounded-xl font-black uppercase text-xs transition-all ${hasAppliedToThis ? 'bg-green-100 text-green-700 cursor-not-allowed border border-green-200' : 'bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md hover:shadow-lg'}`}>{hasAppliedToThis ? 'Applied ✓' : 'Apply Now'}</button>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
+
+                    {profile.positionCategory !== 'Officer' && (
+                        <div className="bg-white p-8 rounded-[40px] border-4 border-[#3E2723] shadow-sm">
+                            <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-1">Executive Board</h4>
+                            <p className="text-xs text-gray-500 font-bold mb-6">Ready to lead? Apply for an officer position. The current officers review every application and may invite you for an interview.</p>
+                            <form onSubmit={handleApplyOfficer} className="space-y-4 max-w-xl">
+                                <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Position</label><select required className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase" value={officerForm.role} onChange={e => setOfficerForm({ ...officerForm, role: e.target.value })}><option value="">Choose a position...</option>{OFFICER_TITLES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                                <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Why you? (optional, 500 characters)</label><textarea rows="4" maxLength={500} className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={officerForm.why} onChange={e => setOfficerForm({ ...officerForm, why: e.target.value })} placeholder="Tell us about your experience and what you would bring to the board."></textarea></div>
+                                <button type="submit" disabled={submittingApp || (userApplications || []).some(a => a.appType === 'officer' && a.status !== 'denied')} className="w-full sm:w-auto px-8 py-4 rounded-xl font-black uppercase text-xs bg-[#3E2723] text-[#FDB813] hover:bg-black shadow-md disabled:opacity-50 disabled:cursor-not-allowed">{(userApplications || []).some(a => a.appType === 'officer' && a.status !== 'denied') ? 'Applied ✓' : 'Apply to the Executive Board'}</button>
+                            </form>
+                        </div>
+                    )}
                 </div>
             )}
 
-            {view === 'daily_grind' && isCommitteePlus && (
-                 <div className="space-y-8 animate-fadeIn">
-                    <div className="flex justify-between items-center"><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">The Task Bar</h3>{isOfficer && <button onClick={() => { setEditingProject(null); setNewProject({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); setShowProjectForm(true); }} className="bg-[#3E2723] text-white p-3 rounded-xl hover:bg-black"><Plus size={20}/></button>}</div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {projects.map(proj => {
-                            const isExpanded = expandedProjectId === proj.id;
-                            const projectTasks = tasks.filter(t => t.projectId === proj.id);
-                            const completedCount = projectTasks.filter(t => t.status === 'served').length;
-                            const totalCount = projectTasks.length;
-                            const progress = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
+            {view === 'manual' && (
+                <div className="space-y-6 animate-fadeIn max-w-3xl mx-auto text-[#3E2723]">
+                    <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
+                        <StatIcon icon={BookOpen} variant="amber" />
+                        <div><h3 className="font-serif text-4xl font-black uppercase">User Manual</h3><p className="text-amber-500 font-black uppercase text-[10px]">How to use the Kaperata Hub</p></div>
+                    </div>
+                    {MANUAL_SECTIONS.filter(sec => sec.level === 'all' || (sec.level === 'officer' && isOfficer) || (sec.level === 'admin' && isSuperAdmin)).map((sec, idx) => (
+                        <details key={sec.title} open={idx === 0} className="bg-white rounded-[28px] border border-amber-100 shadow-sm group">
+                            <summary className="cursor-pointer list-none p-6 flex items-center justify-between gap-3">
+                                <span className="font-black uppercase text-sm">{sec.title}</span>
+                                {sec.level !== 'all' && <span className="bg-purple-100 text-purple-700 text-[8px] font-black uppercase px-3 py-1 rounded-full">{sec.level === 'admin' ? 'System Admin' : 'Officers'}</span>}
+                            </summary>
+                            <ul className="px-6 pb-6 space-y-3 list-disc list-inside text-xs leading-relaxed font-medium text-gray-700">{sec.items.map((it, k) => <li key={k}>{it}</li>)}</ul>
+                        </details>
+                    ))}
+                    <p className="text-center text-[10px] font-bold text-gray-400 uppercase">Need help? lbaofficial.pr@gmail.com</p>
+                </div>
+            )}
+
+            {view === 'inventory' && isOfficer && (() => {
+                const q = (invSearch || '').trim().toLowerCase();
+                const items = (inventory || []).filter(i => i != null);
+                const list = items.filter(i => !q || String(i.name || '').toLowerCase().includes(q) || String(i.category || '').toLowerCase().includes(q)).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+                const isLow = (i) => Number(i.quantity || 0) <= Number(i.reorderLevel || 0);
+                const lowCount = items.filter(isLow).length; const totalUnits = items.reduce((n, i) => n + Number(i.quantity || 0), 0);
+                const hasLace = items.some(i => /id\s*lace/i.test(String(i.name || '')));
+                const openAdd = (preset) => { setEditingInv(null); setInvForm({ ...EMPTY_ITEM, ...(preset || {}) }); setShowInvForm(true); };
+                const openEdit = (i) => { setEditingInv(i); setInvForm({ name: i.name || '', category: i.category || '', quantity: String(i.quantity ?? 0), unit: i.unit || 'pcs', reorderLevel: String(i.reorderLevel ?? 0), notes: i.notes || '' }); setShowInvForm(true); };
+                const adjust = (i) => { const v = window.prompt(`Adjust "${i.name}" (current ${i.quantity} ${i.unit || ''}).\nEnter a number: positive to add, negative to remove.`, '1'); if (v == null) return; const n = parseInt(v, 10); if (!n) return alert("Please enter a whole number such as 5 or -2."); const why = window.prompt('Reason (optional):', n > 0 ? 'Restocked' : 'Used') || ''; handleAdjustStock(i, n, why); };
+                return (
+                <div className="space-y-6 animate-fadeIn text-[#3E2723]">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b-4 border-[#3E2723] pb-6">
+                        <div className="flex items-center gap-4"><StatIcon icon={Package} variant="amber" /><div><h3 className="font-serif text-4xl font-black uppercase">Inventory</h3><p className="text-amber-500 font-black uppercase text-[10px]">Stock on hand</p></div></div>
+                        <div className="flex gap-2 flex-wrap">
+                            {!hasLace && <button onClick={() => openAdd({ name: 'ID Lace', category: 'Membership', unit: 'pcs', reorderLevel: '10' })} className="bg-amber-100 text-amber-800 px-4 py-2.5 rounded-2xl font-black text-[10px] uppercase">+ Track ID Lace</button>}
+                            <button onClick={() => { const rows = list.map(i => [i.name, i.category, i.quantity, i.unit, i.reorderLevel, isLow(i) ? 'LOW' : 'OK', i.notes || '', i.updatedAt ? getSafeDateString(i.updatedAt) : '']); generateCSV(["Item", "Category", "Quantity", "Unit", "Reorder Level", "Stock", "Notes", "Last Updated"], rows, `LBA_Inventory_${new Date().toISOString().split('T')[0]}.csv`); }} className="bg-green-600 text-white px-4 py-2.5 rounded-2xl font-black text-[10px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
+                            <button onClick={() => openAdd()} className="bg-[#3E2723] text-[#FDB813] px-5 py-2.5 rounded-2xl font-black text-[10px] uppercase flex items-center gap-1"><Plus size={14}/> Add Item</button>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 md:gap-6">
+                        <div className="bg-white p-5 rounded-[28px] border border-amber-100 text-center"><p className="text-[9px] font-black uppercase text-gray-400">Items</p><p className="text-2xl font-black">{items.length}</p></div>
+                        <div className="bg-white p-5 rounded-[28px] border border-amber-100 text-center"><p className="text-[9px] font-black uppercase text-gray-400">Total Units</p><p className="text-2xl font-black text-amber-600">{totalUnits}</p></div>
+                        <div className={`p-5 rounded-[28px] border text-center ${lowCount ? 'bg-red-50 border-red-200' : 'bg-white border-amber-100'}`}><p className="text-[9px] font-black uppercase text-gray-400">Low Stock</p><p className={`text-2xl font-black ${lowCount ? 'text-red-600' : 'text-green-600'}`}>{lowCount}</p></div>
+                    </div>
+                    {showInvForm && (
+                        <form onSubmit={handleSaveInventoryItem} className="bg-white p-6 rounded-[32px] border-4 border-[#3E2723] space-y-4">
+                            <h4 className="font-black uppercase text-sm">{editingInv ? 'Edit Item' : 'Add Item'}</h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <input required placeholder="Item name (e.g. ID Lace)" className="p-3 border border-amber-200 rounded-xl text-xs font-bold" value={invForm.name} onChange={e => setInvForm({ ...invForm, name: e.target.value })} />
+                                <input placeholder="Category (e.g. Membership, Supplies)" className="p-3 border border-amber-200 rounded-xl text-xs font-bold" value={invForm.category} onChange={e => setInvForm({ ...invForm, category: e.target.value })} />
+                                <div><label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Quantity on hand</label><input type="number" min="0" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={invForm.quantity} onChange={e => setInvForm({ ...invForm, quantity: e.target.value })} /></div>
+                                <div><label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Unit</label><input placeholder="pcs, packs, boxes" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={invForm.unit} onChange={e => setInvForm({ ...invForm, unit: e.target.value })} /></div>
+                                <div><label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Reorder level (flag as low at or below)</label><input type="number" min="0" className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={invForm.reorderLevel} onChange={e => setInvForm({ ...invForm, reorderLevel: e.target.value })} /></div>
+                                <div><label className="text-[9px] font-bold text-gray-400 uppercase ml-1">Notes</label><input placeholder="Supplier, storage location..." className="w-full p-3 border border-amber-200 rounded-xl text-xs font-bold" value={invForm.notes} onChange={e => setInvForm({ ...invForm, notes: e.target.value })} /></div>
+                            </div>
+                            <div className="flex gap-2 justify-end"><button type="button" onClick={() => { setShowInvForm(false); setEditingInv(null); }} className="px-5 py-3 rounded-xl text-[10px] font-black uppercase bg-gray-100 text-gray-500">Cancel</button><button type="submit" className="px-6 py-3 rounded-xl text-[10px] font-black uppercase bg-[#3E2723] text-[#FDB813]">Save Item</button></div>
+                        </form>
+                    )}
+                    <div className="flex items-center gap-2 bg-white border border-amber-100 px-4 py-3 rounded-2xl"><Search size={16}/><input type="text" placeholder="Search items..." className="bg-transparent outline-none text-[11px] font-black uppercase w-full" value={invSearch} onChange={e => setInvSearch(e.target.value)} /></div>
+                    <div className="space-y-3">
+                        {list.length === 0 ? (<p className="text-center py-12 text-[11px] font-black uppercase text-gray-400">{items.length === 0 ? 'No items yet. Tap Add Item to start tracking stock.' : 'No items match your search.'}</p>) : list.map(i => {
+                            const last = (i.history || [])[(i.history || []).length - 1];
                             return (
-                                <div key={proj.id} className={`bg-white rounded-[32px] border transition-all ${isExpanded ? 'col-span-full border-[#3E2723] shadow-xl' : 'border-amber-100 shadow-sm hover:shadow-md'}`}>
-                                    <div className="p-6 cursor-pointer" onClick={() => setExpandedProjectId(isExpanded ? null : proj.id)}>
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div><h4 className="font-black text-lg text-[#3E2723] uppercase leading-tight">{proj.title}</h4><p className="text-[10px] font-bold text-indigo-600 mt-1 flex items-center gap-1 bg-indigo-50 px-2 py-1 rounded-md w-max"><UserCheck size={12}/> Assigned Head: {proj.projectHeadName || 'Unassigned'}</p></div>
-                                            <div className="text-right"><span className={`text-[9px] font-black px-2 py-1 rounded-full ${progress === 100 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{progress}% Done</span><p className="text-[9px] text-gray-400 mt-1">{completedCount}/{totalCount} Tasks</p></div>
-                                        </div>
-                                        <div className="w-full bg-gray-100 rounded-full h-1.5 mb-4"><div className="bg-[#3E2723] h-1.5 rounded-full transition-all duration-500" style={{ width: `${progress}%` }}></div></div>
-                                        <div className="flex justify-between items-center"><span className="text-[10px] font-bold text-gray-500 flex items-center gap-1"><Clock size={12}/> Due: {new Date(proj.deadline).toLocaleDateString()}</span><button className="text-[10px] font-black uppercase text-amber-600 flex items-center gap-1 hover:underline">{isExpanded ? 'Close Board' : 'Open Board'} <ChevronRight size={12} className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}/></button></div>
-                                    </div>
-                                    {isExpanded && (
-                                        <div className="p-6 border-t border-gray-100 bg-gray-50/50 rounded-b-[32px] animate-fadeIn">
-                                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-                                                <p className="text-xs text-gray-500 max-w-2xl italic pr-4">"{proj.description}"</p>
-                                                <div className="flex gap-2 shrink-0">
-                                                    {(isOfficer || profile.memberId === proj.projectHeadId) && (<><button onClick={(e) => { e.stopPropagation(); handleEditProject(proj); }} className="bg-amber-100 text-amber-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-amber-200 flex items-center gap-1"><Pen size={12}/> Edit Board</button>{isOfficer && <button onClick={async (e) => { e.stopPropagation(); if(confirm('Delete this project board?')) { await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'projects', proj.id)); } }} className="bg-red-100 text-red-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-red-200 flex items-center gap-1"><Trash2 size={12}/></button>}</>)}
-                                                    {(isCommitteePlus || profile.memberId === proj.projectHeadId) && (<button onClick={(e) => { e.stopPropagation(); setEditingTask(null); setNewTask({ ...EMPTY_TASK, projectId: proj.id }); setShowTaskForm(true); }} className="bg-[#3E2723] text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase hover:bg-black flex items-center gap-1"><Plus size={12}/> Add Task</button>)}
-                                                </div>
-                                             </div>
-                                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                                 {['pending', 'brewing', 'served'].map(status => (
-                                                     <div key={status} className="bg-white/50 p-3 rounded-2xl border border-gray-200">
-                                                         <h5 className="font-black uppercase text-[10px] text-gray-400 mb-3 flex items-center gap-2">{status === 'pending' ? <Coffee size={12}/> : status === 'brewing' ? <Loader2 size={12} className="animate-spin"/> : <CheckSquare2 size={12}/>}{status === 'pending' ? 'To Roast' : status === 'brewing' ? 'Brewing' : 'Served'}</h5>
-                                                         <div className="space-y-3 max-h-96 overflow-y-auto pr-1 custom-scrollbar">
-                                                             {projectTasks.filter(t => t.status === status).map(task => (
-                                                                 <div key={task.id} className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm relative group">
-                                                                     <div className="flex justify-between items-start mb-1"><span className="font-bold text-xs text-[#3E2723]">{task.title}</span><div className="flex gap-1"><button onClick={() => handleEditTask(task)} className="text-amber-500 hover:text-amber-700 p-1"><Pen size={12}/></button>{isOfficer && <button onClick={() => handleDeleteTask(task.id)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={12}/></button>}</div></div>
-                                                                     <details className="mt-2 text-[10px] cursor-pointer"><summary className="font-bold text-amber-600 mb-2 outline-none list-none flex items-center gap-1 hover:text-amber-800 transition-colors"><ChevronRight size={12} className="inline-block transition-transform duration-200"/> View Output & Details</summary><div className="pl-3 py-2 border-l-2 border-amber-100 space-y-3 cursor-default">{task.description && <p className="text-gray-600 italic leading-relaxed">{task.description}</p>}{task.link && (<a href={task.link.startsWith('http') ? task.link : `https://${task.link}`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 bg-blue-50 px-2 py-1.5 rounded-lg w-fit"><Link2 size={10}/> Open Reference / Output</a>)}{task.notes && <div className="bg-amber-50 p-2 rounded-lg text-amber-900 border border-amber-100 font-medium">Feedback: {task.notes}</div>}</div></details>
-                                                                     <div className="flex gap-1 border-t border-gray-100 pt-2 mt-2">{status !== 'pending' && <button onClick={() => handleUpdateTaskStatus(task.id, 'pending')} className="flex-1 bg-gray-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-gray-200 text-gray-600 transition-colors">Revert</button>}{status !== 'brewing' && <button onClick={() => handleUpdateTaskStatus(task.id, 'brewing')} className="flex-1 bg-amber-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-amber-200 text-amber-800 transition-colors">Brew</button>}{status !== 'served' && <button onClick={() => handleUpdateTaskStatus(task.id, 'served')} className="flex-1 bg-green-100 text-[8px] font-bold uppercase rounded py-1.5 hover:bg-green-200 text-green-800 transition-colors">Serve</button>}</div>
-                                                                 </div>
-                                                             ))}
-                                                         </div>
-                                                     </div>
-                                                 ))}
-                                             </div>
-                                        </div>
-                                    )}
+                            <div key={i.id} className={`bg-white p-5 rounded-[28px] border-2 flex flex-col md:flex-row md:items-center gap-4 ${isLow(i) ? 'border-red-200' : 'border-amber-100'}`}>
+                                <div className="flex-1 min-w-0">
+                                    <p className="font-black uppercase text-sm truncate">{i.name}</p>
+                                    <p className="text-[10px] font-bold text-gray-400 uppercase">{i.category || 'General'} · reorder at {i.reorderLevel ?? 0}</p>
+                                    {i.notes && <p className="text-[10px] text-gray-500 mt-1">{i.notes}</p>}
+                                    {last && <p className="text-[9px] text-gray-400 mt-1">Last: {last.change > 0 ? '+' : ''}{last.change} · {last.reason} · {last.by} · {formatDate(last.at)}</p>}
                                 </div>
-                            );
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => handleAdjustStock(i, -1, 'Quick adjust')} className="w-9 h-9 rounded-full bg-gray-100 font-black text-lg hover:bg-gray-200" aria-label="Remove one">−</button>
+                                    <div className="text-center min-w-[64px]"><p className={`text-2xl font-black leading-none ${isLow(i) ? 'text-red-600' : ''}`}>{i.quantity ?? 0}</p><p className="text-[9px] font-bold text-gray-400 uppercase">{i.unit || 'pcs'}</p></div>
+                                    <button onClick={() => handleAdjustStock(i, 1, 'Quick adjust')} className="w-9 h-9 rounded-full bg-gray-100 font-black text-lg hover:bg-gray-200" aria-label="Add one">+</button>
+                                </div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {isLow(i) && <span className="bg-red-100 text-red-700 text-[8px] font-black uppercase px-3 py-1 rounded-full">Low Stock</span>}
+                                    <button onClick={() => adjust(i)} className="bg-amber-50 text-amber-700 px-3 py-2 rounded-xl text-[9px] font-black uppercase">Adjust</button>
+                                    <button onClick={() => openEdit(i)} className="bg-amber-50 text-amber-600 p-2 rounded-lg" title="Edit"><Pen size={14}/></button>
+                                    {isSuperAdmin && <button onClick={() => handleDeleteInventoryItem(i)} className="bg-red-50 text-red-500 p-2 rounded-lg" title="Delete"><Trash2 size={14}/></button>}
+                                </div>
+                            </div>);
                         })}
                     </div>
-                 </div>
-            )}
+                </div>);
+            })()}
 
             {view === 'members' && isOfficer && (
                 <div className="space-y-6 animate-fadeIn text-[#3E2723]">
                     <div className="bg-white p-6 rounded-[40px] border border-amber-100 flex justify-between items-center flex-col md:flex-row gap-4">
                         <div className="flex items-center gap-2 bg-amber-50 px-4 py-2 rounded-2xl w-full md:w-auto"><Search size={16}/><input type="text" placeholder="Search..." className="bg-transparent outline-none text-[10px] font-black uppercase w-full" value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}/></div>
                         <div className="flex gap-2 w-full md:w-auto justify-end">
-                            <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="officers">Officers</option><option value="committee">Committee</option></select>
+                            <select className="bg-white border border-amber-100 text-[9px] font-black uppercase px-2 rounded-xl outline-none" value={exportFilter} onChange={e => setExportFilter(e.target.value)}><option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option><option value="officers">Officers</option><option value="committee">Committee</option><option value="lace_issued">ID Lace Issued</option><option value="lace_pending">ID Lace Pending</option></select>
                             <button onClick={handleExportCSV} className="bg-green-600 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase flex items-center gap-1"><FileBarChart size={12}/> CSV</button>
                             <button onClick={handleBulkEmail} className="bg-blue-500 text-white px-5 py-2.5 rounded-2xl font-black text-[9px] uppercase">Email</button>
                             {isSuperAdmin && (
@@ -1388,6 +1481,7 @@ const handleResetPassword = async (memberId, email, name) => {
                                     </div>
                                     {m?.positionCategory === 'Committee' && (<div><label className="text-[8px] font-bold text-indigo-400 uppercase">Committee Dept</label><select className="w-full bg-indigo-50 text-indigo-900 text-[10px] font-black p-2 rounded-lg outline-none uppercase disabled:opacity-50" value={m?.committee || ""} onChange={e=>handleUpdatePosition(m.memberId, m.positionCategory, m.specificTitle, e.target.value)} disabled={!isSuperAdmin}><option value="">Select Dept...</option>{COMMITTEES_INFO.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select></div>)}
                                 </div>
+                                <div className="flex items-center justify-between mb-3 text-[9px] font-black uppercase"><span className="text-gray-400">ID Lace{m?.studentId ? ' · ' + m.studentId : ''}</span><button onClick={() => handleToggleIdLace(m)} title={m?.idLaceIssued ? ('Issued ' + formatDate(m.idLaceIssuedAt) + (m.idLaceIssuedBy ? ' by ' + m.idLaceIssuedBy : '')) : 'Mark ID lace as issued'} className={'px-2 py-1 rounded-full text-[8px] font-black uppercase ' + (m?.idLaceIssued ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400 hover:bg-amber-100 hover:text-amber-700')}>{m?.idLaceIssued ? 'Issued ✓' : 'Pending'}</button></div>
                                 <div className="mt-4 pt-4 border-t border-amber-50 flex justify-between items-center">
                                     <button onClick={() => isSuperAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${m?.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`} disabled={!isSuperAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
                                     <div className="flex gap-2">
@@ -1411,8 +1505,9 @@ const handleResetPassword = async (memberId, email, name) => {
                             <thead className="bg-[#3E2723] text-white font-serif tracking-widest">
                                 <tr className="text-[10px]">
                                     <th className="p-4 w-12 text-center"><button onClick={toggleSelectAll}>{selectedBaristas.length === (paginatedRegistry?.length || 0) && selectedBaristas.length > 0 ? <CheckCircle2 size={16} className="text-[#FDB813]"/> : <Plus size={16}/>}</button></th>
-                                    <th className="p-4 w-1/3">Barista</th>
+                                    <th className="p-4 w-1/4">Barista</th>
                                     <th className="p-4 w-32 text-center">ID</th>
+                                    <th className="p-4 w-24 text-center">ID Lace</th>
                                     <th className="p-4 w-24 text-center">Status</th>
                                     <th className="p-4 w-40 text-center">Designation</th>
                                     <th className="p-4 w-40 text-right">Manage</th>
@@ -1423,7 +1518,8 @@ const handleResetPassword = async (memberId, email, name) => {
                                 <tr key={m?.memberId || Math.random()} className={`hover:bg-amber-50/50 ${m?.status !== 'active' ? 'opacity-50 grayscale' : ''}`}>
                                     <td className="p-4 text-center"><button onClick={()=>toggleSelectBarista(m?.memberId)}>{selectedBaristas.includes(m?.memberId) ? <CheckCircle2 size={18} className="text-[#FDB813]"/> : <div className="w-4 h-4 border-2 border-amber-100 rounded-md mx-auto"></div>}</button></td>
                                     <td className="py-4 px-4"><div className="flex items-center gap-4"><img src={getDirectLink(m?.photoUrl) || `https://ui-avatars.com/api/?name=${m?.name || 'User'}&background=FDB813&color=3E2723`} className="w-8 h-8 rounded-full object-cover border-2 border-[#3E2723]" alt="avatar" /><div className="min-w-0"><p className="font-black text-xs truncate">{m?.name || 'Unknown'} {m?.role === 'superadmin' && <ShieldCheck size={12} className="inline text-purple-600"/>}</p><p className="text-[8px] opacity-60 truncate">"{m?.nickname || m?.program || ''}"</p><div className="flex flex-wrap gap-1 mt-1">{Array.isArray(m?.accolades) && m.accolades.map((acc, i) => (<span key={i} title={acc} className="text-[8px] bg-yellow-100 text-yellow-700 px-1 rounded cursor-help">🏆</span>))}</div></div></div></td>
-                                    <td className="text-center font-mono font-black text-xs">{m?.memberId || 'N/A'}</td>
+                                    <td className="text-center font-mono font-black text-xs">{m?.memberId || 'N/A'}{m?.studentId && <span className="block text-[8px] font-bold text-gray-400 normal-case">{m.studentId}</span>}</td>
+                                    <td className="text-center"><button onClick={() => handleToggleIdLace(m)} title={m?.idLaceIssued ? ('Issued ' + formatDate(m.idLaceIssuedAt) + (m.idLaceIssuedBy ? ' by ' + m.idLaceIssuedBy : '')) : 'Mark ID lace as issued'} className={'px-2 py-1 rounded-full text-[8px] font-black uppercase ' + (m?.idLaceIssued ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400 hover:bg-amber-100 hover:text-amber-700')}>{m?.idLaceIssued ? 'Issued ✓' : 'Pending'}</button></td>
                                     <td className="text-center font-black text-[10px] uppercase">
                                         <button onClick={() => isSuperAdmin && handleToggleStatus(m.memberId, m.status)} className={`px-2 py-1 rounded-full cursor-pointer hover:opacity-80 transition-opacity disabled:cursor-default ${m?.status === 'active' ? (m?.membershipType === 'new' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700') : 'bg-gray-200 text-gray-500'}`} disabled={!isSuperAdmin}>{m?.status === 'active' ? (m?.membershipType || 'ACTIVE') : 'EXPIRED'}</button>
                                     </td>
@@ -1503,44 +1599,20 @@ const handleResetPassword = async (memberId, email, name) => {
               </div>
             </div>
 
-        {/* PROJECT & COMMITTEE MANAGER (NEW) */}
-        <div className="bg-white p-8 rounded-[40px] border-4 border-[#3E2723] shadow-sm">
-            <div className="flex items-center justify-between mb-6">
-                <h4 className="font-black uppercase text-sm flex items-center gap-2"><Briefcase size={18}/> Project & Committee Roaster</h4>
-                <div className="flex gap-2">
-                    <span className="bg-amber-100 text-amber-800 text-[10px] px-3 py-1 rounded-full font-black">ACTIVE OPS</span>
+        {/* MEMBERS CARE SNAPSHOT */}
+        {(() => {
+            const all = (members || []).filter(m => m != null && m.positionCategory !== 'Blacklisted');
+            const active = all.filter(m => m.status === 'active').length; const issued = all.filter(m => m.idLaceIssued).length;
+            const lowStock = (inventory || []).filter(i => i && Number(i.quantity || 0) <= Number(i.reorderLevel || 0)).length;
+            const cell = (label, val, tone) => (<div className="bg-gray-50 rounded-2xl p-4 text-center border border-gray-100"><p className="text-[9px] font-black uppercase text-gray-400">{label}</p><p className={`text-2xl font-black ${tone || ''}`}>{val}</p></div>);
+            return (
+            <div className="bg-white p-8 rounded-[40px] border-4 border-[#3E2723] shadow-sm">
+                <div className="flex items-center justify-between mb-6"><h4 className="font-black uppercase text-sm flex items-center gap-2"><Users size={18}/> Members Care Snapshot</h4><span className="bg-amber-100 text-amber-800 text-[10px] px-3 py-1 rounded-full font-black">LIVE</span></div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    {cell('Members', all.length)}{cell('Active', active, 'text-green-600')}{cell('Expired', all.length - active, 'text-gray-500')}{cell('ID Lace Issued', `${issued}/${all.length}`, 'text-amber-600')}{cell('Low Stock Items', lowStock, lowStock ? 'text-red-600' : 'text-green-600')}
                 </div>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                {/* Active Committees List */}
-                <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-gray-400 px-2">Active Committees</label>
-                    <div className="grid grid-cols-2 gap-2">
-                        {["Finance", "Logistics", "Marketing", "Sponsorship", "Operations"].map(comm => (
-                            <div key={comm} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100">
-                                <span className="text-xs font-bold">{comm}</span>
-                                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Quick Project Toggle */}
-                <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-gray-400 px-2">Operational Projects</label>
-                    <div className="space-y-2">
-                        {['General Tasks', 'Membership Caravan', 'Annual Gala'].map(proj => (
-                            <div key={proj} className="flex items-center justify-between p-3 bg-amber-50/50 rounded-xl border border-amber-100">
-                                <span className="text-xs font-black uppercase tracking-tight">{proj}</span>
-                                <button className="text-[10px] font-black text-amber-600 hover:underline">MANAGE</button>
-                            </div>
-                        ))}
-                        <button className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-[10px] font-black text-gray-400 uppercase hover:bg-gray-50">+ Add New Project</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+            </div>);
+        })()}
 
         {/* DAILY CASH KEY & FINANCIAL CONTROLS */}
         <div className="space-y-4">
@@ -1588,10 +1660,12 @@ const handleResetPassword = async (memberId, email, name) => {
                     <div key={app.id} className="flex justify-between items-center p-4 bg-purple-50 rounded-2xl border border-purple-100">
                         <div>
                             <span className="font-black text-xs uppercase block">{app.name}</span>
-                            <span className="text-[10px] font-bold text-purple-400 uppercase">{(COMMITTEES_INFO.find(c => c.id === app.committee) || {}).title || app.committee} · {app.role} · {app.status}</span>
+                            <span className="text-[10px] font-bold text-purple-400 uppercase">{committeeTitle(app.committee)} · {app.role} · {app.status}</span>{app.reason && <span className="block text-[10px] text-gray-500 normal-case mt-1">"{app.reason}"</span>}
                         </div>
                         <div className="flex gap-2">
+                            {['pending'].includes(app.status) && (<button onClick={() => initiateAppAction(app, 'for_interview')} title="Invite for interview" className="bg-blue-100 text-blue-700 p-2 rounded-lg"><Mail size={14}/></button>)}
                             {app.status !== 'accepted' && (<button onClick={() => initiateAppAction(app, 'accepted')} title="Accept" className="bg-purple-600 text-white p-2 rounded-lg"><CheckCircle2 size={14}/></button>)}
+                            {!['accepted', 'denied'].includes(app.status) && (<button onClick={() => initiateAppAction(app, 'denied')} title="Decline" className="bg-gray-200 text-gray-700 p-2 rounded-lg"><X size={14}/></button>)}
                             <button onClick={() => { if (confirm('Delete this application?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id)); }} title="Delete" className="bg-red-100 text-red-600 p-2 rounded-lg"><Trash2 size={14}/></button>
                         </div>
                     </div>
@@ -1639,7 +1713,9 @@ const handleResetPassword = async (memberId, email, name) => {
                               <form onSubmit={handleUpdateProfile} className="space-y-4">
                                   <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Full Name</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase" value={settingsForm.name || ''} onChange={e => setSettingsForm({...settingsForm, name: e.target.value.toUpperCase()})} placeholder="LAST, FIRST MI." /></div>
                                   <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Nickname / Display Name</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.nickname || ''} onChange={e => setSettingsForm({...settingsForm, nickname: e.target.value})} placeholder="How should we call you?" /></div>
-                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address</label><input type="email" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.email || ''} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} placeholder="email@example.com" /></div>
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Email Address (LPU network email or Gmail)</label><input type="email" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.email || ''} onChange={e => setSettingsForm({...settingsForm, email: e.target.value})} placeholder="email@example.com" /></div>
+                                  <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">LPU Student ID No.</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm uppercase" value={settingsForm.studentId || ''} onChange={e => setSettingsForm({...settingsForm, studentId: e.target.value})} placeholder="Student ID number" /></div>
+                                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"><span className="text-[10px] font-bold text-gray-400 uppercase">ID Lace</span><span className={`text-[10px] font-black uppercase px-3 py-1 rounded-full ${profile.idLaceIssued ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{profile.idLaceIssued ? `Issued${profile.idLaceIssuedAt ? ' · ' + formatDate(profile.idLaceIssuedAt) : ''}` : 'Not yet issued'}</span></div>
                                   <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Profile Photo URL</label><input type="text" className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.photoUrl || ''} onChange={e => setSettingsForm({...settingsForm, photoUrl: e.target.value})} placeholder="https://..." /><p className="text-[9px] text-gray-400 mt-1 ml-1">Paste a direct link to an image (Google Drive/Photos links supported).</p></div>
                                   <div className="grid grid-cols-2 gap-4">
                                       <div><label className="text-[10px] font-bold text-gray-400 uppercase ml-1">Birth Month</label><select className="w-full p-4 bg-gray-50 rounded-xl border border-transparent focus:border-amber-300 outline-none font-bold text-sm" value={settingsForm.birthMonth || ''} onChange={e => setSettingsForm({...settingsForm, birthMonth: e.target.value})}><option value="">Month</option>{MONTHS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}</select></div>
@@ -1661,7 +1737,7 @@ const handleResetPassword = async (memberId, email, name) => {
                       <div className="bg-[#3E2723] p-8 rounded-[40px] text-white/50 text-center text-xs"><p>Member ID: <span className="font-mono text-white font-bold">{profile.memberId}</span></p><p className="mt-2">Need help with your account? Contact the PR Committee.</p></div>
                   </div>
                 )}
-            
+            </ErrorBoundary>
              <DataPrivacyFooter />
           </main>
         </div>
