@@ -19,17 +19,58 @@ const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Alumn
 const MONTHS = [{ value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" }, { value: 4, label: "April" }, { value: 5, label: "May" }, { value: 6, label: "June" }, { value: 7, label: "July" }, { value: 8, label: "August" }, { value: 9, label: "September" }, { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }];
 const DEFAULT_MASTERCLASS_MODULES = [{ id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" }, { id: 2, title: "Equipment Familiarization", short: "Equipment" }, { id: 3, title: "Manual Brewing", short: "Brewing" }, { id: 4, title: "Espresso Machine", short: "Espresso" }, { id: 5, title: "Signature Beverage (Advanced)", short: "Sig Bev" }];
 const COMMITTEES_INFO = [
-  { id: "Arts", title: "Arts & Design", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80", description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.", roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"] },
+  { id: "Arts", title: "Arts & Creatives", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80", description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.", roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"] },
   { id: "Events", title: "Events & Logistics", image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80", description: "The backbone of operations. We plan flows, manage logistics, and ensure smooth gatherings.", roles: ["Program Flow", "Logistics", "Crowd Control"] },
-  { id: "Marketing", title: "Marketing Committee", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", description: "The voice of the association. Social media, public relations, photo & video documentation, and external partnerships.", roles: ["Social Media", "Photo & Video", "Copywriting", "Partnerships"] },
-  { id: "Care", title: "Members Care Committee", image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=800&q=80", description: "Looking after our members. We track member progress, issue ID laces, handle renewals, monitor member count and keep engagement high.", roles: ["Progress Tracking", "ID Lace Issuance", "Renewals", "Member Count", "Engagement"] }
+  { id: "Marketing", title: "Marketing & PR", image: "https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80", description: "The voice of the association. Social media, public relations, photo & video documentation, and external partnerships.", roles: ["Social Media", "Photo & Video", "Copywriting", "Partnerships"] },
+  { id: "Care", title: "Member\u2019s Care & Ethics", image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=800&q=80", description: "Looking after our members. We track member progress, issue ID laces, handle renewals, monitor member count and keep engagement high.", roles: ["Progress Tracking", "ID Lace Issuance", "Renewals", "Member Count", "Engagement"] }
 ];
 const normCommittee = (c) => (c === 'Media' || c === 'PR') ? 'Marketing' : (c || '');
 const committeeTitle = (id) => (COMMITTEES_INFO.find(c => c.id === id) || {}).title || id || '';
 const EMAIL_RULE_MSG = "Please use your LPU network email (for example name@lpu.edu.ph) or a Gmail address (name@gmail.com).";
 const isAllowedEmail = (v) => { const e = String(v || '').trim().toLowerCase(); if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false; const d = e.split('@')[1]; return d === 'gmail.com' || /(^|\.)lpu[a-z]*\.edu\.ph$/.test(d); };
 const isValidStudentId = (v) => /^[0-9A-Za-z-]{5,20}$/.test(String(v || '').trim());
-const EXEC_POSITIONS = ["President", "Vice President", "Secretary", "Assistant Secretary", "Treasurer", "Public Relations Officer", "Business Manager", "Overall Committee Head"];
+const EXEC_ROLES = [
+  { position: "President", duties: [
+    "Serve as the Chief Executive Officer of LBA and preside over all Executive Board meetings and General Assemblies.",
+    "Represent LBA in all university assemblies, Student Affairs Office (SAO) briefings, CITHM council meetings, and external industry partnerships.",
+    "Co-sign all official correspondence, financial requisition vouchers, activity proposals, and contracts, subject to the endorsement of the Faculty Adviser.",
+    "Ensure strict enforcement of this Constitution, the LBA Master Manual, and LPU regulations." ] },
+  { position: "Vice President", duties: [
+    "Assume the duties and powers of the President in the event of the latter\u2019s temporary absence, incapacity, resignation, or removal.",
+    "Directly supervise all Functional Committee Heads and Supplementary Officers.",
+    "Chair the Member\u2019s Care & Ethics Committee and oversee internal officer discipline, demerit tracking, and performance evaluations." ] },
+  { position: "Secretary", duties: [
+    "Serve as official custodian of all physical and digital organizational records, minutes of meetings, membership rosters, and official correspondence.",
+    "Manage the Three-Tier Archiving System (Physical Campus Locker, Cloud Repository, and SAO Annual Bid Book) in accordance with the Master Manual.",
+    "Ensure the SAO Annual Bid Book is updated within seven (7) business days following every completed event." ] },
+  { position: "Assistant Secretary", duties: [
+    "Assist the Secretary in taking accurate minutes during Executive Board meetings and General Assemblies.",
+    "Monitor and record member attendance and tardiness across all assemblies, workshops, and meetings.",
+    "Assist in filing physical receipts, maintaining the Campus Locker inventory log, and uploading scanned documents to the Cloud Repository.",
+    "Co-compile documentation for the SAO Annual Bid Book under the supervision of the Secretary." ] },
+  { position: "Treasurer", duties: [
+    "Serve as official custodian of all organizational funds, fee collections, bank/digital accounts, and petty cash boxes.",
+    "Issue Official Receipts (ORs) for all funds received and maintain an accurate, real-time master ledger.",
+    "Disburse funds strictly through approved Requisition Vouchers bearing dual signatures (Treasurer + Auditor + President/Adviser)." ] },
+  { position: "Auditor", duties: [
+    "Conduct independent monthly audits of all financial records, bank balances, petty cash boxes, and B\u2019Cafe inventory logs.",
+    "Verify all pre-event budget proposals and audit all post-event liquidations and Official Receipts.",
+    "Certify and co-sign all semesterly and annual financial statements prior to presentation to the General Assembly, Adviser, and SAO." ] },
+  { position: "Public Relations Officer", duties: [
+    "Direct LBA\u2019s branding, public relations, publicity campaigns, and official social media platforms.",
+    "Supervise media documentation, graphic production, and external promotional communications." ] },
+  { position: "Business Manager", duties: [
+    "Solicit corporate sponsorships, brand partnerships, and external funding for LBA events and competitions, subject to Adviser and SAO approval.",
+    "Manage approved income-generating projects, merchandise design, production, and sales tracking.",
+    "Draft sponsorship packages, Memoranda of Agreement (MOAs), and external partnership proposals for review by the President and Adviser.",
+    "Turn over all collected revenues and sales logs immediately to the Treasurer and Auditor for verification and receipting." ] },
+  { position: "Overall Committee Head", duties: [
+    "Act as the primary operational coordinator and direct link between the Vice President and all four (4) Functional Committee Heads.",
+    "Synchronize task delegations, event timelines, and workforce allocation across Arts & Creatives, Events & Logistics, Marketing & PR, and Member\u2019s Care & Ethics.",
+    "Conduct regular check-ins with Committee Heads to monitor deliverable progress, resolve cross-committee bottlenecks, and track attendance/tardiness compliance.",
+    "Consolidate committee post-event evaluation reports and submit performance summaries to the Vice President." ] }
+];
+const EXEC_POSITIONS = EXEC_ROLES.map(r => r.position);
 const EXEC_QUESTIONS = [
   "Describe a time you led a team or project through a real challenge. What was the situation, what did you do, and what was the result?",
   "Tell us about a disagreement with a teammate or fellow officer. How did you handle it, and what happened afterwards?",
@@ -67,8 +108,8 @@ const MANUAL_SECTIONS = [
     "Legacy Story tells the history of LBA."
   ] },
   { title: "Join the Team (committees and executive board)", level: 'all', items: [
-    "Committees: choose Arts & Design, Events & Logistics, Marketing or Members Care and tap Apply Now.",
-    "Executive Board: choose a position (President, Vice President, Secretary, Assistant Secretary, Treasurer, Public Relations Officer, Business Manager or Overall Committee Head), paste a link to your resume, write a short self-introduction, explain why you fit, and answer the leadership questions.",
+    "Committees: choose Arts & Creatives, Events & Logistics, Marketing & PR or Member\u2019s Care & Ethics and tap Apply Now.",
+    "Executive Board: read the Executive Board Positions list for each role\u2019s responsibilities, choose a position, paste a link to your resume, write a short self-introduction, explain why you fit, and answer the leadership questions.",
     "You can have one application in progress at a time. Your status shows on the same page: Pending, For Interview, Accepted or Closed. Watch your email for interview details.",
     "Your membership must be active to apply."
   ] },
@@ -96,7 +137,7 @@ const MANUAL_SECTIONS = [
   ] },
   { title: "If something looks wrong", level: 'all', items: [
     "Refresh the page first. If a page shows a red error box, send a screenshot of it to lbaofficial.pr@gmail.com.",
-    "Questions about membership, ID laces or renewals go to the Members Care Committee or any officer."
+    "Questions about membership, ID laces or renewals go to the Member’s Care & Ethics Committee or any officer."
   ] }
 ];
 class ErrorBoundary extends React.Component {
@@ -1358,7 +1399,23 @@ const handleResetPassword = async (memberId, email, name) => {
                         </div>
                     </div>
 
-                    <div className="bg-white p-8 rounded-[40px] border-4 border-[#3E2723] shadow-sm">
+                    <div className="py-2">
+                        <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-1">Executive Board Positions</h4>
+                        <p className="text-xs text-gray-500 font-bold mb-4">Read the roles and responsibilities of each position before you apply.</p>
+                        <div className="divide-y divide-amber-900/10 border-y border-amber-900/10">
+                            {EXEC_ROLES.map(r => (
+                                <details key={r.position} className="py-4">
+                                    <summary className="cursor-pointer list-none flex items-center justify-between gap-3"><span className="font-black uppercase text-sm text-[#3E2723]">{r.position}</span><ChevronRight size={16} className="text-gray-400"/></summary>
+                                    {r.duties.length > 0 ? (
+                                        <ol className="mt-3 space-y-2 list-decimal list-inside text-xs leading-relaxed font-medium text-gray-700">{r.duties.map((d, k) => <li key={k}>{d}</li>)}</ol>
+                                    ) : (<p className="mt-3 text-xs text-gray-500 font-medium">Responsibilities for this position have not been listed yet. Ask any officer for details.</p>)}
+                                    <button type="button" onClick={() => { setOfficerForm({ ...officerForm, role: r.position }); const el = document.getElementById('exec-application'); if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }} className="mt-4 text-[10px] font-black uppercase text-amber-700 border border-amber-700/30 px-4 py-2 rounded-lg hover:bg-amber-50">Apply for {r.position}</button>
+                                </details>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div id="exec-application" className="bg-white p-8 rounded-[40px] border-4 border-[#3E2723] shadow-sm">
                         <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723] mb-1">Executive Board Application</h4>
                         <p className="text-xs text-gray-500 font-bold mb-6">Ready to lead? Choose a position to start your application. The current officers review every application and may invite you for an interview.</p>
                         {(userApplications || []).some(a => a.appType === 'officer' && ['pending', 'for_interview'].includes(a.status)) ? (
@@ -1626,7 +1683,7 @@ const handleResetPassword = async (memberId, email, name) => {
             const cell = (label, val, tone) => (<div className="text-center px-2"><p className="text-[9px] font-black uppercase text-gray-400">{label}</p><p className={`text-2xl font-black ${tone || ''}`}>{val}</p></div>);
             return (
             <div className="py-8">
-                <div className="flex items-center justify-between mb-6"><h4 className="font-black uppercase text-sm flex items-center gap-2"><Users size={18}/> Members Care Snapshot</h4><span className="text-amber-600 text-[10px] font-black">LIVE</span></div>
+                <div className="flex items-center justify-between mb-6"><h4 className="font-black uppercase text-sm flex items-center gap-2"><Users size={18}/> Member’s Care Snapshot</h4><span className="text-amber-600 text-[10px] font-black">LIVE</span></div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-y-6 md:divide-x divide-amber-900/10">
                     {cell('Members', all.length)}{cell('Active', active, 'text-green-600')}{cell('Expired', all.length - active, 'text-gray-500')}{cell('ID Lace Issued', `${issued}/${all.length}`, 'text-amber-600')}{cell('Low Stock Items', lowStock, lowStock ? 'text-red-600' : 'text-green-600')}
                 </div>
