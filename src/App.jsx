@@ -1590,9 +1590,8 @@ const handleResetPassword = async (memberId, email, name) => {
           </div>
         ) : (
           /* ACTUAL TERMINAL */
-          <div className="space-y-10 animate-fadeIn text-[#3E2723]">
-            <div className="flex items-center gap-4 border-b-4 border-[#3E2723] pb-6">
-              <StatIcon icon={TrendingUp} variant="amber" />
+          <div className="divide-y divide-amber-900/10 animate-fadeIn text-[#3E2723] max-w-5xl">
+            <div className="flex items-center gap-4 pb-8">
               <div>
                 <h3 className="font-serif text-4xl font-black uppercase">Terminal</h3>
                 <p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p>
@@ -1600,20 +1599,20 @@ const handleResetPassword = async (memberId, email, name) => {
             </div>
 
             {/* STATS GRID */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 md:divide-x divide-amber-900/10 py-8">
+              <div className="px-4 py-2 text-center">
                 <p className="text-[10px] font-bold text-gray-400 uppercase">Total</p>
                 <p className="text-2xl font-black text-[#3E2723]">{(financialStats?.totalPaid || 0) + (financialStats?.exemptCount || 0)}</p>
               </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+              <div className="px-4 py-2 text-center">
                 <p className="text-[10px] font-bold text-gray-400 uppercase">Paid</p>
                 <p className="text-2xl font-black text-green-600">{financialStats?.totalPaid || 0}</p>
               </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+              <div className="px-4 py-2 text-center">
                 <p className="text-[10px] font-bold text-gray-400 uppercase">Exempt</p>
                 <p className="text-2xl font-black text-blue-600">{financialStats?.exemptCount || 0}</p>
               </div>
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-amber-50 text-center">
+              <div className="px-4 py-2 text-center">
                 <p className="text-[10px] font-bold text-gray-400 uppercase">Apps</p>
                 <p className="text-2xl font-black text-purple-600">{(committeeApps || []).filter(a => !['accepted','denied'].includes(a.status)).length}</p>
               </div>
@@ -1624,69 +1623,69 @@ const handleResetPassword = async (memberId, email, name) => {
             const all = (members || []).filter(m => m != null && m.positionCategory !== 'Blacklisted');
             const active = all.filter(m => m.status === 'active').length; const issued = all.filter(m => m.idLaceIssued).length;
             const lowStock = (inventory || []).filter(i => i && Number(i.quantity || 0) <= Number(i.reorderLevel || 0)).length;
-            const cell = (label, val, tone) => (<div className="bg-gray-50 rounded-2xl p-4 text-center border border-gray-100"><p className="text-[9px] font-black uppercase text-gray-400">{label}</p><p className={`text-2xl font-black ${tone || ''}`}>{val}</p></div>);
+            const cell = (label, val, tone) => (<div className="text-center px-2"><p className="text-[9px] font-black uppercase text-gray-400">{label}</p><p className={`text-2xl font-black ${tone || ''}`}>{val}</p></div>);
             return (
-            <div className="bg-white p-8 rounded-[40px] border-4 border-[#3E2723] shadow-sm">
-                <div className="flex items-center justify-between mb-6"><h4 className="font-black uppercase text-sm flex items-center gap-2"><Users size={18}/> Members Care Snapshot</h4><span className="bg-amber-100 text-amber-800 text-[10px] px-3 py-1 rounded-full font-black">LIVE</span></div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="py-8">
+                <div className="flex items-center justify-between mb-6"><h4 className="font-black uppercase text-sm flex items-center gap-2"><Users size={18}/> Members Care Snapshot</h4><span className="text-amber-600 text-[10px] font-black">LIVE</span></div>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-y-6 md:divide-x divide-amber-900/10">
                     {cell('Members', all.length)}{cell('Active', active, 'text-green-600')}{cell('Expired', all.length - active, 'text-gray-500')}{cell('ID Lace Issued', `${issued}/${all.length}`, 'text-amber-600')}{cell('Low Stock Items', lowStock, lowStock ? 'text-red-600' : 'text-green-600')}
                 </div>
             </div>);
         })()}
 
         {/* DAILY CASH KEY & FINANCIAL CONTROLS */}
-        <div className="space-y-4">
-            <div className="bg-[#FDB813] p-8 rounded-[40px] border-4 border-[#3E2723] shadow-xl flex items-center justify-between">
+        <div className="py-8 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
                 <div className="flex items-center gap-6"><Banknote size={32}/><div className="leading-tight"><h4 className="font-serif text-2xl font-black uppercase">Daily Cash Key</h4><p className="text-[10px] font-black uppercase opacity-60">Verification Code</p></div></div>
-                <div className="flex items-center gap-3"><div className="bg-white/40 px-8 py-4 rounded-3xl border-2 border-dashed border-[#3E2723]/20 font-mono text-4xl font-black">{currentDailyKey || "----"}</div><button onClick={handleRotateDailyKey} title="Generate a new cash key" className="bg-[#3E2723] text-[#FDB813] p-4 rounded-2xl hover:bg-black"><RefreshCcw size={18}/></button></div>
+                <div className="flex items-center gap-3"><div className="font-mono text-4xl font-black tracking-widest">{currentDailyKey || "----"}</div><button onClick={handleRotateDailyKey} title="Generate a new cash key" className="p-3 rounded-lg border border-amber-900/20 hover:bg-amber-50"><RefreshCcw size={18}/></button></div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-white p-6 rounded-[32px] border-2 border-amber-100 flex items-center justify-between gap-4">
+                <div className="flex items-center justify-between gap-4">
                     <div className="flex-1">
                         <p className="text-[10px] font-black uppercase text-amber-800">GCash Number: <span className="font-mono">{hubSettings?.gcashNumber}</span></p>
-                        <input type="text" placeholder="Update GCash..." className="w-full mt-2 p-2 bg-amber-50 rounded-lg text-xs font-bold outline-none" value={newGcashNumber} onChange={(e) => setNewGcashNumber(e.target.value)} />
+                        <input type="text" placeholder="Update GCash..." className="w-full mt-2 p-2 bg-transparent border-b border-amber-900/20 text-xs font-bold outline-none" value={newGcashNumber} onChange={(e) => setNewGcashNumber(e.target.value)} />
                     </div>
-                    <button onClick={async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { gcashNumber: newGcashNumber }); setNewGcashNumber(''); }} className="bg-[#3E2723] text-[#FDB813] p-4 rounded-2xl font-black uppercase text-[10px]"><RefreshCcw size={16}/></button>
+                    <button onClick={async () => { await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), { gcashNumber: newGcashNumber }); setNewGcashNumber(''); }} className="p-3 rounded-lg border border-amber-900/20 hover:bg-amber-50 font-black uppercase text-[10px]"><RefreshCcw size={16}/></button>
                 </div>
 
                 <button onClick={() => {
                     const headers = ["Name", "ID", "Type", "Status", "Ref No", "Date"];
                     const rows = members.filter(m => m.paymentStatus === 'paid').map(m => [m.name, m.memberId, m.membershipType, m.paymentStatus, m.paymentDetails?.refNo || 'N/A', formatDate(m.joinedDate)]);
                     generateCSV(headers, rows, `LBA_Finance_${new Date().toLocaleDateString()}.csv`);
-                }} className="bg-green-600 text-white p-6 rounded-[32px] font-black uppercase text-xs flex items-center justify-center gap-3 hover:bg-green-700 transition-all">
+                }} className="text-green-700 border border-green-700/30 px-6 py-3 rounded-lg font-black uppercase text-xs flex items-center justify-center gap-3 hover:bg-green-50">
                     <Download size={20}/> Export Financial Report
                 </button>
             </div>
         </div>
         
         {/* SECURITY VAULT */}
-        <div className="bg-[#3E2723] p-10 rounded-[50px] border-4 border-[#FDB813] text-white shadow-xl">
-            <div className="flex justify-between items-center mb-6"><h4 className="font-serif text-2xl font-black uppercase text-[#FDB813]">Security Vault</h4><Lock size={24} className="text-[#FDB813]"/></div>
+        <div className="py-8">
+            <div className="flex justify-between items-center mb-6"><h4 className="font-serif text-2xl font-black uppercase">Security Vault</h4><Lock size={20} className="text-amber-600"/></div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Officer Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.officerKey || "N/A"}</span></div>
-                <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Head Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.headKey || "N/A"}</span></div>
-                <div className="bg-white/10 p-4 rounded-2xl border border-white/10"><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Comm Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.commKey || "N/A"}</span></div>
-                <div className="bg-white/10 p-4 rounded-2xl border border-white/10 relative overflow-hidden"><div className="absolute top-0 right-0 bg-[#FDB813] text-[#3E2723] text-[8px] font-black px-2 py-0.5 rounded-bl-lg">PAYMENT BYPASS</div><span className="text-[10px] font-black uppercase text-white/60 block mb-1">Bypass Key</span><span className="font-mono text-xl font-black text-[#FDB813] tracking-wider">{secureKeys?.bypassKey || "N/A"}</span></div>
+                <div className=""><span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Officer Key</span><span className="font-mono text-xl font-black text-[#3E2723] tracking-wider">{secureKeys?.officerKey || "N/A"}</span></div>
+                <div className=""><span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Head Key</span><span className="font-mono text-xl font-black text-[#3E2723] tracking-wider">{secureKeys?.headKey || "N/A"}</span></div>
+                <div className=""><span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Comm Key</span><span className="font-mono text-xl font-black text-[#3E2723] tracking-wider">{secureKeys?.commKey || "N/A"}</span></div>
+                <div className=" relative overflow-hidden"><div className="absolute top-0 right-0 text-amber-600 text-[8px] font-black">PAYMENT BYPASS</div><span className="text-[10px] font-black uppercase text-gray-400 block mb-1">Bypass Key</span><span className="font-mono text-xl font-black text-[#3E2723] tracking-wider">{secureKeys?.bypassKey || "N/A"}</span></div>
             </div>
-            <button onClick={handleRotateSecurityKeys} className="w-full mt-6 bg-red-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] hover:bg-red-700 transition-colors flex items-center justify-center gap-2"><RefreshCcw size={14}/> Rotate Security Keys</button>
+            <button onClick={handleRotateSecurityKeys} className="mt-6 text-red-600 border border-red-600/30 px-5 py-3 rounded-lg font-black uppercase text-[10px] hover:bg-red-50 transition-colors flex items-center justify-center gap-2"><RefreshCcw size={14}/> Rotate Security Keys</button>
         </div>
 
         {/* COMMITTEE HUNT INTEGRATION */}
-        <div className="bg-white p-8 rounded-[40px] border-2 border-purple-100 shadow-sm">
-            <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-purple-700"><Users size={16}/> Committee Hunt Registry</h4>
+        <div className="py-8">
+            <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-purple-700"><Users size={16}/> Join the Team Applications</h4>
             <div className="max-h-64 overflow-y-auto space-y-2">
                 {committeeApps.length > 0 ? committeeApps.map(app => (
-                    <div key={app.id} className="flex justify-between items-center p-4 bg-purple-50 rounded-2xl border border-purple-100">
+                    <div key={app.id} className="flex justify-between items-center py-3 border-b border-amber-900/10 last:border-0">
                         <div>
                             <span className="font-black text-xs uppercase block">{app.name}</span>
-                            <span className="text-[10px] font-bold text-purple-400 uppercase">{committeeTitle(app.committee)} · {app.role} · {app.status}</span>{app.appType === 'officer' && (<details className="mt-2 normal-case"><summary className="cursor-pointer text-[10px] font-black text-purple-600 uppercase">View application</summary><div className="mt-2 space-y-2 text-[11px] text-gray-700 font-medium bg-white/70 p-3 rounded-xl border border-purple-100">{app.resumeLink && /^https?:\/\//i.test(app.resumeLink) && <p><a href={app.resumeLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-black underline">Open resume</a></p>}{app.studentId && <p><b>Student ID:</b> {app.studentId} · {app.program}</p>}{app.intro && <p><b>Introduction:</b> {app.intro}</p>}{app.whyFit && <p><b>Why fit:</b> {app.whyFit}</p>}{(app.answers || []).map((x, k) => <p key={k}><b>{x.q}</b><br/>{x.a}</p>)}{app.plan && <p><b>First 30 days:</b> {app.plan}</p>}</div></details>)}
+                            <span className="text-[10px] font-bold text-purple-400 uppercase">{committeeTitle(app.committee)} · {app.role} · {app.status}</span>{app.appType === 'officer' && (<details className="mt-2 normal-case"><summary className="cursor-pointer text-[10px] font-black text-purple-600 uppercase">View application</summary><div className="mt-2 space-y-2 text-[11px] text-gray-700 font-medium border-l-2 border-amber-900/10 pl-3">{app.resumeLink && /^https?:\/\//i.test(app.resumeLink) && <p><a href={app.resumeLink} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-black underline">Open resume</a></p>}{app.studentId && <p><b>Student ID:</b> {app.studentId} · {app.program}</p>}{app.intro && <p><b>Introduction:</b> {app.intro}</p>}{app.whyFit && <p><b>Why fit:</b> {app.whyFit}</p>}{(app.answers || []).map((x, k) => <p key={k}><b>{x.q}</b><br/>{x.a}</p>)}{app.plan && <p><b>First 30 days:</b> {app.plan}</p>}</div></details>)}
                         </div>
                         <div className="flex gap-2">
-                            {['pending'].includes(app.status) && (<button onClick={() => initiateAppAction(app, 'for_interview')} title="Invite for interview" className="bg-blue-100 text-blue-700 p-2 rounded-lg"><Mail size={14}/></button>)}
-                            {app.status !== 'accepted' && (<button onClick={() => initiateAppAction(app, 'accepted')} title="Accept" className="bg-purple-600 text-white p-2 rounded-lg"><CheckCircle2 size={14}/></button>)}
-                            {!['accepted', 'denied'].includes(app.status) && (<button onClick={() => initiateAppAction(app, 'denied')} title="Decline" className="bg-gray-200 text-gray-700 p-2 rounded-lg"><X size={14}/></button>)}
-                            <button onClick={() => { if (confirm('Delete this application?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id)); }} title="Delete" className="bg-red-100 text-red-600 p-2 rounded-lg"><Trash2 size={14}/></button>
+                            {['pending'].includes(app.status) && (<button onClick={() => initiateAppAction(app, 'for_interview')} title="Invite for interview" className="text-blue-600 p-2 rounded-lg hover:bg-blue-50"><Mail size={14}/></button>)}
+                            {app.status !== 'accepted' && (<button onClick={() => initiateAppAction(app, 'accepted')} title="Accept" className="text-purple-700 p-2 rounded-lg hover:bg-purple-50"><CheckCircle2 size={14}/></button>)}
+                            {!['accepted', 'denied'].includes(app.status) && (<button onClick={() => initiateAppAction(app, 'denied')} title="Decline" className="text-gray-500 p-2 rounded-lg hover:bg-gray-100"><X size={14}/></button>)}
+                            <button onClick={() => { if (confirm('Delete this application?')) deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'applications', app.id)); }} title="Delete" className="text-red-500 p-2 rounded-lg hover:bg-red-50"><Trash2 size={14}/></button>
                         </div>
                     </div>
                 )) : <p className="text-center py-6 text-[10px] font-bold text-gray-400 uppercase">No active applications</p>}
@@ -1694,29 +1693,29 @@ const handleResetPassword = async (memberId, email, name) => {
         </div>
 
         {/* OPERATIONS LOG */}
-        <div className="bg-white p-8 rounded-[40px] border-2 border-gray-200 shadow-sm max-h-96 overflow-y-auto custom-scrollbar">
+        <div className="py-8 max-h-96 overflow-y-auto custom-scrollbar">
             <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><ClipboardList size={16}/> Operations Log</h4>
             <div className="space-y-2">
-                {logs && logs.length > 0 ? ( logs.map(log => ( <div key={log.id} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl text-xs"><div><span className="font-bold text-[#3E2723] block">{log.action}</span><span className="text-gray-500">{log.details}</span></div><div className="text-right"><span className="block font-bold text-amber-700">{log.actor}</span><span className="text-[9px] text-gray-400">{log.timestamp?.toDate ? formatDate(log.timestamp.toDate()) : 'Just now'}</span></div></div> )) ) : ( <p className="text-center text-gray-400 text-xs py-4">No recent activity recorded.</p> )}
+                {logs && logs.length > 0 ? ( logs.map(log => ( <div key={log.id} className="flex justify-between items-center py-2 border-b border-amber-900/5 text-xs"><div><span className="font-bold text-[#3E2723] block">{log.action}</span><span className="text-gray-500">{log.details}</span></div><div className="text-right"><span className="block font-bold text-amber-700">{log.actor}</span><span className="text-[9px] text-gray-400">{log.timestamp?.toDate ? formatDate(log.timestamp.toDate()) : 'Just now'}</span></div></div> )) ) : ( <p className="text-center text-gray-400 text-xs py-4">No recent activity recorded.</p> )}
             </div>
         </div>
 
         {/* SYSTEM CONTROLS & DANGER ZONE */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pb-10">
-            <div className="bg-white p-8 rounded-[40px] border-2 border-amber-200 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-10 py-8">
+            <div className="">
                 <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2"><Settings2 size={16}/> System Controls</h4>
                 <div className="space-y-4">
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Maintenance Mode</span><button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}</button></div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Registration</span><button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>{hubSettings.registrationOpen ? "OPEN" : "CLOSED"}</button></div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Renewal Season</span><button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.renewalMode ? "ACTIVE" : "OFF"}</button></div>
-                    <div className="flex justify-between items-center p-3 bg-gray-50 rounded-xl"><span className="text-xs font-bold text-gray-600">Payment Methods</span><button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">{hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}</button></div>
+                    <div className="flex justify-between items-center py-3 border-b border-amber-900/10"><span className="text-xs font-bold text-gray-600">Maintenance Mode</span><button onClick={handleToggleMaintenance} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.maintenanceMode ? 'bg-orange-500 hover:bg-orange-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.maintenanceMode ? "ACTIVE" : "OFF"}</button></div>
+                    <div className="flex justify-between items-center py-3 border-b border-amber-900/10"><span className="text-xs font-bold text-gray-600">Registration</span><button onClick={handleToggleRegistration} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.registrationOpen ? 'bg-green-500 hover:bg-green-600' : 'bg-red-500 hover:bg-red-600'}`}>{hubSettings.registrationOpen ? "OPEN" : "CLOSED"}</button></div>
+                    <div className="flex justify-between items-center py-3 border-b border-amber-900/10"><span className="text-xs font-bold text-gray-600">Renewal Season</span><button onClick={handleToggleRenewalMode} className={`px-4 py-2 rounded-xl text-[10px] font-bold uppercase text-white transition-colors ${hubSettings.renewalMode ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-400 hover:bg-gray-500'}`}>{hubSettings.renewalMode ? "ACTIVE" : "OFF"}</button></div>
+                    <div className="flex justify-between items-center py-3 border-b border-amber-900/10"><span className="text-xs font-bold text-gray-600">Payment Methods</span><button onClick={handleToggleAllowedPayment} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-bold uppercase hover:bg-blue-200">{hubSettings.allowedPayment === 'gcash_only' ? 'GCash Only' : 'Cash & GCash'}</button></div>
                 </div>
             </div>
-           <div className="bg-white p-8 rounded-[40px] border-2 border-red-100 shadow-sm mb-10">
+           <div className="">
                 <h4 className="font-black uppercase text-sm mb-4 flex items-center gap-2 text-red-700"><AlertOctagon size={16}/> Danger Zone</h4>
                 <div className="space-y-3">
-                    <button onClick={handleSanitizeDatabase} className="w-full bg-red-50 text-red-600 border border-red-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-100"><Database size={14}/> Sanitize Database</button>
-                    <button onClick={handleMigrateToRenewal} className="w-full bg-orange-50 text-orange-600 border border-orange-100 py-3 rounded-xl font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-100"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
+                    <button onClick={handleSanitizeDatabase} className="w-full text-red-600 border border-red-200 py-3 rounded-lg font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-red-50"><Database size={14}/> Sanitize Database</button>
+                    <button onClick={handleMigrateToRenewal} className="w-full text-orange-600 border border-orange-200 py-3 rounded-lg font-black uppercase text-[10px] flex items-center justify-center gap-2 hover:bg-orange-50"><RefreshCcw size={14}/> Migrate: Set All to Renewal</button>
                    </div>
               </div>
             </div>
