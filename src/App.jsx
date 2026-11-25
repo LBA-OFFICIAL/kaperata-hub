@@ -422,6 +422,7 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   const handleDeleteBadge = async (b) => { if (!confirm(`Delete the badge "${b.name}"? Members will no longer see it.`)) return; await saveBadgeList(badgeDefs.filter(x => x.id !== b.id), `Deleted badge: ${b.name}`); };
   const handleResetBadges = async () => { if (!confirm("Reset the badge list to the original badges? Your own badges will be removed.")) return; await saveBadgeList(DEFAULT_BADGES, "Reset badges to defaults"); };
 
+  const pendingAppCount = isSuperAdmin ? (committeeApps || []).filter(a => a && a.status === 'pending').length : 0;
   const notifications = useMemo(() => {
       const hasNew = (items, pageKey) => { if (!items || items.length === 0) return false; const lastVisit = lastVisited[pageKey]; if (!lastVisit) return true; return items.some(i => { const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0); return d > new Date(lastVisit); }); };
       let huntNotify = isSuperAdmin ? committeeApps.some(a => a.status === 'pending') : userApplications.some(a => { const updated = a.statusUpdatedAt?.toDate ? a.statusUpdatedAt.toDate() : null; const lastVisit = lastVisited['committee_hunt']; if (!updated) return false; return !lastVisit || updated > new Date(lastVisit); });
@@ -821,7 +822,7 @@ const handleResetPassword = async (memberId, email, name) => {
     ...(isOfficer ? [ { id: 'admin', label: isSuperAdmin ? 'Admin Desk' : 'Officer Desk', icon: ShieldCheck, items: [
       { id: 'members', label: 'Registry', icon: Users, hasNotification: notifications.members },
       { id: 'payments', label: 'Payments', icon: Banknote, hasNotification: pendingPayments.length > 0 },
-      ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText }] : []) ] } ] : []),
+      ...(isSuperAdmin ? [{ id: 'reports', label: 'Terminal', icon: FileText, hasNotification: pendingAppCount > 0 }] : []) ] } ] : []),
   ];
 
   const activeMenuClass = "w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all bg-[#FDB813] text-[#3E2723] shadow-lg font-black relative";
@@ -1942,7 +1943,7 @@ const handleResetPassword = async (memberId, email, name) => {
               </div>
             </div>
 
-            <div className="py-4 flex gap-2 overflow-x-auto custom-scrollbar">{[['overview', 'Overview'], ['badges', 'Badges'], ['finance', 'Finance'], ['security', 'Security'], ['applications', 'Applications'], ['log', 'Activity Log'], ['system', 'System']].map(([k, l]) => (<button key={k} onClick={() => setTermTab(k)} className={`shrink-0 px-5 py-2 rounded-full text-[10px] font-black uppercase transition-all ${termTab === k ? 'bg-[#3E2723] text-[#FDB813] shadow' : 'bg-amber-50 text-amber-900 hover:bg-amber-100'}`}>{l}</button>))}</div>
+            <div className="py-4 flex gap-2 overflow-x-auto custom-scrollbar">{[['overview', 'Overview'], ['badges', 'Badges'], ['finance', 'Finance'], ['security', 'Security'], ['applications', 'Applications'], ['log', 'Activity Log'], ['system', 'System']].map(([k, l]) => (<button key={k} onClick={() => setTermTab(k)} className={`shrink-0 px-5 py-2 rounded-full text-[10px] font-black uppercase transition-all ${termTab === k ? 'bg-[#3E2723] text-[#FDB813] shadow' : 'bg-amber-50 text-amber-900 hover:bg-amber-100'}`}>{l}{k === 'applications' && pendingAppCount > 0 && <span className="ml-2 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[9px] font-black animate-pulse">{pendingAppCount}</span>}</button>))}</div>
             {termTab === 'badges' && (<>
             <div className="py-8 space-y-6">
               <div><h4 className="font-black uppercase text-sm flex items-center gap-2"><Trophy size={16} className="text-amber-500"/> Badge Manager</h4><p className="text-[10px] font-bold text-gray-500 uppercase mt-1">Create badges and set the rule for earning them. Members see these on their profile.</p></div>
