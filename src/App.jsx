@@ -24,6 +24,29 @@ const PROGRAMS = ["CAKO", "CLOCA", "CLOHS", "HRA", "ITM/ITTM"];
 const POSITION_CATEGORIES = ["Member", "Officer", "Committee", "Execomm", "Alumni", "Org Adviser", "Blacklisted"];
 const MONTHS = [{ value: 1, label: "January" }, { value: 2, label: "February" }, { value: 3, label: "March" }, { value: 4, label: "April" }, { value: 5, label: "May" }, { value: 6, label: "June" }, { value: 7, label: "July" }, { value: 8, label: "August" }, { value: 9, label: "September" }, { value: 10, label: "October" }, { value: 11, label: "November" }, { value: 12, label: "December" }];
 const DEFAULT_MASTERCLASS_MODULES = [{ id: 1, title: "Basic Coffee Knowledge & History", short: "Basics" }, { id: 2, title: "Equipment Familiarization", short: "Equipment" }, { id: 3, title: "Manual Brewing", short: "Brewing" }, { id: 4, title: "Espresso Machine", short: "Espresso" }, { id: 5, title: "Signature Beverage (Advanced)", short: "Sig Bev" }];
+const BADGE_KINDS = [
+  { id: 'always', label: 'Everyone (automatic)', hint: '' },
+  { id: 'category', label: 'Position category (automatic)', hint: 'Member, Officer, Committee, Execomm or Alumni' },
+  { id: 'years', label: 'Years in LBA (automatic)', hint: 'Number of school years since joining' },
+  { id: 'volunteer', label: 'Volunteer shifts (automatic)', hint: 'Number of volunteer shifts joined' },
+  { id: 'modules', label: 'Legacy Masterclass modules (automatic)', hint: 'Number of old Masterclass modules attended' },
+  { id: 'master', label: 'Legacy Masterclass certification (automatic)', hint: '' },
+  { id: 'manual', label: 'Awarded by an officer (manual)', hint: 'Give it with "Give Accolade" using the exact badge name' },
+];
+const DEFAULT_BADGES = [
+  { id: 'member', name: 'Member', icon: '☕', desc: 'Join the LPU Baristas\' Association.', kind: 'always', value: '' },
+  { id: 'officer', name: 'Officer', icon: '🛡️', desc: 'Serve as an officer of the association.', kind: 'category', value: 'Officer' },
+  { id: 'committee', name: 'Committee', icon: '🎗️', desc: 'Serve in one of the committees.', kind: 'category', value: 'Committee' },
+  { id: 'execomm', name: 'Execomm', icon: '💼', desc: 'Serve on the executive committee.', kind: 'category', value: 'Execomm' },
+  { id: 'alumni', name: 'Alumni', icon: '🎓', desc: 'Be recognised as an LBA alumnus.', kind: 'category', value: 'Alumni' },
+  { id: 'veteran', name: 'Veteran', icon: '🏅', desc: 'Stay with LBA for one school year or more.', kind: 'years', value: 1 },
+  { id: 'vol1', name: 'Volunteer', icon: '🤚', desc: 'Join your first volunteer shift at an event.', kind: 'volunteer', value: 1 },
+  { id: 'vol4', name: 'Inter. Volunteer', icon: '🔥', desc: 'Join 4 volunteer shifts.', kind: 'volunteer', value: 4 },
+  { id: 'vol9', name: 'Adv. Volunteer', icon: '🚀', desc: 'Join 9 volunteer shifts.', kind: 'volunteer', value: 9 },
+  { id: 'vol15', name: 'Super Volunteer', icon: '👑', desc: 'Join 15 volunteer shifts.', kind: 'volunteer', value: 15 },
+  { id: 'mc1', name: 'Masterclass Attendee', icon: '🌱', desc: 'Attended at least one of the old Masterclass modules.', kind: 'modules', value: 1 },
+  { id: 'mcmaster', name: 'Certified Master Barista', icon: '🏆', desc: 'Completed the legacy Masterclass: Modules 1 and 2 plus two of Modules 3 to 5.', kind: 'master', value: '' },
+];
 const COMMITTEES_INFO = [
   { id: "Arts", title: "Arts & Creatives", image: "https://images.unsplash.com/photo-1513364776144-60967b0f800f?auto=format&fit=crop&w=800&q=80", description: "The creative soul of LBA. We handle all visual assets, stage decorations, and artistic direction.", roles: ["Pubmats & Posters", "Merch Design", "Venue Styling"] },
   { id: "Events", title: "Events & Logistics", image: "https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=800&q=80", description: "The backbone of operations. We plan flows, manage logistics, and ensure smooth gatherings.", roles: ["Program Flow", "Logistics", "Crowd Control"] },
@@ -120,8 +143,8 @@ const MANUAL_SECTIONS = [
     "If an event needs volunteers, tap a shift to sign up. You can leave a shift before it starts.",
     "Attendance is checked by officers on the event day. Past events stay in the list for reference."
   ] },
-  { title: "Masterclass, Barista Diaries and the Brew Crew", level: 'all', items: [
-    "Masterclass tracks the five modules you have attended and your certificate progress.",
+  { title: "Training Academy, Barista Diaries and the Brew Crew", level: 'all', items: [
+    "The Barista Training Academy is coming soon. Your past Masterclass attendance is kept safe for when it opens.",
     "Barista Diaries is the photo journal of the organisation. Brew Crew shows the current officers and committees.",
     "Legacy Story tells the history of LBA."
   ] },
@@ -326,7 +349,7 @@ const Login = ({ user, onLoginSuccess, initialError }) => {
 };
 
 const Dashboard = ({ user, profile, setProfile, logout }) => {
-  const [view, setView] = useState('home'); const [openGroups, setOpenGroups] = useState({}); const [migBusy, setMigBusy] = useState(false); const [migMsg, setMigMsg] = useState(''); const [inventory, setInventory] = useState([]); const [showInvForm, setShowInvForm] = useState(false); const [invForm, setInvForm] = useState(EMPTY_ITEM); const [editingInv, setEditingInv] = useState(null); const [invSearch, setInvSearch] = useState(''); const [officerForm, setOfficerForm] = useState(EMPTY_OFFICER_FORM); const [videoSettings, setVideoSettings] = useState(null); const [videoForm, setVideoForm] = useState({ required: false, intro: { title: '', url: '', minSeconds: 60 }, orientation: { title: '', url: '', minSeconds: 120 } }); const [gateSkipped, setGateSkipped] = useState(false); const [bdayCursor, setBdayCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; }); const [bdaySel, setBdaySel] = useState(null); const [renewalPayer, setRenewalPayer] = useState(''); const [renewalPayDate, setRenewalPayDate] = useState(() => new Date().toISOString().slice(0, 10)); const [members, setMembers] = useState([]); const [events, setEvents] = useState([]); const [announcements, setAnnouncements] = useState([]); const [suggestions, setSuggestions] = useState([]); const [committeeApps, setCommitteeApps] = useState([]); const [userApplications, setUserApplications] = useState([]); const [tasks, setTasks] = useState([]); const [projects, setProjects] = useState([]); const [expandedProjectId, setExpandedProjectId] = useState(null); const [logs, setLogs] = useState([]); const [polls, setPolls] = useState([]); const [seriesPosts, setSeriesPosts] = useState([]); const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] }); const [showPollForm, setShowPollForm] = useState(false); const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' }); const [showSeriesForm, setShowSeriesForm] = useState(false); const [editingSeriesId, setEditingSeriesId] = useState(null); const [showProjectForm, setShowProjectForm] = useState(false); const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); const [editingProject, setEditingProject] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' }); const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' }); const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); const [showCertificate, setShowCertificate] = useState(false); const [adminMcModule, setAdminMcModule] = useState(1); const [adminMcSearch, setAdminMcSearch] = useState(''); const [selectedMcMembers, setSelectedMcMembers] = useState([]); const [editingMcCurriculum, setEditingMcCurriculum] = useState(false); const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' }); const [isAnniversary, setIsAnniversary] = useState(false); const [editingMember, setEditingMember] = useState(null); const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' }); const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' }); const [showAccoladeModal, setShowAccoladeModal] = useState(null); const [accoladeText, setAccoladeText] = useState(""); const [showTaskForm, setShowTaskForm] = useState(false); const [newTask, setNewTask] = useState({ ...EMPTY_TASK }); const [editingTask, setEditingTask] = useState(null); const [renewalRef, setRenewalRef] = useState(''); const [renewalMethod, setRenewalMethod] = useState('gcash'); const [renewalCashKey, setRenewalCashKey] = useState(''); const [newGcashNumber, setNewGcashNumber] = useState(''); const [showEventForm, setShowEventForm] = useState(false); const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); const [editingEvent, setEditingEvent] = useState(null); const [showAnnounceForm, setShowAnnounceForm] = useState(false); const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' }); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const [searchQuery, setSearchQuery] = useState(""); const [selectedBaristas, setSelectedBaristas] = useState([]); const [isImporting, setIsImporting] = useState(false); const [confirmDelete, setConfirmDelete] = useState(null); const fileInputRef = useRef(null); const currentDailyKey = getActiveCashKey(secureKeys); const [settingsForm, setSettingsForm] = useState({ ...profile }); const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' }); const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); const [savingSettings, setSavingSettings] = useState(false); const [financialFilter, setFinancialFilter] = useState('all'); const [isEditingLegacy, setIsEditingLegacy] = useState(false); const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' }); const [suggestionText, setSuggestionText] = useState(""); const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' }); const [submittingApp, setSubmittingApp] = useState(false); const [attendanceEvent, setAttendanceEvent] = useState(null); const [exportFilter, setExportFilter] = useState('all'); const [currentPage, setCurrentPage] = useState(1); const itemsPerPage = 10;
+  const [view, setView] = useState('home'); const [openGroups, setOpenGroups] = useState({}); const [attTab, setAttTab] = useState('member'); const [attSearch, setAttSearch] = useState(''); const [attFilter, setAttFilter] = useState('all'); const [attOpen, setAttOpen] = useState(null); const [badgeDefs, setBadgeDefs] = useState(DEFAULT_BADGES); const [badgeForm, setBadgeForm] = useState({ id: '', name: '', icon: '', desc: '', kind: 'manual', value: '' }); const [badgeBusy, setBadgeBusy] = useState(false); const [migBusy, setMigBusy] = useState(false); const [migMsg, setMigMsg] = useState(''); const [inventory, setInventory] = useState([]); const [showInvForm, setShowInvForm] = useState(false); const [invForm, setInvForm] = useState(EMPTY_ITEM); const [editingInv, setEditingInv] = useState(null); const [invSearch, setInvSearch] = useState(''); const [officerForm, setOfficerForm] = useState(EMPTY_OFFICER_FORM); const [videoSettings, setVideoSettings] = useState(null); const [videoForm, setVideoForm] = useState({ required: false, intro: { title: '', url: '', minSeconds: 60 }, orientation: { title: '', url: '', minSeconds: 120 } }); const [gateSkipped, setGateSkipped] = useState(false); const [bdayCursor, setBdayCursor] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() }; }); const [bdaySel, setBdaySel] = useState(null); const [renewalPayer, setRenewalPayer] = useState(''); const [renewalPayDate, setRenewalPayDate] = useState(() => new Date().toISOString().slice(0, 10)); const [members, setMembers] = useState([]); const [events, setEvents] = useState([]); const [announcements, setAnnouncements] = useState([]); const [suggestions, setSuggestions] = useState([]); const [committeeApps, setCommitteeApps] = useState([]); const [userApplications, setUserApplications] = useState([]); const [tasks, setTasks] = useState([]); const [projects, setProjects] = useState([]); const [expandedProjectId, setExpandedProjectId] = useState(null); const [logs, setLogs] = useState([]); const [polls, setPolls] = useState([]); const [seriesPosts, setSeriesPosts] = useState([]); const [newPoll, setNewPoll] = useState({ question: '', options: ['', ''] }); const [showPollForm, setShowPollForm] = useState(false); const [newSeriesPost, setNewSeriesPost] = useState({ title: '', imageUrls: [''], caption: '' }); const [showSeriesForm, setShowSeriesForm] = useState(false); const [editingSeriesId, setEditingSeriesId] = useState(null); const [showProjectForm, setShowProjectForm] = useState(false); const [newProject, setNewProject] = useState({ title: '', description: '', deadline: '', projectHeadId: '', projectHeadName: '' }); const [editingProject, setEditingProject] = useState(null); const [hubSettings, setHubSettings] = useState({ registrationOpen: true, renewalOpen: true, maintenanceMode: false, renewalMode: false, allowedPayment: 'gcash_only', gcashNumber: '09063751402' }); const [secureKeys, setSecureKeys] = useState({ officerKey: '', headKey: '', commKey: '' }); const [legacyContent, setLegacyContent] = useState({ body: "Loading association history...", achievements: [], imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [mobileMenuOpen, setMobileMenuOpen] = useState(false); const [masterclassData, setMasterclassData] = useState({ certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); const [showCertificate, setShowCertificate] = useState(false); const [adminMcModule, setAdminMcModule] = useState(1); const [adminMcSearch, setAdminMcSearch] = useState(''); const [selectedMcMembers, setSelectedMcMembers] = useState([]); const [editingMcCurriculum, setEditingMcCurriculum] = useState(false); const [tempMcDetails, setTempMcDetails] = useState({ title: '', objectives: '', topics: '', icon: '' }); const [isAnniversary, setIsAnniversary] = useState(false); const [editingMember, setEditingMember] = useState(null); const [editMemberForm, setEditMemberForm] = useState({ joinedDate: '' }); const [emailModal, setEmailModal] = useState({ isOpen: false, app: null, type: '', subject: '', body: '' }); const [showAccoladeModal, setShowAccoladeModal] = useState(null); const [accoladeText, setAccoladeText] = useState(""); const [showTaskForm, setShowTaskForm] = useState(false); const [newTask, setNewTask] = useState({ ...EMPTY_TASK }); const [editingTask, setEditingTask] = useState(null); const [renewalRef, setRenewalRef] = useState(''); const [renewalMethod, setRenewalMethod] = useState('gcash'); const [renewalCashKey, setRenewalCashKey] = useState(''); const [newGcashNumber, setNewGcashNumber] = useState(''); const [showEventForm, setShowEventForm] = useState(false); const [newEvent, setNewEvent] = useState({ name: '', startDate: '', endDate: '', startTime: '', endTime: '', venue: '', description: '', attendanceRequired: false, evaluationLink: '', isVolunteer: false, registrationRequired: true, openForAll: true, volunteerTarget: { officer: 0, committee: 0, member: 0 }, shifts: [], masterclassModuleIds: [], scheduleType: 'WHOLE_DAY' }); const [editingEvent, setEditingEvent] = useState(null); const [showAnnounceForm, setShowAnnounceForm] = useState(false); const [newAnnouncement, setNewAnnouncement] = useState({ title: '', content: '' }); const [editingAnnouncement, setEditingAnnouncement] = useState(null); const [searchQuery, setSearchQuery] = useState(""); const [selectedBaristas, setSelectedBaristas] = useState([]); const [isImporting, setIsImporting] = useState(false); const [confirmDelete, setConfirmDelete] = useState(null); const fileInputRef = useRef(null); const currentDailyKey = getActiveCashKey(secureKeys); const [settingsForm, setSettingsForm] = useState({ ...profile }); const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' }); const [tempShift, setTempShift] = useState({ date: '', name: '', startTime: '', endTime: '', capacity: 50, volunteerCapacity: 5 }); const [savingSettings, setSavingSettings] = useState(false); const [financialFilter, setFinancialFilter] = useState('all'); const [isEditingLegacy, setIsEditingLegacy] = useState(false); const [legacyForm, setLegacyForm] = useState({ body: '', imageUrl: '', galleryUrl: '', achievements: [], establishedDate: '', imageSettings: { objectFit: 'cover', objectPosition: 'center' } }); const [tempAchievement, setTempAchievement] = useState({ date: '', text: '' }); const [suggestionText, setSuggestionText] = useState(""); const [committeeForm, setCommitteeForm] = useState({ role: 'Committee Member' }); const [submittingApp, setSubmittingApp] = useState(false); const [attendanceEvent, setAttendanceEvent] = useState(null); const [exportFilter, setExportFilter] = useState('all'); const [currentPage, setCurrentPage] = useState(1); const itemsPerPage = 10;
   const [lastVisited, setLastVisited] = useState(() => { try { return JSON.parse(localStorage.getItem('lba_last_visited') || '{}'); } catch { return {}; } });
 
   // 🛡️ THE 4-TIER ACCESS SYSTEM 🛡️
@@ -364,6 +387,40 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
   }, [members]);
 
   const volunteerCount = useMemo(() => { if (!events || !profile.memberId) return 0; return events.reduce((acc, ev) => { if (!ev.isVolunteer || !ev.shifts) return acc; const shiftCount = ev.shifts.filter(s => s.volunteers?.includes(profile.memberId)).length; return acc + shiftCount; }, 0); }, [events, profile.memberId]);
+  const ATT_MIN = 60;
+  const handleToggleExcuse = async (ev, memberId) => { try { const isEx = Array.isArray(ev.excused) && ev.excused.includes(memberId); await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'events', ev.id), { excused: isEx ? arrayRemove(memberId) : arrayUnion(memberId) }); logAction("Attendance", `${isEx ? 'Removed excuse' : 'Excused'} ${memberId} for ${ev.name}`); } catch (e) { alert("Could not update. Please try again."); } };
+  const attendanceData = useMemo(() => {
+    if (!(isOfficer || isCare)) return { rows: [], events: [] };
+    const today = new Date().toLocaleDateString('en-CA');
+    const evs = (events || []).filter(e => e && e.attendanceRequired && e.startDate).map(e => ({ ...e, _end: e.endDate || e.startDate })).filter(e => e._end < today || (e._end === today && Array.isArray(e.attendees) && e.attendees.length > 0)).sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+    const rows = (members || []).filter(m => m && m.memberId && m.status !== 'expired' && !['Alumni', 'Blacklisted'].includes(m.positionCategory)).map(m => {
+      const jd = m.joinedDate ? String(m.joinedDate).slice(0, 10) : '';
+      const mine = evs.filter(e => !jd || String(e._end) >= jd).map(e => { const present = Array.isArray(e.attendees) && e.attendees.includes(m.memberId); const excused = !present && Array.isArray(e.excused) && e.excused.includes(m.memberId); return { ev: e, present, excused }; });
+      const counted = mine.filter(x => !x.excused); const present = counted.filter(x => x.present).length;
+      return { m, mine, present, absent: counted.length - present, excused: mine.length - counted.length, total: counted.length, pct: counted.length ? Math.round(present / counted.length * 100) : null };
+    }).sort((a, b) => (a.pct === null ? 1 : b.pct === null ? -1 : a.pct - b.pct) || String(a.m.name).localeCompare(String(b.m.name)));
+    return { rows, events: evs };
+  }, [events, members, isOfficer, isCare]);
+  const handleDownloadAttSummary = () => { const q = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`; const lines = [["Member ID", "Name", "Program", "Present", "Absent", "Excused", "Counted Events", "Attendance %", "Status"].join(',')]; attendanceData.rows.forEach(r => lines.push([r.m.memberId, r.m.name, r.m.program || '', r.present, r.absent, r.excused, r.total, r.pct === null ? '' : r.pct, r.pct === null ? 'No events yet' : (r.pct < ATT_MIN ? 'At risk' : 'On track')].map(q).join(','))); const blob = new Blob([lines.join('\n')], { type: 'text/csv' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'LBA_Attendance_Summary.csv'; a.click(); URL.revokeObjectURL(url); };
+  const yearsInLBA = (() => { const n = parseInt(String(profile.memberId || '').substring(3, 5), 10); return isNaN(n) ? 0 : Math.max(0, new Date().getFullYear() - 2000 - n); })();
+  const mcDone = [1, 2, 3, 4, 5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(profile.memberId));
+  const mcMasterEarned = mcDone.includes(1) && mcDone.includes(2) && [3, 4, 5].filter(id => mcDone.includes(id)).length >= 2;
+  const badgeStatus = (b) => {
+    const v = Number(b.value) || 0; const acc = Array.isArray(profile.accolades) ? profile.accolades.map(a => String(a).trim().toLowerCase()) : [];
+    switch (b.kind) {
+      case 'always': return { earned: true, note: '' };
+      case 'category': return { earned: String(profile.positionCategory || '').toLowerCase() === String(b.value || '').toLowerCase(), note: '' };
+      case 'years': return { earned: yearsInLBA >= v, note: `${Math.min(yearsInLBA, v)} / ${v} year${v === 1 ? '' : 's'}` };
+      case 'volunteer': return { earned: volunteerCount >= v, note: `${Math.min(volunteerCount, v)} / ${v} shifts` };
+      case 'modules': return { earned: mcDone.length >= v, note: `${Math.min(mcDone.length, v)} / ${v} modules` };
+      case 'master': return { earned: mcMasterEarned, note: '' };
+      default: return { earned: acc.includes(String(b.name || '').trim().toLowerCase()), note: 'Awarded by an officer' };
+    }
+  };
+  const saveBadgeList = async (list, msg) => { setBadgeBusy(true); try { await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'badges'), { list, updatedAt: new Date().toISOString(), updatedBy: profile.name }); logAction("Badges", msg); return true; } catch (e) { alert("Could not save badges: " + ((e && e.message) || e)); return false; } finally { setBadgeBusy(false); } };
+  const handleSaveBadge = async (e) => { e.preventDefault(); const f = badgeForm; if (!f.name.trim() || !f.desc.trim()) return alert("A badge needs a name and a short rule."); if (['years', 'volunteer', 'modules'].includes(f.kind) && !(Number(f.value) > 0)) return alert("Enter the number needed for this badge."); if (f.kind === 'category' && !String(f.value).trim()) return alert("Choose the position category."); const clean = { id: f.id || ('b' + Date.now().toString(36)), name: f.name.trim(), icon: (f.icon || '🏅').trim(), desc: f.desc.trim(), kind: f.kind, value: ['years', 'volunteer', 'modules'].includes(f.kind) ? Number(f.value) : (f.kind === 'category' ? f.value : '') }; const list = badgeDefs.some(b => b.id === clean.id) ? badgeDefs.map(b => b.id === clean.id ? clean : b) : [...badgeDefs, clean]; if (await saveBadgeList(list, `${f.id ? 'Edited' : 'Added'} badge: ${clean.name}`)) setBadgeForm({ id: '', name: '', icon: '', desc: '', kind: 'manual', value: '' }); };
+  const handleDeleteBadge = async (b) => { if (!confirm(`Delete the badge "${b.name}"? Members will no longer see it.`)) return; await saveBadgeList(badgeDefs.filter(x => x.id !== b.id), `Deleted badge: ${b.name}`); };
+  const handleResetBadges = async () => { if (!confirm("Reset the badge list to the original badges? Your own badges will be removed.")) return; await saveBadgeList(DEFAULT_BADGES, "Reset badges to defaults"); };
 
   const notifications = useMemo(() => {
       const hasNew = (items, pageKey) => { if (!items || items.length === 0) return false; const lastVisit = lastVisited[pageKey]; if (!lastVisit) return true; return items.some(i => { const d = i.createdAt?.toDate ? i.createdAt.toDate() : new Date(i.createdAt || 0); return d > new Date(lastVisit); }); };
@@ -455,10 +512,11 @@ const Dashboard = ({ user, profile, setProfile, logout }) => {
       const unsubSeries = onSnapshot(query(collection(db, 'artifacts', appId, 'public', 'data', 'series_posts'), orderBy('createdAt', 'desc')), (s) => setSeriesPosts(s.docs.map(d => ({ id: d.id, ...d.data() }))));
       const unsubOps = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'ops'), (s) => s.exists() && setHubSettings(s.data()));
       const unsubVideos = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'videos'), (snap) => { if (snap.exists()) { const d = snap.data(); setVideoSettings(d); setVideoForm({ required: !!d.required, intro: { title: '', url: '', minSeconds: 60, ...(d.intro || {}) }, orientation: { title: '', url: '', minSeconds: 120, ...(d.orientation || {}) } }); } else setVideoSettings({}); });
+      const unsubBadges = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'badges'), (s) => { if (s.exists() && Array.isArray(s.data().list) && s.data().list.length) setBadgeDefs(s.data().list); else setBadgeDefs(DEFAULT_BADGES); }, () => {});
       const unsubKeys = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'settings', 'keys'), (s) => s.exists() && setSecureKeys(s.data()));
       const unsubLegacy = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'legacy', 'main'), (s) => { if(s.exists()) { setLegacyContent(s.data()); const data = s.data(); setLegacyForm({ ...data, achievements: data.achievements || [], imageUrl: data.imageUrl || '', galleryUrl: data.galleryUrl || '', imageSettings: data.imageSettings || { objectFit: 'cover', objectPosition: 'center' } }); if (data.establishedDate) { const today = new Date(); const est = new Date(data.establishedDate); if (today.getMonth() === est.getMonth() && today.getDate() === est.getDate()) setIsAnniversary(true); } } });
       const unsubMC = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), (s) => { if(s.exists()) setMasterclassData(s.data()); else setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'masterclass', 'tracker'), { certTemplate: '', moduleAttendees: { 1: [], 2: [], 3: [], 4: [], 5: [] }, moduleDetails: {} }); });
-      return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubApps(); unsubUserApps(); unsubProjects(); unsubTasks(); unsubLogs(); unsubInv(); unsubVideos(); unsubPolls(); unsubSeries(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); };
+      return () => { unsubProfile(); unsubReg(); unsubEvents(); unsubAnn(); unsubSug(); unsubApps(); unsubUserApps(); unsubProjects(); unsubTasks(); unsubLogs(); unsubInv(); unsubVideos(); unsubBadges(); unsubPolls(); unsubSeries(); unsubOps(); unsubKeys(); unsubLegacy(); unsubMC(); };
   }, [user, isSuperAdmin, isOfficer, isCare, profile.memberId]);
 
   useEffect(() => { if (attendanceEvent && events.length > 0) { const liveEvent = events.find(e => e.id === attendanceEvent.id); if (liveEvent) setAttendanceEvent(liveEvent); } }, [events]);
@@ -747,7 +805,7 @@ const handleResetPassword = async (memberId, email, name) => {
     { id: 'explore', label: 'Explore', icon: Coffee, items: [
       { id: 'about', label: 'Legacy Story', icon: History },
       { id: 'team', label: 'Brew Crew', icon: Users },
-      { id: 'masterclass', label: 'Masterclass', icon: GraduationCap },
+      { id: 'masterclass', label: 'Training Academy', icon: GraduationCap },
       { id: 'series', label: 'Barista Diaries', icon: ImageIcon } ] },
     { id: 'community', label: 'Community', icon: MessageSquare, items: [
       { id: 'events', label: "What's Brewing?", icon: Calendar, hasNotification: notifications.events },
@@ -757,6 +815,7 @@ const handleResetPassword = async (memberId, email, name) => {
       { id: 'committee_hunt', label: 'Join the Team', icon: Briefcase, hasNotification: notifications.committee_hunt },
       { id: 'videos', label: 'Orientation Videos', icon: Play } ] },
     ...((isOfficer || isCare) ? [ { id: 'care', label: "Member's Care Desk", icon: Heart, items: [
+      { id: 'attendance', label: 'Attendance', icon: ClipboardList },
       { id: 'birthdays', label: 'Birthdays', icon: Gift, hasNotification: birthdayToday },
       { id: 'inventory', label: 'Inventory', icon: Package } ] } ] : []),
     ...(isOfficer ? [ { id: 'admin', label: isSuperAdmin ? 'Admin Desk' : 'Officer Desk', icon: ShieldCheck, items: [
@@ -969,16 +1028,6 @@ const handleResetPassword = async (memberId, email, name) => {
                         <label className="flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer"><input type="checkbox" checked={newEvent.attendanceRequired} onChange={e => setNewEvent({...newEvent, attendanceRequired: e.target.checked})} className="rounded text-amber-600 focus:ring-amber-500"/> Attendance Check</label>
                     </div>
 
-                    <div className="bg-purple-50 p-4 rounded-2xl border border-purple-100">
-                        <h4 className="text-xs font-black uppercase text-purple-800 mb-3 flex items-center gap-2"><GraduationCap size={14}/> Link to Masterclass</h4>
-                        <div className="flex flex-wrap gap-3">
-                            {DEFAULT_MASTERCLASS_MODULES.map(mod => (
-                                <label key={mod.id} className="flex items-center gap-1.5 text-[10px] font-bold text-purple-900 cursor-pointer uppercase hover:bg-purple-100 px-2 py-1 rounded-md transition-colors">
-                                    <input type="checkbox" checked={newEvent.masterclassModuleIds?.includes(mod.id)} onChange={e => { const ids = newEvent.masterclassModuleIds || []; if (e.target.checked) setNewEvent({...newEvent, masterclassModuleIds: [...ids, mod.id]}); else setNewEvent({...newEvent, masterclassModuleIds: ids.filter(id => id !== mod.id)}); }} className="rounded text-purple-600 focus:ring-purple-500"/> Mod {mod.id}
-                                </label>
-                            ))}
-                        </div>
-                    </div>
 
                     {newEvent.scheduleType === 'MULTIPLE_SHIFTS' && (
                         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 space-y-4">
@@ -1136,7 +1185,7 @@ const handleResetPassword = async (memberId, email, name) => {
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-2 space-y-6">
+                        <div className="lg:col-span-3 space-y-6">
                             <div>
                                 <h3 className="font-serif text-xl font-black uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Bell size={20} className="text-amber-600"/> Latest Notices</h3>
                                 <div className="space-y-4">
@@ -1170,35 +1219,24 @@ const handleResetPassword = async (memberId, email, name) => {
                             </div>
                         </div>
 
-                        {/* Right Column: Trophy Case */}
-                        <div className="bg-white p-6 rounded-[32px] border border-amber-100 h-full">
-                            <h3 className="font-black text-sm uppercase text-[#3E2723] mb-4 flex items-center gap-2"><Trophy size={16} className="text-amber-500"/> Trophy Case</h3>
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="flex flex-col items-center gap-1"><div title="Member" className="w-full aspect-square bg-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">☕</div><span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900/60 leading-none">Member</span></div></div>
-                                {['Officer'].includes(profile.positionCategory) && (<div className="flex flex-col items-center gap-1"><div title="Officer" className="w-full aspect-square bg-indigo-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🛡️</div><span className="text-[8px] md:text-[10px] font-black uppercase text-indigo-900/60 leading-none">Officer</span></div></div>)}
-                                {profile.positionCategory === 'Committee' && (<div className="flex flex-col items-center gap-1"><div title="Committee" className="w-full aspect-square bg-pink-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🎗️</div><span className="text-[8px] md:text-[10px] font-black uppercase text-pink-900/60 leading-none">Comm.</span></div></div>)}
-                                {profile.positionCategory === 'Execomm' && (<div className="flex flex-col items-center gap-1"><div title="Execomm" className="w-full aspect-square bg-blue-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">💼</div><span className="text-[8px] md:text-[10px] font-black uppercase text-blue-900/60 leading-none">Execomm</span></div></div>)}
-                                {profile.positionCategory === 'Alumni' && (<div className="flex flex-col items-center gap-1"><div title="Alumni" className="w-full aspect-square bg-slate-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🎓</div><span className="text-[8px] md:text-[10px] font-black uppercase text-slate-900/60 leading-none">Alumni</span></div></div>)}
-                                {profile.memberId && (new Date().getFullYear() - 2000 - parseInt(profile.memberId.substring(3,5))) >= 1 && (<div className="flex flex-col items-center gap-1"><div title="Veteran" className="w-full aspect-square bg-yellow-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🏅</div><span className="text-[8px] md:text-[10px] font-black uppercase text-yellow-900/60 leading-none">Veteran</span></div></div>)}
-                                {volunteerCount > 0 && (<div className="flex flex-col items-center gap-1">{(() => { let tier = { icon: '🤚', label: 'Volunteer', color: 'bg-teal-50 text-teal-900/60' }; if (volunteerCount >= 15) tier = { icon: '👑', label: 'Super Vol.', color: 'bg-rose-100 text-rose-900/60' }; else if (volunteerCount >= 9) tier = { icon: '🚀', label: 'Adv. Vol.', color: 'bg-purple-100 text-purple-900/60' }; else if (volunteerCount >= 4) tier = { icon: '🔥', label: 'Inter. Vol.', color: 'bg-orange-100 text-orange-900/60' }; const textColor = tier.color.split(' ')[1] || 'text-gray-500'; const bgColor = tier.color.split(' ')[0] || 'bg-gray-100'; return (<div title={`Volunteered for ${volunteerCount} shifts`} className={`w-full aspect-square ${bgColor} rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2`}><div className="text-2xl md:text-3xl mb-1">{tier.icon}</div><span className={`text-[8px] md:text-[10px] font-black uppercase ${textColor} leading-none tracking-tight`}>{tier.label}</span></div>); })()}</div>)}
-                                {(() => {
-                                    const myBadges = [];
-                                    DEFAULT_MASTERCLASS_MODULES.forEach(mod => {
-                                        if (masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId)) {
-                                            const details = masterclassData.moduleDetails?.[mod.id] || {}; const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"]; const iconToUse = details.icon || defaultIcons[mod.id-1]; const displayTitle = details.title || mod.short; 
-                                            myBadges.push(<div key={`mc-${mod.id}`} className="flex flex-col items-center gap-1"><div title={`Completed: ${displayTitle}`} className="w-full aspect-square bg-green-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 border border-green-100"><div className="text-2xl md:text-3xl mb-1">{iconToUse}</div><span className="text-[8px] md:text-[10px] font-black uppercase text-green-800 text-center leading-none tracking-tighter line-clamp-2">{displayTitle}</span></div></div>);
-                                        }
-                                    });
-                                    const has1 = masterclassData.moduleAttendees?.[1]?.includes(profile.memberId);
-                                    const has2 = masterclassData.moduleAttendees?.[2]?.includes(profile.memberId);
-                                    const optMods = [3, 4, 5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(profile.memberId)).length;
-                                    if (has1 && has2 && optMods >= 2) { 
-                                        myBadges.unshift(<div key="mc-master" className="flex flex-col items-center gap-1"><div title="Certified Master Barista" className="w-full aspect-square bg-gradient-to-br from-amber-300 to-amber-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2 shadow-lg border-2 border-white"><div className="text-2xl md:text-3xl mb-1">🎓</div><span className="text-[8px] md:text-[10px] font-black uppercase text-amber-900 leading-none">Master</span></div></div>); 
-                                    }
-                                    return myBadges;
-                                })()}
-                                {Array.isArray(profile.accolades) && profile.accolades.map((acc, i) => (<div key={i} className="flex flex-col items-center gap-1"><div title={acc} className="w-full aspect-square bg-purple-50 rounded-2xl flex flex-col items-center justify-center text-center p-1 md:p-2"><div className="text-2xl md:text-3xl mb-1">🏆</div><span className="text-[8px] md:text-[10px] font-black uppercase text-purple-900/60 leading-none line-clamp-2 tracking-tight">{acc}</span></div></div>))}
-                            </div>
+                        {/* Badges */}
+                        <div className="bg-white p-6 md:p-8 rounded-[32px] border border-amber-100 lg:col-span-3">
+                            {(() => { const rows = (badgeDefs || []).map(b => ({ b, st: badgeStatus(b) })); const got = rows.filter(r => r.st.earned).length; const manualNames = (badgeDefs || []).filter(b => b.kind === 'manual').map(b => String(b.name).trim().toLowerCase()); const extra = (Array.isArray(profile.accolades) ? profile.accolades : []).filter(a => !manualNames.includes(String(a).trim().toLowerCase())); return (<>
+                                <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 mb-6"><div><h3 className="font-black text-sm uppercase text-[#3E2723] flex items-center gap-2"><Trophy size={16} className="text-amber-500"/> Badges</h3><p className="text-[10px] font-bold text-gray-400 uppercase mt-1">Each badge shows what it is for and how to earn it.</p></div><span className="text-[10px] font-black uppercase bg-amber-100 text-amber-800 px-3 py-1 rounded-full self-start">{got} of {rows.length} earned</span></div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                                    {rows.map(({ b, st }) => (
+                                        <div key={b.id} className={`flex items-start gap-4 p-4 rounded-2xl border ${st.earned ? 'bg-amber-50 border-amber-200' : 'bg-gray-50 border-gray-100'}`}>
+                                            <div className={`w-14 h-14 shrink-0 rounded-2xl flex items-center justify-center text-3xl ${st.earned ? 'bg-white shadow-sm' : 'bg-gray-100 grayscale opacity-50'}`}>{b.icon}</div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2 flex-wrap"><p className={`font-black text-xs uppercase ${st.earned ? 'text-[#3E2723]' : 'text-gray-500'}`}>{b.name}</p>{st.earned ? <span className="text-[8px] font-black uppercase bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Earned</span> : <span className="text-[8px] font-black uppercase bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full flex items-center gap-1"><Lock size={8}/> Locked</span>}</div>
+                                                <p className="text-[10px] font-bold text-gray-500 mt-1 leading-snug"><span className="uppercase text-amber-600">How to earn: </span>{b.desc}</p>
+                                                {!st.earned && st.note && <p className="text-[9px] font-black uppercase text-amber-700 mt-1">{st.note}</p>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                {extra.length > 0 && (<div className="mt-6"><p className="text-[10px] font-black uppercase text-gray-400 mb-2">Special recognition</p><div className="flex flex-wrap gap-2">{extra.map((a, i) => (<span key={i} className="bg-purple-50 text-purple-800 border border-purple-100 px-3 py-1.5 rounded-full text-[10px] font-black uppercase">🏆 {a}</span>))}</div></div>)}
+                            </>); })()}
                         </div>
                     </div>
                   </div>
@@ -1233,77 +1271,27 @@ const handleResetPassword = async (memberId, email, name) => {
             )}
 
             {view === 'masterclass' && (
-                <div className="space-y-8 animate-fadeIn">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-                        <div><h3 className="font-serif text-4xl font-black uppercase text-[#3E2723]">Masterclass</h3><p className="text-amber-600 font-bold text-xs uppercase">School of Coffee Excellence</p></div>
-                        {(() => {
-                            const hasMod1 = masterclassData.moduleAttendees?.[1]?.includes(profile.memberId);
-                            const hasMod2 = masterclassData.moduleAttendees?.[2]?.includes(profile.memberId);
-                            const optionalMods = [3, 4, 5].filter(id => masterclassData.moduleAttendees?.[id]?.includes(profile.memberId)).length;
-                            const isEligible = hasMod1 && hasMod2 && optionalMods >= 2;
-                            return (
-                                <button onClick={() => isEligible ? setShowCertificate(true) : alert("Certificate Locked: You must complete mandatory Modules 1 & 2, PLUS any two modules from Mod 3-5 to unlock your certificate.")} className={`${isEligible ? 'bg-[#3E2723] text-[#FDB813] hover:bg-black' : 'bg-gray-200 text-gray-500 hover:bg-gray-300'} px-6 py-3 rounded-2xl font-black uppercase text-xs flex items-center gap-2 transition-colors w-full md:w-auto justify-center shadow-sm`}>
-                                    {isEligible ? <Award size={16}/> : <Lock size={16}/>} 
-                                    {isEligible ? 'View Certificate' : 'Certificate Locked'}
-                                </button>
-                            );
-                        })()}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {DEFAULT_MASTERCLASS_MODULES.map(mod => {
-                            const isCompleted = masterclassData.moduleAttendees?.[mod.id]?.includes(profile.memberId);
-                            const isOpen = events.some(ev => ev.masterclassModuleIds?.includes(mod.id));
-                            const details = masterclassData.moduleDetails?.[mod.id] || {};
-                            const defaultIcons = ["🌱", "⚙️", "💧", "☕", "🍹"]; const icon = details.icon || defaultIcons[mod.id-1];
-                            return (
-                                <div key={mod.id} className={`p-6 rounded-[32px] border-2 transition-all flex flex-col ${isCompleted ? 'bg-green-50 border-green-200' : isOpen ? 'bg-white border-blue-300 shadow-md' : 'bg-white border-gray-100 opacity-80'}`}>
-                                    <div className="flex justify-between items-start mb-4"><div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl ${isCompleted ? 'bg-green-200' : isOpen ? 'bg-blue-100' : 'bg-gray-100'}`}>{icon}</div>{isCompleted && <BadgeCheck className="text-green-600" size={24}/>}</div>
-                                    <h4 className="font-black uppercase text-sm text-[#3E2723] mb-1">{details.title || mod.title}</h4>
-                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Module 0{mod.id}</p>
-                                    <div className="flex-1 space-y-4 mt-4">
-                                        {details.objectives && (<div><p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Objectives</p><p className="text-xs text-gray-700 leading-relaxed">{details.objectives}</p></div>)}
-                                        {details.topics && (<div><p className="text-[10px] font-bold text-gray-500 uppercase mb-1">Topics Covered</p><p className="text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">{details.topics}</p></div>)}
-                                        {!details.objectives && !details.topics && (<p className="text-xs text-gray-400 italic">Curriculum details coming soon.</p>)}
-                                    </div>
-                                    {isCompleted ? (
-                                        <div className="mt-6 text-[10px] font-bold text-green-700 uppercase bg-green-100 px-3 py-1 rounded-full inline-block self-start">Completed</div>
-                                    ) : isOpen ? (
-                                        <div className="mt-6 text-[10px] font-bold text-blue-700 uppercase bg-blue-100 px-3 py-1 rounded-full inline-block self-start shadow-sm animate-pulse">Registration Open</div>
-                                    ) : (
-                                        <div className="mt-6 text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-3 py-1 rounded-full inline-block self-start">Locked</div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {isOfficer && (
-                        <div className="bg-amber-50 p-6 rounded-[32px] border border-amber-200 mt-8 space-y-4">
-                            <h4 className="font-black text-sm uppercase text-amber-800 mb-4 flex items-center gap-2"><Settings2 size={16}/> Admin Controls</h4>
-                            <div className="space-y-4">
-                                <div className="flex flex-col md:flex-row gap-4">
-                                    <select className="p-3 rounded-xl border border-amber-200 text-xs font-bold uppercase w-full md:w-auto" value={adminMcModule} onChange={e => { setAdminMcModule(e.target.value); const details = masterclassData.moduleDetails?.[e.target.value] || {}; setTempMcDetails(details); setSelectedMcMembers([]); }}>
-                                        {DEFAULT_MASTERCLASS_MODULES.map(m => { const details = masterclassData.moduleDetails?.[m.id] || {}; const displayTitle = details.title || m.title; return <option key={m.id} value={m.id}>Module {m.id}: {displayTitle}</option> })}
-                                    </select>
-                                    <button onClick={handleBulkAddMasterclass} disabled={selectedMcMembers.length === 0} className="bg-amber-600 text-white px-6 py-3 rounded-xl font-black uppercase text-xs hover:bg-amber-700 disabled:opacity-50">Add {selectedMcMembers.length} Attendees</button>
-                                </div>
-                                <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
-                                    <input type="text" placeholder="Search members to add..." className="w-full p-3 text-xs border-b border-amber-100 outline-none" value={adminMcSearch} onChange={e => setAdminMcSearch(e.target.value.toUpperCase())} />
-                                    <div className="max-h-40 overflow-y-auto p-2 space-y-1">
-                                        {members.filter(m => m != null && (m?.name?.includes(adminMcSearch) || m?.memberId?.includes(adminMcSearch)) && !masterclassData.moduleAttendees?.[adminMcModule]?.includes(m.memberId)).slice(0, 50).map(m => (
-                                                <label key={m.memberId} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer">
-                                                    <input type="checkbox" className="rounded border-gray-300 text-amber-600 focus:ring-amber-500" checked={selectedMcMembers.includes(m.memberId)} onChange={(e) => { if (e.target.checked) setSelectedMcMembers(prev => [...prev, m.memberId]); else setSelectedMcMembers(prev => prev.filter(id => id !== m.memberId)); }} />
-                                                    <div><p className="text-xs font-bold text-gray-700">{m.name}</p><p className="text-[9px] text-gray-400 font-mono">{m.memberId}</p></div>
-                                                </label>
-                                            ))
-                                        }
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-amber-200">
-                                <div><label className="text-[10px] font-bold uppercase text-amber-800 mb-1 block">Certificate Template URL</label><div className="flex gap-2"><input type="text" className="flex-1 p-3 rounded-xl border border-amber-200 text-xs" value={masterclassData.certTemplate || ''} onChange={e => setMasterclassData({...masterclassData, certTemplate: e.target.value})} /><button onClick={handleSaveCertTemplate} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold uppercase text-xs">Save</button></div></div>
-                                <div className="flex items-end"><button onClick={() => setEditingMcCurriculum(true)} className="w-full bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-xs">Edit Curriculum for Module {adminMcModule}</button></div>
-                            </div>
+                <div className="space-y-8 animate-fadeIn text-[#3E2723]">
+                    <div className="relative overflow-hidden rounded-[40px] bg-[#3E2723] text-[#FDB813] p-10 md:p-16 text-center shadow-2xl border-4 border-[#FDB813]">
+                        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
+                        <div className="relative z-10 flex flex-col items-center gap-4">
+                            <GraduationCap size={56} />
+                            <span className="bg-[#FDB813] text-[#3E2723] px-4 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.3em]">Coming Soon</span>
+                            <h3 className="font-serif text-4xl md:text-6xl font-black uppercase tracking-wide">Barista Training Academy</h3>
+                            <p className="text-amber-100/80 font-bold text-xs md:text-sm uppercase tracking-widest max-w-xl">Hands-on coffee training with different certification levels. Still in planning and discussion with the officers.</p>
                         </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {[['📚', 'Structured training', 'Lessons from coffee basics to advanced brewing.'], ['🎖️', 'Certifications', 'Different certification levels you can earn.'], ['🤝', 'Led by LBA', 'Trainings run by our officers and trained members.']].map(([ic, t, d]) => (<div key={t} className="bg-white p-6 rounded-[28px] border border-amber-100 text-center"><div className="text-3xl mb-2">{ic}</div><p className="font-black text-xs uppercase">{t}</p><p className="text-[11px] text-gray-500 font-bold mt-1">{d}</p></div>))}
+                    </div>
+                    <p className="text-center text-[11px] font-bold text-gray-500 uppercase">Details will be announced in the Grind Report. Your past Masterclass attendance is safely kept.</p>
+                    {isOfficer && (
+                        <details className="bg-white rounded-[28px] border border-amber-100 p-6">
+                            <summary className="cursor-pointer font-black uppercase text-xs">Officers: saved Masterclass attendance records</summary>
+                            <div className="mt-4 space-y-4">
+                                {DEFAULT_MASTERCLASS_MODULES.map(mod => { const ids = masterclassData.moduleAttendees?.[mod.id] || []; const details = masterclassData.moduleDetails?.[mod.id] || {}; return (<div key={mod.id}><p className="text-[10px] font-black uppercase text-amber-700">Module {mod.id}: {details.title || mod.title} ({ids.length})</p><p className="text-[11px] text-gray-600 font-bold mt-1">{ids.length ? ids.map(id => { const m = (members || []).find(x => x && x.memberId === id); return m ? m.name : id; }).join(', ') : 'No attendees recorded.'}</p></div>); })}
+                            </div>
+                        </details>
                     )}
                 </div>
             )}
@@ -1355,7 +1343,7 @@ const handleResetPassword = async (memberId, email, name) => {
                                             <div className="flex-1">
                                                 <div className="pr-24">
                                                     <h4 className="font-serif text-2xl font-black uppercase text-[#3E2723]">{ev.name}</h4>
-                                                    {ev.masterclassModuleIds && ev.masterclassModuleIds.length > 0 && (
+                                                    {false && ev.masterclassModuleIds && ev.masterclassModuleIds.length > 0 && (
                                                         <div className="flex flex-wrap gap-2 mt-2">
                                                             {ev.masterclassModuleIds.map(mid => (
                                                                 <button key={mid} onClick={() => setView('masterclass')} className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-[8px] font-black uppercase flex items-center gap-1 hover:bg-purple-200 transition-colors shadow-sm"><GraduationCap size={10}/> Masterclass Module {mid}</button>
@@ -1696,6 +1684,28 @@ const handleResetPassword = async (memberId, email, name) => {
                 </div>);
             })()}
 
+            {view === 'attendance' && (isOfficer || isCare) && (() => {
+                const { rows, events: attEvents } = attendanceData; const q = attSearch.trim().toLowerCase();
+                const shown = rows.filter(r => (!q || String(r.m.name).toLowerCase().includes(q) || String(r.m.memberId).toLowerCase().includes(q)) && (attFilter === 'all' || (attFilter === 'risk' && r.pct !== null && r.pct < ATT_MIN) || (attFilter === 'good' && r.pct !== null && r.pct >= ATT_MIN)));
+                const withData = rows.filter(r => r.pct !== null); const avg = withData.length ? Math.round(withData.reduce((a, r) => a + r.pct, 0) / withData.length) : 0; const risk = withData.filter(r => r.pct < ATT_MIN).length;
+                return (
+                <div className="space-y-6 animate-fadeIn text-[#3E2723]">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-3"><div><h3 className="font-serif text-4xl font-black uppercase">Attendance</h3><p className="text-amber-600 font-bold text-xs uppercase">Member's Care Desk &middot; members need at least {ATT_MIN}% attendance</p></div><button onClick={handleDownloadAttSummary} className="flex items-center gap-2 bg-white border border-amber-200 px-4 py-2 rounded-full text-[10px] font-black uppercase hover:bg-amber-50 self-start"><Download size={14}/> Download summary</button></div>
+                    <div className="grid grid-cols-3 gap-3">{[['Events tracked', attEvents.length], ['Average attendance', avg + '%'], ['Below ' + ATT_MIN + '%', risk]].map(([l, v]) => (<div key={l} className={`p-5 rounded-[24px] border text-center ${l.startsWith('Below') && risk > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-amber-100'}`}><p className="text-2xl md:text-3xl font-black">{v}</p><p className="text-[9px] font-black uppercase text-gray-500 mt-1">{l}</p></div>))}</div>
+                    <div className="flex gap-2"><button onClick={() => setAttTab('member')} className={`px-5 py-2 rounded-full text-[10px] font-black uppercase ${attTab === 'member' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>By member</button><button onClick={() => setAttTab('event')} className={`px-5 py-2 rounded-full text-[10px] font-black uppercase ${attTab === 'event' ? 'bg-[#3E2723] text-[#FDB813]' : 'bg-amber-50 text-amber-900'}`}>By event</button></div>
+                    {attTab === 'member' ? (<>
+                        <div className="flex flex-col md:flex-row gap-3"><div className="flex items-center gap-2 bg-white border border-amber-100 px-4 py-2 rounded-2xl flex-1"><Search size={16}/><input type="text" placeholder="Search name or ID..." className="bg-transparent outline-none text-[11px] font-black uppercase w-full" value={attSearch} onChange={e => setAttSearch(e.target.value)} /></div><div className="flex gap-2">{[['all', 'All'], ['risk', 'Below ' + ATT_MIN + '%'], ['good', 'On track']].map(([k, l]) => (<button key={k} onClick={() => setAttFilter(k)} className={`px-4 py-2 rounded-full text-[10px] font-black uppercase ${attFilter === k ? 'bg-amber-500 text-white' : 'bg-white border border-amber-100 text-amber-900'}`}>{l}</button>))}</div></div>
+                        {attEvents.length === 0 && <div className="bg-white p-8 rounded-[28px] border border-amber-100 text-center text-xs font-bold text-gray-500 uppercase">No past events with required attendance yet. Mark "attendance required" when creating an event, then take attendance on the event.</div>}
+                        <div className="space-y-2">{shown.map(r => { const open = attOpen === r.m.memberId; const low = r.pct !== null && r.pct < ATT_MIN; return (
+                            <div key={r.m.memberId} className={`bg-white rounded-2xl border ${low ? 'border-red-200' : 'border-amber-100'}`}>
+                                <button onClick={() => setAttOpen(open ? null : r.m.memberId)} className="w-full flex items-center gap-4 p-4 text-left"><div className="flex-1 min-w-0"><p className="font-black text-xs uppercase truncate">{r.m.name}</p><p className="text-[9px] font-bold text-gray-400 uppercase">{r.m.memberId} &middot; {r.m.program || ''}</p></div><div className="hidden sm:block w-32"><div className="h-2 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${low ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: (r.pct || 0) + '%' }}></div></div></div><div className="text-right"><p className={`font-black text-sm ${low ? 'text-red-600' : ''}`}>{r.pct === null ? '—' : r.pct + '%'}</p><p className="text-[9px] font-bold text-gray-400 uppercase">{r.present} present &middot; {r.absent} absent{r.excused ? ' · ' + r.excused + ' excused' : ''}</p></div><ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`}/></button>
+                                {open && (<div className="border-t border-amber-50 p-4 space-y-2">{r.mine.length === 0 && <p className="text-[10px] font-bold text-gray-400 uppercase">No tracked events yet.</p>}{r.mine.map(x => (<div key={x.ev.id} className="flex items-center gap-3 text-[11px]"><span className={`w-20 text-center px-2 py-1 rounded-full text-[8px] font-black uppercase ${x.present ? 'bg-green-100 text-green-700' : x.excused ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}>{x.present ? 'Present' : x.excused ? 'Excused' : 'Absent'}</span><span className="flex-1 font-bold uppercase truncate">{x.ev.name}</span><span className="text-gray-400 font-bold">{x.ev.startDate}</span>{!x.present && <button onClick={() => handleToggleExcuse(x.ev, r.m.memberId)} className="text-[9px] font-black uppercase text-amber-700 hover:underline">{x.excused ? 'Undo excuse' : 'Mark excused'}</button>}</div>))}</div>)}
+                            </div>); })}{shown.length === 0 && attEvents.length > 0 && <p className="text-center text-[11px] font-bold text-gray-400 uppercase py-6">No members match.</p>}</div>
+                    </>) : (
+                        <div className="space-y-2">{attEvents.length === 0 && <div className="bg-white p-8 rounded-[28px] border border-amber-100 text-center text-xs font-bold text-gray-500 uppercase">No past events with required attendance yet.</div>}{attEvents.map(ev => (<div key={ev.id} className="bg-white p-4 rounded-2xl border border-amber-100 flex items-center gap-4"><div className="flex-1 min-w-0"><p className="font-black text-xs uppercase truncate">{ev.name}</p><p className="text-[9px] font-bold text-gray-400 uppercase">{ev.startDate}{ev.venue ? ' · ' + ev.venue : ''}</p></div><p className="text-[10px] font-black uppercase text-amber-700">{(ev.attendees || []).length} present</p><button onClick={() => setAttendanceEvent(ev)} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-full text-[9px] font-black uppercase hover:bg-indigo-200">Open attendance</button></div>))}</div>
+                    )}
+                </div>); })()}
+
             {view === 'birthdays' && (isOfficer || isCare) && (() => {
                 const { y, m } = bdayCursor; const today = new Date(); const dim = new Date(y, m + 1, 0).getDate(); const first = new Date(y, m, 1).getDay();
                 const people = (members || []).filter(mm => mm && mm.birthMonth && mm.birthDay && mm.positionCategory !== 'Blacklisted');
@@ -1930,6 +1940,27 @@ const handleResetPassword = async (memberId, email, name) => {
                 <h3 className="font-serif text-4xl font-black uppercase">Terminal</h3>
                 <p className="text-amber-500 font-black uppercase text-[10px]">The Control Roaster</p>
               </div>
+            </div>
+
+            {/* BADGE MANAGER */}
+            <div className="py-8 space-y-6">
+              <div><h4 className="font-black uppercase text-sm flex items-center gap-2"><Trophy size={16} className="text-amber-500"/> Badge Manager</h4><p className="text-[10px] font-bold text-gray-500 uppercase mt-1">Create badges and set the rule for earning them. Members see these on their profile.</p></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(badgeDefs || []).map(b => (<div key={b.id} className="flex items-start gap-3 p-4 bg-white rounded-2xl border border-amber-100"><div className="text-2xl">{b.icon}</div><div className="flex-1 min-w-0"><p className="font-black text-xs uppercase">{b.name}</p><p className="text-[10px] text-gray-500 font-bold mt-0.5">{b.desc}</p><p className="text-[9px] font-black uppercase text-amber-700 mt-1">{(BADGE_KINDS.find(k => k.id === b.kind) || {}).label}{b.value !== '' && b.value != null && b.kind !== 'manual' ? ` · ${b.value}` : ''}</p></div><div className="flex flex-col gap-1"><button onClick={() => { setBadgeForm({ id: b.id, name: b.name, icon: b.icon, desc: b.desc, kind: b.kind, value: b.value }); }} className="text-[9px] font-black uppercase text-amber-700 hover:underline">Edit</button><button onClick={() => handleDeleteBadge(b)} className="text-[9px] font-black uppercase text-red-500 hover:underline">Delete</button></div></div>))}
+              </div>
+              <form onSubmit={handleSaveBadge} className="bg-amber-50 p-5 rounded-2xl border border-amber-100 space-y-3">
+                <p className="text-[10px] font-black uppercase text-amber-800">{badgeForm.id ? 'Edit badge' : 'Add a new badge'}</p>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                  <input type="text" placeholder="Badge name" className="p-3 border rounded-xl text-xs font-bold md:col-span-2" value={badgeForm.name} onChange={e => setBadgeForm({ ...badgeForm, name: e.target.value })} />
+                  <input type="text" placeholder="Icon (an emoji, e.g. 🏅)" className="p-3 border rounded-xl text-xs font-bold" value={badgeForm.icon} onChange={e => setBadgeForm({ ...badgeForm, icon: e.target.value })} />
+                  <select className="p-3 border rounded-xl text-xs font-bold" value={badgeForm.kind} onChange={e => setBadgeForm({ ...badgeForm, kind: e.target.value, value: '' })}>{BADGE_KINDS.map(k => <option key={k.id} value={k.id}>{k.label}</option>)}</select>
+                </div>
+                <input type="text" placeholder="How to earn it (shown to members), e.g. Join 20 volunteer shifts." className="w-full p-3 border rounded-xl text-xs font-bold" value={badgeForm.desc} onChange={e => setBadgeForm({ ...badgeForm, desc: e.target.value })} />
+                {['years', 'volunteer', 'modules'].includes(badgeForm.kind) && (<input type="number" min="1" placeholder={(BADGE_KINDS.find(k => k.id === badgeForm.kind) || {}).hint} className="w-full p-3 border rounded-xl text-xs font-bold" value={badgeForm.value} onChange={e => setBadgeForm({ ...badgeForm, value: e.target.value })} />)}
+                {badgeForm.kind === 'category' && (<select className="w-full p-3 border rounded-xl text-xs font-bold" value={badgeForm.value} onChange={e => setBadgeForm({ ...badgeForm, value: e.target.value })}><option value="">Choose position category</option>{['Member', 'Officer', 'Committee', 'Execomm', 'Alumni'].map(c => <option key={c} value={c}>{c}</option>)}</select>)}
+                {badgeForm.kind === 'manual' && (<p className="text-[10px] font-bold text-amber-800">Manual badge: an officer awards it with "Give Accolade" in the Registry, typing exactly "{badgeForm.name || 'the badge name'}".</p>)}
+                <div className="flex gap-2 flex-wrap"><button type="submit" disabled={badgeBusy} className="bg-[#3E2723] text-[#FDB813] px-6 py-3 rounded-xl font-black uppercase text-[10px] disabled:opacity-50">{badgeBusy ? 'Saving...' : (badgeForm.id ? 'Update badge' : 'Add badge')}</button>{badgeForm.id && <button type="button" onClick={() => setBadgeForm({ id: '', name: '', icon: '', desc: '', kind: 'manual', value: '' })} className="bg-white border px-6 py-3 rounded-xl font-black uppercase text-[10px]">Cancel</button>}<button type="button" onClick={handleResetBadges} className="ml-auto text-[10px] font-black uppercase text-red-500 hover:underline">Reset to original badges</button></div>
+              </form>
             </div>
 
             {/* STATS GRID */}
